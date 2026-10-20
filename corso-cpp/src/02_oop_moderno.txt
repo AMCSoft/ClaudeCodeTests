@@ -1,0 +1,187 @@
+# Parte 2 - OOP, template e C++ moderno
+
+## Capitolo 6 - Programmazione orientata agli oggetti
+
+### Lezione 6.1 - Classi, costruttori e distruttori
+
+Una classe incapsula dati e comportamento. `struct` e `class` differiscono solo per la visibilita' di default (pubblica vs privata). I costruttori inizializzano, il distruttore libera le risorse.
+
+```cpp
+#include <string>
+#include <utility>
+
+class Conto {
+public:
+    Conto(std::string titolare, double saldo = 0.0)
+        : titolare_(std::move(titolare)), saldo_(saldo) {}
+    void versa(double v) { saldo_ += v; }
+    [[nodiscard]] double saldo() const noexcept { return saldo_; }
+private:
+    std::string titolare_;
+    double saldo_;
+};
+```
+
+- Usa la **lista di inizializzazione** dei membri.
+- Marca `const` i metodi che non modificano lo stato.
+- `explicit` sui costruttori a un argomento evita conversioni implicite.
+
+### Lezione 6.2 - Regola del 5 / del 0, copia e move
+
+Se una classe gestisce una risorsa servono: distruttore, costruttore di copia, assegnazione di copia, costruttore di move, assegnazione di move (**regola del 5**). Meglio ancora: usa membri che gestiscono la risorsa (`vector`, `unique_ptr`) e non scrivere nulla (**regola del 0**).
+
+La **move semantics** (C++11) trasferisce le risorse da oggetti temporanei (rvalue) invece di copiarle: `std::move` converte in rvalue reference `T&&`.
+
+```cpp
+class Buffer {
+    std::size_t n_; int* d_;
+public:
+    explicit Buffer(std::size_t n) : n_(n), d_(new int[n]{}) {}
+    ~Buffer() { delete[] d_; }
+    Buffer(const Buffer& o) : n_(o.n_), d_(new int[o.n_]) { std::copy(o.d_, o.d_ + n_, d_); }
+    Buffer& operator=(Buffer o) noexcept { std::swap(n_, o.n_); std::swap(d_, o.d_); return *this; }
+    Buffer(Buffer&& o) noexcept : n_(std::exchange(o.n_, 0)), d_(std::exchange(o.d_, nullptr)) {}
+};
+```
+
+### Lezione 6.3 - Ereditarieta' e polimorfismo
+
+Il polimorfismo a runtime usa funzioni `virtual`. La classe base deve avere distruttore virtuale. `override` e `final` rendono esplicite le intenzioni. Preferisci la composizione all'ereditarieta' quando possibile.
+
+```cpp
+#include <memory>
+#include <vector>
+#include <numbers>
+struct Forma {
+    virtual ~Forma() = default;
+    virtual double area() const = 0;   // classe astratta
+};
+struct Cerchio : Forma {
+    double r;
+    explicit Cerchio(double r) : r(r) {}
+    double area() const override { return std::numbers::pi * r * r; }
+};
+struct Rettangolo : Forma {
+    double w, h;
+    Rettangolo(double w, double h) : w(w), h(h) {}
+    double area() const override { return w * h; }
+};
+int main() {
+    std::vector<std::unique_ptr<Forma>> v;
+    v.push_back(std::make_unique<Cerchio>(2));
+    v.push_back(std::make_unique<Rettangolo>(3, 4));
+    double tot = 0; for (auto& f : v) tot += f->area();
+}
+```
+
+### Lezione 6.4 - Overloading degli operatori, eccezioni, principi SOLID
+
+Si possono ridefinire operatori (`+`, `==`, `<<`, `[]`, `()`) per tipi definiti dall'utente: fallo solo quando il significato e' naturale. Le eccezioni (`try`/`catch`/`throw`) segnalano errori eccezionali; con RAII garantiscono la pulizia. In alternativa: `std::optional`, `std::expected` (C++23), codici di errore.
+
+I principi **SOLID** (Single responsibility, Open/closed, Liskov, Interface segregation, Dependency inversion) guidano un design manutenibile. Pattern importanti: Strategy, Observer, Factory, Builder, Singleton (con cautela), Visitor, Decorator, Adapter.
+
+LC: 146 - LRU Cache (design di classi)
+LC: 155 - Min Stack
+LC: 232 - Implement Queue using Stacks
+LC: 225 - Implement Stack using Queues
+LC: 705 - Design HashSet
+LC: 706 - Design HashMap
+LC: 208 - Implement Trie (Prefix Tree)
+LC: 355 - Design Twitter
+
+## Capitolo 7 - Template e programmazione generica
+
+### Lezione 7.1 - Template di funzione e di classe
+
+I template generano codice per tipi diversi a compile time senza overhead a runtime.
+
+```cpp
+template <typename T>
+T massimo(T a, T b) { return a < b ? b : a; }
+
+template <typename T, std::size_t N>
+class Array {
+    T dati_[N]{};
+public:
+    constexpr T& operator[](std::size_t i) { return dati_[i]; }
+    constexpr std::size_t size() const { return N; }
+};
+
+template <typename... Args>             // variadic template
+auto somma(Args... args) { return (args + ...); }   // fold expression (C++17)
+```
+
+### Lezione 7.2 - Concepts, SFINAE e metaprogrammazione
+
+I **concepts** (C++20) esprimono vincoli sui parametri template con messaggi d'errore chiari, sostituendo il vecchio SFINAE. `if constexpr` (C++17) sceglie il ramo a compile time. `<type_traits>` offre `is_integral_v`, `enable_if`, `remove_reference_t`, ecc.
+
+```cpp
+#include <concepts>
+template <std::integral T>
+T mcd(T a, T b) { return b == 0 ? a : mcd(b, a % b); }
+
+template <typename T>
+concept Stampabile = requires(T t, std::ostream& os) { os << t; };
+
+template <Stampabile T>
+void stampa(const T& x) { std::cout << x << '\n'; }
+
+template <typename T>
+auto descrivi(const T& v) {
+    if constexpr (std::is_pointer_v<T>) return "puntatore";
+    else return "valore";
+}
+```
+
+LC: 703 - Kth Largest Element in a Stream
+LC: 295 - Find Median from Data Stream
+
+## Capitolo 8 - Il C++ moderno: C++11, 14, 17, 20, 23
+
+### Lezione 8.1 - Novita' di C++11/14/17
+
+- **C++11**: `auto`, range-for, lambda, `nullptr`, `move`, smart pointer, `constexpr`, `thread`, `unordered_map`, `enum class`, `override`, `= default`/`= delete`, inizializzazione uniforme.
+- **C++14**: lambda generiche, `make_unique`, `decltype(auto)`, variable template, separatori numerici `1'000'000`.
+- **C++17**: structured bindings, `std::optional`, `std::variant`, `std::string_view`, `std::filesystem`, `if constexpr`, fold expression, algoritmi paralleli, CTAD, `inline` variables.
+
+```cpp
+#include <optional>
+#include <variant>
+#include <string>
+std::optional<int> parseInt(const std::string& s) {
+    try { return std::stoi(s); } catch (...) { return std::nullopt; }
+}
+using Valore = std::variant<int, double, std::string>;
+struct Visitatore {
+    void operator()(int i) const { /* ... */ }
+    void operator()(double d) const { /* ... */ }
+    void operator()(const std::string& s) const { /* ... */ }
+};
+// std::visit(Visitatore{}, valore);
+```
+
+### Lezione 8.2 - Novita' di C++20/23: concepts, ranges, coroutine, moduli
+
+- **Ranges**: pipeline componibili e pigre.
+- **Coroutine**: `co_await`, `co_yield`, `co_return` per codice asincrono e generatori.
+- **Moduli**: `import std;` sostituisce `#include` e velocizza la compilazione.
+- **`std::format`**, `std::span`, `std::jthread`, `<=>`, `consteval`, `std::source_location`.
+- **C++23**: `std::expected`, `std::print`, `std::mdspan`, `std::generator`, `deducing this`, `std::flat_map`.
+
+```cpp
+#include <ranges>
+#include <vector>
+#include <print>   // C++23
+namespace vw = std::views;
+int main() {
+    std::vector<int> v{1,2,3,4,5,6,7,8,9,10};
+    auto r = v | vw::filter([](int x){ return x % 2 == 0; })
+               | vw::transform([](int x){ return x * x; })
+               | vw::take(3);
+    for (int x : r) std::print("{} ", x);   // 4 16 36
+}
+```
+
+### Lezione 8.3 - Buone pratiche: C++ Core Guidelines
+
+Segui le **C++ Core Guidelines** (Stroustrup e Sutter): `const` per default, parametri di ingresso per `const&` o per valore se piccoli, restituire per valore (grazie a copy elision/RVO), `noexcept` sulle funzioni di move, evitare le variabili globali, usare `std::span` invece di coppie puntatore+dimensione, `gsl::not_null`, `[[nodiscard]]`. Strumenti: clang-tidy (`modernize-*`, `cppcoreguidelines-*`), cppcheck, sanitizer.

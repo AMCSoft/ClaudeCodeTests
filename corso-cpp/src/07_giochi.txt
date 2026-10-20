@@ -1,0 +1,136 @@
+# Parte 7 - Videogiochi e grafica
+
+## Capitolo 22 - Fondamenti di game programming
+
+### Lezione 22.1 - Il game loop e l'architettura di un gioco
+
+Il cuore di un videogioco e' il **game loop**: ripete lettura input, aggiornamento della simulazione, rendering. Per la stabilita' della fisica si usa un passo fisso (fixed timestep) disaccoppiato dal rendering.
+
+```cpp
+#include <chrono>
+using clock_t_ = std::chrono::steady_clock;
+
+void gameLoop() {
+    constexpr double dt = 1.0 / 60.0;
+    double accumulatore = 0;
+    auto precedente = clock_t_::now();
+    bool inEsecuzione = true;
+    while (inEsecuzione) {
+        auto ora = clock_t_::now();
+        accumulatore += std::chrono::duration<double>(ora - precedente).count();
+        precedente = ora;
+        processaInput(inEsecuzione);
+        while (accumulatore >= dt) { aggiorna(dt); accumulatore -= dt; }
+        disegna(accumulatore / dt);          // interpolazione
+    }
+}
+```
+
+### Lezione 22.2 - Entity Component System (ECS) e gestione della memoria
+
+L'architettura **ECS** separa dati (componenti), identita' (entita') e logica (sistemi), favorendo la cache e la composizione rispetto all'ereditarieta'. Librerie: **EnTT**, **flecs**. Tecniche: object pooling, allocatori ad arena/linear, data-oriented design (struct of arrays), spatial partitioning (griglia, quadtree, octree, BVH) per collisioni e culling.
+
+```cpp
+#include <entt/entt.hpp>
+struct Posizione { float x, y; };
+struct Velocita { float dx, dy; };
+int main() {
+    entt::registry reg;
+    auto e = reg.create();
+    reg.emplace<Posizione>(e, 0.f, 0.f);
+    reg.emplace<Velocita>(e, 1.f, 2.f);
+    reg.view<Posizione, Velocita>().each([](auto& p, const auto& v) { p.x += v.dx; p.y += v.dy; });
+}
+```
+
+LC: 1197 - Minimum Knight Moves
+LC: 289 - Game of Life
+LC: 1091 - Shortest Path in Binary Matrix
+LC: 773 - Sliding Puzzle
+LC: 529 - Minesweeper
+LC: 79 - Word Search
+LC: 782 - Transform to Chessboard
+
+### Lezione 22.3 - Matematica per i giochi: vettori, matrici, quaternioni
+
+Servono: vettori (somma, prodotto scalare e vettoriale, normalizzazione), matrici 4x4 (traslazione, rotazione, scala, proiezione), quaternioni (rotazioni senza gimbal lock), interpolazione (lerp, slerp), collisioni (AABB, sfere, SAT, raycast). Librerie: **GLM**, **Eigen**, DirectXMath.
+
+```cpp
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+glm::mat4 model = glm::translate(glm::mat4(1.f), glm::vec3(1, 0, 0));
+model = glm::rotate(model, glm::radians(45.f), glm::vec3(0, 1, 0));
+glm::mat4 proj = glm::perspective(glm::radians(60.f), 16.f / 9.f, 0.1f, 100.f);
+```
+
+## Capitolo 23 - Librerie e motori
+
+### Lezione 23.1 - SDL2, SFML e un primo gioco 2D
+
+**SDL2** e **SFML** forniscono finestra, input, audio e rendering 2D su Windows, Linux, macOS (e SDL anche su mobile e web).
+
+```cpp
+#include <SFML/Graphics.hpp>
+int main() {
+    sf::RenderWindow w(sf::VideoMode({800, 600}), "Pong");
+    w.setFramerateLimit(60);
+    sf::CircleShape palla(10.f); palla.setPosition({400, 300});
+    sf::Vector2f vel{4.f, 3.f};
+    while (w.isOpen()) {
+        while (auto ev = w.pollEvent()) if (ev->is<sf::Event::Closed>()) w.close();
+        palla.move(vel);
+        auto p = palla.getPosition();
+        if (p.x < 0 || p.x > 780) vel.x = -vel.x;
+        if (p.y < 0 || p.y > 580) vel.y = -vel.y;
+        w.clear(); w.draw(palla); w.display();
+    }
+}
+```
+
+Progetti proposti: Pong, Snake, Tetris, Breakout, platform 2D con tilemap, shoot'em up, gioco a turni con IA.
+
+### Lezione 23.2 - Grafica 3D: OpenGL, Vulkan, DirectX, Metal
+
+La pipeline grafica: vertex shader, rasterizzazione, fragment shader, depth test, blending. **OpenGL** (semplice, ottimo per imparare), **Vulkan** (basso livello, multipiattaforma, esplicito), **DirectX 12** (Windows/Xbox), **Metal** (Apple), **WebGPU**. Concetti: buffer (VBO/VAO/UBO), texture, framebuffer, illuminazione (Phong, PBR), shadow mapping, normal mapping, instancing, deferred rendering, compute shader. Librerie di supporto: GLFW, GLAD, stb_image, Assimp (caricamento modelli), bgfx, Dear ImGui.
+
+```cpp
+const char* vs = R"(#version 330 core
+layout(location=0) in vec3 pos;
+uniform mat4 mvp;
+void main() { gl_Position = mvp * vec4(pos, 1.0); })";
+```
+
+### Lezione 23.3 - Unreal Engine, Godot e altri motori
+
+**Unreal Engine** si programma in C++ (con Blueprint): `UCLASS`, `UPROPERTY`, `UFUNCTION`, Actor, Component, Gameplay Framework, garbage collector per gli `UObject`, replicazione di rete. **Godot** supporta C++ tramite GDExtension. Altri: **O3DE**, **Cocos2d-x**, **Urho3D**, **Ogre3D**, **raylib** (semplice e didattico), **Box2D/Bullet/PhysX/Jolt** per la fisica, **FMOD/OpenAL/miniaudio** per l'audio.
+
+```cpp
+UCLASS()
+class AMioPersonaggio : public ACharacter {
+    GENERATED_BODY()
+public:
+    UPROPERTY(EditAnywhere, BlueprintReadWrite) float Salute = 100.f;
+    UFUNCTION(BlueprintCallable) void SubisciDanno(float Danno);
+};
+```
+
+## Capitolo 24 - IA, rete e ottimizzazione nei giochi
+
+### Lezione 24.1 - Intelligenza artificiale per i giochi
+
+Pathfinding (A*, navmesh, flow field, Dijkstra map), macchine a stati finiti, behavior tree, utility AI, GOAP, steering behaviors (seek, flee, flocking), minimax con potatura alpha-beta (scacchi, tris), Monte Carlo Tree Search, generazione procedurale (rumore di Perlin, WFC, dungeon generation).
+
+LC: 1091 - Shortest Path in Binary Matrix
+LC: 505 - The Maze II
+LC: 490 - The Maze
+LC: 913 - Cat and Mouse
+LC: 464 - Can I Win
+LC: 486 - Predict the Winner
+LC: 877 - Stone Game
+LC: 292 - Nim Game
+LC: 348 - Design Tic-Tac-Toe
+LC: 130 - Surrounded Regions
+
+### Lezione 24.2 - Multiplayer e ottimizzazione
+
+Networking: UDP vs TCP, modelli client-server autoritativo, client-side prediction, riconciliazione, interpolazione delle entita', lag compensation, serializzazione compatta, librerie (ENet, GameNetworkingSockets, Photon). Ottimizzazione: profiling frame per frame, batching, culling (frustum, occlusion), LOD, streaming asset, multithreading con job system, evitare allocazioni durante il frame, SIMD.

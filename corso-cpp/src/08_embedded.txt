@@ -1,0 +1,127 @@
+# Parte 8 - Sistemi embedded
+
+## Capitolo 25 - Fondamenti dell'embedded con C++
+
+### Lezione 25.1 - Hardware, microcontrollori e toolchain
+
+Un sistema embedded e' un computer dedicato a un compito specifico, con risorse limitate (kB di RAM, MHz di CPU, bassi consumi). Famiglie: **ARM Cortex-M** (STM32, nRF52, RP2040), **AVR** (Arduino Uno), **ESP32** (Xtensa/RISC-V con Wi-Fi/BLE), **RISC-V**, PIC, MSP430. Toolchain: **arm-none-eabi-gcc**, PlatformIO, Zephyr, ESP-IDF, STM32CubeIDE, Pico SDK. Strumenti: debugger JTAG/SWD (OpenOCD, J-Link, ST-Link), oscilloscopio, analizzatore logico.
+
+Cosa evitare/limitare in ambito embedded: eccezioni (`-fno-exceptions`), RTTI (`-fno-rtti`), allocazione dinamica e frammentazione dell'heap, iostream pesante. Cosa usare: `constexpr`, template, `std::array`, `std::span`, `std::optional`, `etl::` (Embedded Template Library), allocatori statici, `static_assert`.
+
+### Lezione 25.2 - Accesso ai registri e GPIO
+
+I periferici sono mappati in memoria: si leggono e scrivono registri tramite puntatori `volatile`. `volatile` impedisce al compilatore di eliminare o riordinare gli accessi.
+
+```cpp
+#include <cstdint>
+
+struct GPIO {
+    volatile std::uint32_t MODER, OTYPER, OSPEEDR, PUPDR, IDR, ODR;
+};
+inline GPIO& GPIOA = *reinterpret_cast<GPIO*>(0x40020000);
+
+template <typename Port, unsigned Pin>
+struct Led {
+    static void init() { Port::MODER |= (1u << (Pin * 2)); }
+    static void toggle() { Port::ODR ^= (1u << Pin); }
+};
+```
+
+Un approccio C++ idiomatico incapsula i registri in classi con template a costo zero, trasformando errori di configurazione in errori di compilazione.
+
+```cpp
+// Blink su Arduino
+void setup() { pinMode(LED_BUILTIN, OUTPUT); }
+void loop() { digitalWrite(LED_BUILTIN, HIGH); delay(500); digitalWrite(LED_BUILTIN, LOW); delay(500); }
+```
+
+### Lezione 25.3 - Interrupt, timer e vincoli real-time
+
+Le **ISR** (Interrupt Service Routine) devono essere brevi: impostano flag o riempiono buffer, il lavoro pesante si fa nel main loop. Variabili condivise: `volatile` + sezioni critiche o `std::atomic`. Timer e PWM per temporizzazione e controllo motori; watchdog per il recupero da blocchi; modalita' a basso consumo (sleep). Real-time: determinismo, latenza massima, priorita', analisi WCET.
+
+```cpp
+volatile bool tastoPremuto = false;
+extern "C" void EXTI0_IRQHandler() { tastoPremuto = true; EXTI->PR |= 1; }
+int main() {
+    init();
+    for (;;) { if (tastoPremuto) { tastoPremuto = false; gestisci(); } __WFI(); }
+}
+```
+
+LC: 622 - Design Circular Queue (ring buffer)
+LC: 641 - Design Circular Deque
+LC: 346 - Moving Average from Data Stream
+LC: 1472 - Design Browser History
+LC: 191 - Number of 1 Bits
+LC: 190 - Reverse Bits
+LC: 461 - Hamming Distance
+LC: 78 - Subsets (bitmask)
+LC: 89 - Gray Code
+LC: 1318 - Minimum Flips to Make a OR b Equal to c
+
+## Capitolo 26 - Protocolli, RTOS e sistemi connessi
+
+### Lezione 26.1 - Bus e protocolli: UART, I2C, SPI, CAN
+
+- **UART**: seriale asincrona (debug, GPS, modem).
+- **I2C**: bus a 2 fili con indirizzi (sensori, EEPROM, display).
+- **SPI**: full-duplex veloce con chip select (memorie flash, display, SD).
+- **CAN/CAN-FD**: bus robusto per automotive e industria.
+- **1-Wire, USB, Ethernet, Modbus, LIN**.
+- **Wireless**: BLE, Wi-Fi, LoRa, Zigbee, Thread, MQTT/CoAP a livello applicativo.
+
+```cpp
+std::uint8_t leggiRegistroI2C(std::uint8_t addr, std::uint8_t reg) {
+    i2c.start(); i2c.write(addr << 1); i2c.write(reg);
+    i2c.restart(); i2c.write((addr << 1) | 1);
+    auto v = i2c.read(/*nack*/true); i2c.stop();
+    return v;
+}
+```
+
+Driver ben progettati separano l'accesso all'hardware (HAL) dalla logica (pattern: interfacce astratte o concepts, iniezione delle dipendenze, test su PC con mock).
+
+### Lezione 26.2 - RTOS: FreeRTOS e Zephyr
+
+Un **RTOS** offre task con priorita', scheduler preemptive, code, semafori, mutex (con priority inheritance), timer software, event groups. Problemi tipici: inversione di priorita', deadlock, overflow dello stack di un task, race condition tra ISR e task.
+
+```cpp
+#include "FreeRTOS.h"
+#include "task.h"
+#include "queue.h"
+
+QueueHandle_t coda;
+void taskSensore(void*) {
+    for (;;) { int v = leggiSensore(); xQueueSend(coda, &v, portMAX_DELAY); vTaskDelay(pdMS_TO_TICKS(100)); }
+}
+void taskElabora(void*) {
+    int v; for (;;) if (xQueueReceive(coda, &v, portMAX_DELAY)) elabora(v);
+}
+int main() {
+    coda = xQueueCreate(8, sizeof(int));
+    xTaskCreate(taskSensore, "sens", 256, nullptr, 2, nullptr);
+    xTaskCreate(taskElabora, "elab", 256, nullptr, 1, nullptr);
+    vTaskStartScheduler();
+}
+```
+
+### Lezione 26.3 - Bootloader, OTA, sicurezza e Embedded Linux
+
+Bootloader (MCUboot, U-Boot), aggiornamenti OTA firmati, secure boot, crittografia (mbedTLS), gestione di flash e wear leveling, diagnostica e log in-field. Per sistemi piu' potenti si usa **Embedded Linux** (Yocto, Buildroot, Raspberry Pi): accesso a GPIO via `libgpiod`, `/dev/i2c`, `/dev/spidev`, driver in userspace, systemd, cross-compilazione con CMake toolchain file. Standard di codifica per sistemi critici: **MISRA C++**, **AUTOSAR C++14**, **CERT C++**, ISO 26262 (automotive), DO-178C (aerospaziale), IEC 61508.
+
+### Lezione 26.4 - Progetti pratici embedded
+
+- LED lampeggiante con timer e interrupt (senza `delay`).
+- Lettura di un sensore di temperatura I2C con filtro a media mobile e display OLED.
+- Macchina a stati per un distributore (stati, eventi, transizioni).
+- Datalogger su scheda SD con FreeRTOS.
+- Stazione meteo ESP32 che pubblica su MQTT.
+- Controllo PID di un motore DC con encoder.
+- Driver SPI generico basato su template e concepts, testato su PC.
+
+LC: 232 - Implement Queue using Stacks
+LC: 1670 - Design Front Middle Back Queue
+LC: 295 - Find Median from Data Stream
+LC: 480 - Sliding Window Median
+LC: 362 - Design Hit Counter
+LC: 1429 - First Unique Number

@@ -1,0 +1,124 @@
+# Parte 9 - Sistemi operativi
+
+## Capitolo 27 - Programmazione di sistema (POSIX/Linux e Windows)
+
+### Lezione 27.1 - Processi, fork/exec, segnali
+
+Un sistema operativo gestisce processi, memoria, file, dispositivi e rete. In C++ si usano le API di sistema: POSIX su Linux/macOS, Win32 su Windows. Un processo ha un PID, uno spazio di indirizzi, file descriptor. `fork()` clona il processo, `exec*()` ne sostituisce l'immagine, `waitpid()` attende il figlio.
+
+```cpp
+#include <unistd.h>
+#include <sys/wait.h>
+#include <csignal>
+#include <iostream>
+
+int main() {
+    pid_t pid = fork();
+    if (pid == 0) { execlp("ls", "ls", "-l", nullptr); _exit(127); }
+    int stato; waitpid(pid, &stato, 0);
+    std::cout << "figlio terminato con " << WEXITSTATUS(stato) << '\n';
+}
+```
+
+Segnali: `SIGINT`, `SIGTERM`, `SIGSEGV`, `SIGCHLD`; con `sigaction` si installano handler (solo funzioni async-signal-safe al loro interno).
+
+### Lezione 27.2 - File descriptor, pipe, IPC e memoria condivisa
+
+Tutto e' un file: file regolari, pipe, socket, dispositivi. API: `open`, `read`, `write`, `close`, `dup2`, `pipe`, `mmap`, `fcntl`. IPC: pipe e FIFO, socket Unix, code di messaggi, memoria condivisa (`shm_open` + `mmap`), semafori, segnali. Wrapper RAII: classe `FileDescriptor` che chiama `close()` nel distruttore.
+
+```cpp
+class Fd {
+    int fd_;
+public:
+    explicit Fd(int fd = -1) : fd_(fd) {}
+    ~Fd() { if (fd_ >= 0) ::close(fd_); }
+    Fd(Fd&& o) noexcept : fd_(std::exchange(o.fd_, -1)) {}
+    Fd& operator=(Fd&& o) noexcept { std::swap(fd_, o.fd_); return *this; }
+    Fd(const Fd&) = delete; Fd& operator=(const Fd&) = delete;
+    int get() const { return fd_; }
+};
+```
+
+### Lezione 27.3 - Una mini shell
+
+Esercizio completo: leggi una riga, tokenizza, `fork`+`exec`, gestisci pipe (`a | b`), redirezioni (`>`, `<`), comandi interni (`cd`, `exit`), job in background (`&`) e `SIGINT`.
+
+LC: 71 - Simplify Path
+LC: 588 - Design In-Memory File System
+LC: 609 - Find Duplicate File in System
+LC: 1166 - Design File System
+LC: 636 - Exclusive Time of Functions
+LC: 862 - Shortest Subarray with Sum at Least K
+
+## Capitolo 28 - Concetti di sistemi operativi
+
+### Lezione 28.1 - Scheduling, memoria virtuale, paginazione
+
+Scheduling della CPU: FCFS, SJF, Round Robin, priorita', MLFQ, CFS di Linux. Memoria virtuale: tabelle delle pagine, TLB, page fault, swapping, algoritmi di sostituzione (FIFO, LRU, Clock). Allocatori: first-fit/best-fit, buddy system, slab; `malloc` implementato con liste libere. Implementare un allocatore e' un ottimo esercizio.
+
+LC: 146 - LRU Cache
+LC: 460 - LFU Cache
+LC: 621 - Task Scheduler
+LC: 253 - Meeting Rooms II
+LC: 56 - Merge Intervals
+LC: 1834 - Single-Threaded CPU
+LC: 1962 - Remove Stones to Minimize the Total
+LC: 358 - Rearrange String k Distance Apart
+
+### Lezione 28.2 - Sincronizzazione e deadlock
+
+Race condition, sezioni critiche, mutex, semafori, monitor, spinlock, lock-free. Problemi classici: produttore-consumatore, lettori-scrittori, filosofi a cena. Deadlock: condizioni di Coffman (mutua esclusione, hold and wait, no preemption, attesa circolare); prevenzione con ordinamento delle risorse (`std::scoped_lock`/`std::lock` acquisiscono piu' mutex senza deadlock).
+
+LC: 1226 - The Dining Philosophers
+LC: 1195 - Fizz Buzz Multithreaded
+LC: 1279 - Traffic Light Controlled Intersection
+LC: 207 - Course Schedule (rilevare cicli di dipendenza)
+
+### Lezione 28.3 - File system e I/O
+
+Struttura di un file system: superblocco, inode, blocchi dati, directory, journaling (ext4), copy-on-write (Btrfs, ZFS, APFS), FAT. Operazioni di I/O: buffered vs direct, `mmap`, `io_uring`, `epoll`, I/O asincrono. Implementa un mini file system in un file immagine.
+
+## Capitolo 29 - Costruire un sistema operativo
+
+### Lezione 29.1 - Boot, bare metal e kernel minimale
+
+Per sviluppare un OS in C++ si lavora in ambiente **freestanding**: niente libreria standard completa, niente eccezioni/RTTI (o implementati da te), cross-compiler (`x86_64-elf-g++` o `riscv64-elf-g++`), emulatore **QEMU**. Sequenza di avvio: firmware (BIOS/UEFI) -> bootloader (GRUB, limine) -> kernel. Tappe di un kernel didattico:
+
+- Boot con header Multiboot2, passaggio in modalita' 64 bit.
+- Output su console VGA/seriale.
+- GDT, IDT, gestione delle eccezioni e degli interrupt (PIC/APIC), timer PIT/HPET.
+- Gestore di memoria fisica (bitmap/buddy) e virtuale (paginazione), heap del kernel.
+- Tastiera (PS/2), driver ATA/AHCI/NVMe, file system.
+- Scheduler cooperativo poi preemptive, context switch in assembly.
+- Syscall (`syscall`/`sysret`), modalita' utente, caricamento di eseguibili ELF.
+- Shell in user space, libc minimale, rete (driver e1000 + TCP/IP).
+
+```cpp
+extern "C" void kmain(std::uint32_t magic, void* info) {
+    Console::pulisci();
+    Console::stampa("Kernel avviato\n");
+    Gdt::init(); Idt::init(); Pic::init(); Timer::avvia(100);
+    Paging::init(info); Heap::init();
+    asm volatile("sti");
+    for (;;) asm volatile("hlt");
+}
+```
+
+```cpp
+// global constructors e operatori new nel kernel
+void* operator new(std::size_t n) { return Heap::alloca(n); }
+void operator delete(void* p) noexcept { Heap::libera(p); }
+```
+
+Risorse: OSDev wiki, "Operating Systems: Three Easy Pieces", xv6 (MIT), "Writing an OS in Rust/C++" tutorial, SerenityOS (un OS completo in C++ moderno, ottimo da leggere), Linux kernel (C, con Rust), Haiku e Fuchsia/Zircon (C++).
+
+### Lezione 29.2 - Driver, moduli e C++ nel kernel
+
+Scrivere driver per Windows (WDK, KMDF) o per Linux (moduli in C; C++ non e' ammesso nel kernel Linux upstream). In user space con **FUSE** puoi implementare file system, con **libusb** driver USB, con **DPDK** e **io_uring** I/O ad alte prestazioni. Concetti: MMIO, DMA, interrupt handler top/bottom half, concorrenza nel kernel, sicurezza (ring 0 / ring 3, ASLR, NX, SMEP).
+
+LC: 146 - LRU Cache
+LC: 380 - Insert Delete GetRandom O(1)
+LC: 705 - Design HashSet
+LC: 622 - Design Circular Queue
+LC: 1396 - Design Underground System
+LC: 1348 - Tweet Counts Per Frequency

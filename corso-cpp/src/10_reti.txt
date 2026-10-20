@@ -1,0 +1,115 @@
+# Parte 10 - Programmazione di reti
+
+## Capitolo 30 - Fondamenti di networking
+
+### Lezione 30.1 - Modello ISO/OSI e TCP/IP
+
+Livelli TCP/IP: collegamento (Ethernet, Wi-Fi), rete (IP, ICMP, ARP), trasporto (TCP, UDP, QUIC), applicazione (HTTP, DNS, TLS, SMTP, SSH, MQTT). Concetti: indirizzi IPv4/IPv6, subnet, porte, NAT, routing, MTU, handshake a tre vie di TCP, controllo di flusso e di congestione. Strumenti: `ping`, `traceroute`, `ss`, `nc`, `tcpdump`, **Wireshark**, `curl`, `nmap`.
+
+Endianness: la rete usa **big endian** (network byte order). Funzioni `htons`, `htonl`, `ntohs`, `ntohl`, oppure `std::byteswap` (C++23) e `std::endian` (C++20).
+
+### Lezione 30.2 - Socket BSD in C++
+
+Server TCP sequenziale con socket POSIX:
+
+```cpp
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <unistd.h>
+#include <cstring>
+#include <iostream>
+
+int main() {
+    int srv = socket(AF_INET, SOCK_STREAM, 0);
+    int opt = 1; setsockopt(srv, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof opt);
+    sockaddr_in a{}; a.sin_family = AF_INET; a.sin_addr.s_addr = INADDR_ANY; a.sin_port = htons(9000);
+    bind(srv, (sockaddr*)&a, sizeof a);
+    listen(srv, 16);
+    for (;;) {
+        int c = accept(srv, nullptr, nullptr);
+        char buf[1024];
+        ssize_t n;
+        while ((n = recv(c, buf, sizeof buf, 0)) > 0) send(c, buf, n, 0);   // echo
+        close(c);
+    }
+}
+```
+
+Client TCP: `socket` -> `getaddrinfo` -> `connect` -> `send/recv` -> `close`. Per UDP: `SOCK_DGRAM`, `sendto/recvfrom`. Gestire sempre: letture/scritture parziali, `EINTR`, timeout, chiusura ordinata (`shutdown`), `SIGPIPE`.
+
+## Capitolo 31 - Server scalabili
+
+### Lezione 31.1 - Modelli di concorrenza dei server
+
+1. **Un processo/thread per connessione**: semplice, non scala.
+2. **Thread pool** con coda di lavori.
+3. **Multiplexing** con `select`/`poll` e soprattutto `epoll` (Linux), `kqueue` (BSD/macOS), IOCP (Windows), **`io_uring`** (Linux moderno).
+4. **Reactor** (event loop) o **Proactor** (completamento asincrono).
+5. **Coroutine** sopra un event loop (Asio, libuv, liburing).
+
+Il problema C10K/C10M: gestire decine di migliaia di connessioni con pochi thread, buffer non bloccanti, backpressure e timeout.
+
+```cpp
+int ep = epoll_create1(0);
+epoll_event ev{}; ev.events = EPOLLIN; ev.data.fd = srv;
+epoll_ctl(ep, EPOLL_CTL_ADD, srv, &ev);
+epoll_event eventi[64];
+for (;;) {
+    int n = epoll_wait(ep, eventi, 64, -1);
+    for (int i = 0; i < n; ++i) {
+        int fd = eventi[i].data.fd;
+        if (fd == srv) { int c = accept4(srv, nullptr, nullptr, SOCK_NONBLOCK); /* registra c */ }
+        else gestisciLettura(fd);
+    }
+}
+```
+
+### Lezione 31.2 - Protocolli applicativi e serializzazione
+
+Progettare un protocollo: framing (prefisso di lunghezza, delimitatori), versioning, checksum, gestione di messaggi parziali. Formati: JSON, Protocol Buffers, FlatBuffers, MessagePack, CBOR. Il codice di parsing deve essere robusto contro input malevoli (limiti di lunghezza, validazione, fuzzing).
+
+```cpp
+struct Intestazione { std::uint32_t lunghezza; std::uint16_t tipo; std::uint16_t versione; };
+// invio: lunghezza in network byte order, poi payload
+```
+
+### Lezione 31.3 - TLS, sicurezza e RPC
+
+**TLS** con OpenSSL, BoringSSL, mbedTLS, wolfSSL o `Boost.Asio::ssl`: certificati, catena di fiducia, SNI, ALPN, verifica dell'hostname. Evitare di scrivere crittografia in proprio. Altri temi: autenticazione, rate limiting, SYN flood, buffer overflow nei parser, DoS. **gRPC** (HTTP/2 + protobuf), **WebSocket**, **QUIC/HTTP3** (msquic, ngtcp2), **ZeroMQ**, **nanomsg** per messaggistica distribuita.
+
+LC: 535 - Encode and Decode TinyURL
+LC: 271 - Encode and Decode Strings (framing)
+LC: 359 - Logger Rate Limiter
+LC: 362 - Design Hit Counter
+LC: 1146 - Snapshot Array
+LC: 1244 - Design A Leaderboard
+LC: 981 - Time Based Key-Value Store
+LC: 1396 - Design Underground System
+LC: 1500 - Design a File Sharing System
+
+## Capitolo 32 - Algoritmi e progetti di rete
+
+### Lezione 32.1 - Algoritmi di rete
+
+Instradamento (Dijkstra e Bellman-Ford sono alla base di OSPF e RIP), spanning tree (STP), flusso massimo, load balancing (round robin, least connections, consistent hashing), rate limiting (token bucket, leaky bucket, sliding window), controllo di congestione (AIMD, CUBIC, BBR), compressione (Huffman, LZ77), checksum e CRC, codici di correzione degli errori.
+
+LC: 743 - Network Delay Time
+LC: 1334 - Find the City With the Smallest Number of Neighbors at a Threshold Distance
+LC: 1135 - Connecting Cities With Minimum Cost
+LC: 1319 - Number of Operations to Make Network Connected
+LC: 1202 - Smallest String With Swaps
+LC: 886 - Possible Bipartition
+LC: 1584 - Min Cost to Connect All Points
+LC: 1976 - Number of Ways to Arrive at Destination
+LC: 2092 - Find All People With Secret
+
+### Lezione 32.2 - Progetti di rete
+
+- Chat multiutente con epoll o Asio (stanze, nickname, comandi).
+- Client/server HTTP minimale con parser delle richieste e file statici.
+- Port scanner e traceroute con raw socket (solo su reti tue!).
+- Proxy TCP/SOCKS5 e load balancer.
+- Server DNS ricorsivo semplice con cache.
+- Trasferimento file affidabile sopra UDP (ritrasmissioni, finestra scorrevole).
+- Client MQTT e broker minimale.
+- Gioco multiplayer client-server autoritativo (vedi Parte 7).

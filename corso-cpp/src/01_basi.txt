@@ -1,0 +1,250 @@
+# Parte 1 - Fondamenti del linguaggio
+
+## Capitolo 1 - Introduzione e ambiente di lavoro
+
+### Lezione 1.1 - Cos'e' il C++ e perche' impararlo
+
+Il C++ e' un linguaggio compilato, staticamente tipizzato e multi-paradigma (procedurale, orientato agli oggetti, generico, funzionale). Creato da Bjarne Stroustrup nel 1979 come "C with Classes", e' standardizzato da ISO: C++98, C++03, C++11, C++14, C++17, C++20, C++23. Questo corso usa lo stile del **C++ moderno** (da C++11 in poi): niente `new`/`delete` manuali, niente puntatori grezzi proprietari, molto uso della libreria standard.
+
+Il C++ e' usato dove servono prestazioni e controllo: motori di gioco (Unreal), browser (Chrome, Firefox), database (MySQL, MongoDB, ClickHouse), sistemi operativi e driver, firmware embedded, finanza ad alta frequenza, grafica e machine learning (backend di PyTorch, TensorFlow).
+
+- **Zero-cost abstraction**: non paghi per cio' che non usi.
+- **Controllo della memoria**: gestione deterministica delle risorse tramite RAII.
+- **Ecosistema enorme**: STL, Boost, Qt, Eigen, Asio, SDL e molto altro.
+
+### Lezione 1.2 - Compilatori, toolchain e primo programma
+
+Compilatori principali: GCC (`g++`), Clang (`clang++`), MSVC. Per seguire il corso installa GCC 13+ o Clang 17+ e CMake. Il processo di build ha quattro fasi: preprocessore, compilazione, assemblaggio, linking.
+
+```cpp
+#include <iostream>
+
+int main() {
+    std::cout << "Ciao, mondo!\n";
+    return 0;
+}
+```
+
+```bash
+g++ -std=c++20 -Wall -Wextra -O2 main.cpp -o main
+./main
+```
+
+Opzioni utili: `-Wall -Wextra -Wpedantic` (avvisi), `-g` (debug), `-O2` (ottimizzazione), `-fsanitize=address,undefined` (sanitizer, indispensabili durante lo sviluppo).
+
+NOTA: Compila sempre con gli avvisi attivi e con i sanitizer in debug: individuano la maggior parte degli errori di memoria e di comportamento indefinito.
+
+### Lezione 1.3 - Strumenti: CMake, debugger, IDE
+
+CMake e' lo standard de facto per descrivere progetti C++ multipiattaforma.
+
+```cmake
+cmake_minimum_required(VERSION 3.20)
+project(corso LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+add_executable(corso src/main.cpp)
+target_compile_options(corso PRIVATE -Wall -Wextra)
+```
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build -j
+```
+
+Altri strumenti: **gdb/lldb** (debugger), **valgrind**, **clang-format** (formattazione), **clang-tidy** (analisi statica), **Conan/vcpkg** (gestione dipendenze), **Catch2/GoogleTest** (test), IDE come CLion, VS Code (con clangd) e Visual Studio.
+
+## Capitolo 2 - Tipi, variabili e operatori
+
+### Lezione 2.1 - Tipi fondamentali
+
+Tipi interi: `int`, `long`, `long long`, `short`, `char` e varianti `unsigned`. Per dimensioni garantite usa `<cstdint>`: `int32_t`, `uint64_t`, ecc. Tipi in virgola mobile: `float`, `double`, `long double`. Altri: `bool`, `char`, `wchar_t`, `char8_t` (C++20), `std::byte`.
+
+```cpp
+#include <cstdint>
+#include <iostream>
+int main() {
+    int a = 42;
+    double pi = 3.14159;
+    std::uint8_t byte = 255;
+    bool ok = true;
+    auto x = 10u;          // deduzione: unsigned int
+    int b{7};              // inizializzazione uniforme (vieta narrowing)
+    constexpr int N = 100; // valutata a compile time
+    std::cout << sizeof(int) << ' ' << sizeof(long long) << '\n';
+}
+```
+
+Preferisci l'inizializzazione con parentesi graffe `{}`: impedisce le conversioni con perdita (`int x{3.5};` e' un errore). `auto` deduce il tipo, `const` e `constexpr` esprimono immutabilita'.
+
+LC: 7 - Reverse Integer (overflow e limiti dei tipi)
+LC: 9 - Palindrome Number
+LC: 13 - Roman to Integer
+
+### Lezione 2.2 - Operatori e conversioni
+
+Aritmetici (`+ - * / %`), confronto, logici (`&& || !`), bit a bit (`& | ^ ~ << >>`), assegnazione composta, ternario `?:`. Attenzione a: divisione tra interi (tronca), overflow dei signed (comportamento indefinito), confronti signed/unsigned. Usa `static_cast<T>(x)` per le conversioni esplicite; evita i cast in stile C.
+
+```cpp
+int n = 7;
+double r = static_cast<double>(n) / 2;   // 3.5
+unsigned flags = 0b1010;
+flags |= (1u << 0);                      // imposta il bit 0
+bool bit3 = flags & (1u << 3);
+```
+
+Il C++20 introduce l'operatore a tre vie `<=>` (spaceship) che genera automaticamente tutti i confronti.
+
+LC: 191 - Number of 1 Bits
+LC: 231 - Power of Two
+LC: 136 - Single Number (XOR)
+LC: 338 - Counting Bits
+LC: 190 - Reverse Bits
+
+## Capitolo 3 - Controllo di flusso e funzioni
+
+### Lezione 3.1 - Istruzioni condizionali e cicli
+
+`if`, `else`, `switch`, `for`, `while`, `do-while`, `break`, `continue`. Il C++17 consente l'inizializzazione nell'`if` e nello `switch`; il C++11 introduce il ciclo range-based.
+
+```cpp
+#include <vector>
+#include <map>
+#include <iostream>
+int main() {
+    std::vector<int> v{1, 2, 3, 4};
+    for (int x : v) std::cout << x << ' ';
+
+    std::map<std::string, int> m{{"a", 1}, {"b", 2}};
+    for (const auto& [chiave, valore] : m)        // structured bindings (C++17)
+        std::cout << chiave << '=' << valore << '\n';
+
+    if (auto it = m.find("a"); it != m.end())      // init-statement (C++17)
+        std::cout << it->second;
+}
+```
+
+LC: 1 - Two Sum
+LC: 26 - Remove Duplicates from Sorted Array
+LC: 27 - Remove Element
+LC: 412 - Fizz Buzz
+LC: 1480 - Running Sum of 1d Array
+
+### Lezione 3.2 - Funzioni, overloading e lambda
+
+Una funzione ha tipo di ritorno, nome e parametri. Passaggio per valore, per riferimento (`T&`), per riferimento costante (`const T&`). L'overloading permette piu' funzioni con lo stesso nome ma parametri diversi. Gli argomenti di default riducono la duplicazione.
+
+```cpp
+#include <algorithm>
+#include <vector>
+int somma(int a, int b = 0) { return a + b; }
+double somma(double a, double b) { return a + b; }
+
+[[nodiscard]] constexpr int fattoriale(int n) {
+    return n <= 1 ? 1 : n * fattoriale(n - 1);
+}
+
+int main() {
+    std::vector<int> v{5, 2, 9, 1};
+    int soglia = 3;
+    auto grandi = std::count_if(v.begin(), v.end(), [soglia](int x) { return x > soglia; });
+    auto quadrato = [](auto x) { return x * x; };   // lambda generica
+    static_assert(fattoriale(5) == 120);
+}
+```
+
+La ricorsione e' una tecnica fondamentale: ogni funzione ricorsiva ha un caso base e un passo ricorsivo.
+
+LC: 509 - Fibonacci Number
+LC: 70 - Climbing Stairs
+LC: 50 - Pow(x, n)
+LC: 344 - Reverse String
+
+## Capitolo 4 - Puntatori, riferimenti e memoria
+
+### Lezione 4.1 - Riferimenti e puntatori
+
+Un riferimento e' un alias di un oggetto esistente. Un puntatore contiene un indirizzo e puo' essere riassegnato o nullo (`nullptr`). Usa riferimenti quando possibile, puntatori quando serve opzionalita' o riassegnazione.
+
+```cpp
+int x = 10;
+int& r = x;        // riferimento
+int* p = &x;       // puntatore
+*p = 20;           // x vale 20
+r++;               // x vale 21
+int arr[3] = {1, 2, 3};
+int* q = arr;      // decadimento array -> puntatore
+q[1] = 5;          // aritmetica dei puntatori: *(q+1)
+```
+
+### Lezione 4.2 - Stack, heap, durata e RAII
+
+Gli oggetti automatici vivono nello **stack** e sono distrutti all'uscita dallo scope. Gli oggetti dinamici vivono nell'**heap**. **RAII** (Resource Acquisition Is Initialization) lega la durata di una risorsa (memoria, file, mutex, socket) alla vita di un oggetto: il distruttore la rilascia automaticamente, anche in presenza di eccezioni.
+
+Errori classici: memory leak, dangling pointer, double free, buffer overflow, use-after-free. Il C++ moderno li evita con gli smart pointer e i contenitori della STL.
+
+```cpp
+#include <memory>
+struct Nodo { int valore; std::unique_ptr<Nodo> next; };
+
+auto a = std::make_unique<int>(42);        // proprieta' esclusiva
+auto b = std::make_shared<int>(7);         // proprieta' condivisa (conteggio)
+std::weak_ptr<int> w = b;                  // osservatore non proprietario
+```
+
+NOTA: Regola d'oro del C++ moderno: non scrivere `new` e `delete` nel codice applicativo. Usa `make_unique`, `make_shared` e i contenitori.
+
+LC: 141 - Linked List Cycle
+LC: 206 - Reverse Linked List
+LC: 21 - Merge Two Sorted Lists
+LC: 876 - Middle of the Linked List
+
+## Capitolo 5 - Stringhe, I/O e file
+
+### Lezione 5.1 - std::string e std::string_view
+
+`std::string` gestisce testo con memoria dinamica; `std::string_view` (C++17) e' una vista non proprietaria, ideale per parametri in sola lettura. Funzioni utili: `substr`, `find`, `replace`, `append`, `std::to_string`, `std::stoi`.
+
+```cpp
+#include <string>
+#include <string_view>
+#include <format>      // C++20
+#include <iostream>
+
+int contaVocali(std::string_view s) {
+    int n = 0;
+    for (char c : s) if (std::string_view("aeiouAEIOU").find(c) != std::string_view::npos) ++n;
+    return n;
+}
+int main() {
+    std::string s = "Ciao mondo";
+    std::cout << std::format("'{}' ha {} vocali\n", s, contaVocali(s));
+}
+```
+
+LC: 14 - Longest Common Prefix
+LC: 125 - Valid Palindrome
+LC: 242 - Valid Anagram
+LC: 387 - First Unique Character in a String
+LC: 49 - Group Anagrams
+LC: 5 - Longest Palindromic Substring
+
+### Lezione 5.2 - Stream e file
+
+Le classi `std::ifstream`, `std::ofstream` e `std::fstream` leggono e scrivono file, chiudendoli automaticamente (RAII). C++17 aggiunge `std::filesystem` per percorsi e directory.
+
+```cpp
+#include <fstream>
+#include <filesystem>
+#include <sstream>
+#include <iostream>
+namespace fs = std::filesystem;
+
+int main() {
+    { std::ofstream out("dati.txt"); out << "riga 1\nriga 2\n"; }
+    std::ifstream in("dati.txt");
+    std::string riga;
+    while (std::getline(in, riga)) std::cout << riga << '\n';
+    for (auto& e : fs::directory_iterator(".")) std::cout << e.path() << '\n';
+}
+```

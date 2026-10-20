@@ -1,0 +1,159 @@
+# Parte 11 - Programmazione di database
+
+## Capitolo 33 - Usare database da C++
+
+### Lezione 33.1 - SQL e SQLite
+
+Un database relazionale organizza i dati in tabelle; SQL permette di interrogarli (`SELECT`, `JOIN`, `GROUP BY`), modificarli (`INSERT`, `UPDATE`, `DELETE`) e definirne lo schema. Concetti: chiavi primarie/esterne, indici, normalizzazione, transazioni e proprieta' **ACID**, livelli di isolamento (read committed, repeatable read, serializable), query plan (`EXPLAIN`).
+
+**SQLite** e' la via piu' semplice per cominciare (libreria C embedded, zero configurazione).
+
+```cpp
+#include <sqlite3.h>
+#include <iostream>
+#include <memory>
+
+int main() {
+    sqlite3* raw = nullptr;
+    sqlite3_open("corso.db", &raw);
+    std::unique_ptr<sqlite3, decltype(&sqlite3_close)> db(raw, &sqlite3_close);
+
+    sqlite3_exec(db.get(), "CREATE TABLE IF NOT EXISTS utenti(id INTEGER PRIMARY KEY, nome TEXT, eta INT);", 0, 0, 0);
+
+    sqlite3_stmt* st;
+    sqlite3_prepare_v2(db.get(), "INSERT INTO utenti(nome, eta) VALUES(?, ?);", -1, &st, nullptr);
+    sqlite3_bind_text(st, 1, "Anna", -1, SQLITE_TRANSIENT);   // query parametrizzata: niente SQL injection
+    sqlite3_bind_int(st, 2, 30);
+    sqlite3_step(st); sqlite3_finalize(st);
+
+    sqlite3_prepare_v2(db.get(), "SELECT nome, eta FROM utenti;", -1, &st, nullptr);
+    while (sqlite3_step(st) == SQLITE_ROW)
+        std::cout << sqlite3_column_text(st, 0) << ' ' << sqlite3_column_int(st, 1) << '\n';
+    sqlite3_finalize(st);
+}
+```
+
+NOTA: Usa sempre query parametrizzate (prepared statement): concatenare stringhe nelle query espone ad attacchi di SQL injection.
+
+LC: 175 - Combine Two Tables (SQL)
+LC: 176 - Second Highest Salary (SQL)
+LC: 181 - Employees Earning More Than Their Managers (SQL)
+LC: 182 - Duplicate Emails (SQL)
+LC: 183 - Customers Who Never Order (SQL)
+LC: 184 - Department Highest Salary (SQL)
+LC: 262 - Trips and Users (SQL)
+LC: 185 - Department Top Three Salaries (SQL)
+
+### Lezione 33.2 - PostgreSQL, MySQL e ORM
+
+Client C++ per i principali DBMS: **libpqxx** (PostgreSQL), **MySQL Connector/C++** e **MariaDB Connector**, **ODBC/nanodbc**, **SOCI** (astrazione multi-database), **sqlpp11**, **ODB**, **Drogon ORM**, **QxOrm**; per NoSQL: **mongocxx** (MongoDB), **hiredis/redis-plus-plus** (Redis), **cassandra-cpp-driver**, **cpp-driver per Couchbase**. Pool di connessioni, transazioni RAII, gestione degli errori, mapping tra tipi SQL e C++ (`std::optional` per NULL).
+
+```cpp
+#include <pqxx/pqxx>
+int main() {
+    pqxx::connection c("dbname=corso user=app host=localhost");
+    pqxx::work tx(c);
+    pqxx::result r = tx.exec_params("SELECT nome FROM utenti WHERE eta > $1", 18);
+    for (auto riga : r) std::cout << riga[0].as<std::string>() << '\n';
+    tx.exec_params("UPDATE utenti SET eta = eta + 1 WHERE id = $1", 7);
+    tx.commit();    // senza commit: rollback automatico nel distruttore
+}
+```
+
+## Capitolo 34 - Costruire un database: strutture e algoritmi
+
+### Lezione 34.1 - Storage engine: pagine, B-tree, LSM-tree
+
+Un DBMS e' fatto di: parser SQL, planner/ottimizzatore, executor, **storage engine**, buffer pool, gestore di transazioni, log (WAL). Molti database sono scritti in C++: MySQL, MongoDB, ClickHouse, RocksDB, LevelDB, DuckDB, ScyllaDB, FoundationDB.
+
+- **Pagine** di dimensione fissa (4-16 KB) su disco; **buffer pool** con politica LRU/Clock.
+- **B+tree**: indice ordinato con letture ottimizzate per disco; usato da InnoDB e PostgreSQL.
+- **LSM-tree**: memtable in RAM + SSTable su disco con compaction (RocksDB, Cassandra); ottimo per scritture.
+- **Hash index**, **bitmap index**, **R-tree** (geospaziale), **inverted index** (full-text).
+- **WAL** (Write-Ahead Logging) per durabilita' e recupero dai crash (ARIES).
+- **MVCC** per letture non bloccanti; lock a due fasi per l'isolamento.
+- **Colonnare** vs **riga**: analitica (OLAP) vs transazionale (OLTP).
+
+```cpp
+// Scheletro di una pagina slotted
+struct Pagina {
+    static constexpr std::size_t DIM = 4096;
+    std::uint16_t nSlot, offsetLibero;
+    std::byte dati[DIM - 4];
+};
+```
+
+LC: 146 - LRU Cache (buffer pool)
+LC: 460 - LFU Cache
+LC: 981 - Time Based Key-Value Store
+LC: 1146 - Snapshot Array (MVCC)
+LC: 355 - Design Twitter
+LC: 981 - Time Based Key-Value Store
+LC: 706 - Design HashMap
+LC: 208 - Implement Trie (Prefix Tree)
+LC: 307 - Range Sum Query - Mutable
+LC: 315 - Count of Smaller Numbers After Self
+LC: 23 - Merge k Sorted Lists (merge delle SSTable)
+
+### Lezione 34.2 - Parser e ottimizzatore di query
+
+Un parser SQL si costruisce con lexer + parser a discesa ricorsiva (o ANTLR, Bison, PEGTL). Il risultato e' un AST che il planner trasforma in un piano logico e poi fisico (scelta di indici, ordine dei join, algoritmi nested-loop/hash/merge join). Un'ottimizzazione basata sui costi usa statistiche e istogrammi.
+
+```cpp
+struct Espr { virtual ~Espr() = default; virtual double valuta() const = 0; };
+// Parser a discesa ricorsiva per: expr := term (('+'|'-') term)*
+```
+
+LC: 224 - Basic Calculator
+LC: 227 - Basic Calculator II
+LC: 772 - Basic Calculator III
+LC: 150 - Evaluate Reverse Polish Notation
+LC: 394 - Decode String
+LC: 726 - Number of Atoms
+LC: 1096 - Brace Expansion II
+
+### Lezione 34.3 - Progetti con database
+
+- Rubrica / gestionale con SQLite e interfaccia a riga di comando.
+- Key-value store persistente con WAL e compattazione (stile Bitcask).
+- Piccolo B-tree su file con pagine e buffer pool.
+- Mini SQL engine: CREATE/INSERT/SELECT con WHERE su tabelle in memoria, poi su disco.
+- API REST (Parte 6) collegata a PostgreSQL con pool di connessioni.
+- Cache distribuita con protocollo Redis (RESP) sopra il server epoll della Parte 10.
+
+# Parte 12 - Percorso di studio e progetti finali
+
+## Capitolo 35 - Piano di studio e preparazione ai colloqui
+
+### Lezione 35.1 - Piano di studio suggerito (24 settimane)
+
+- Settimane 1-4: Parte 1 (basi) + 30 problemi LeetCode Easy su array, stringhe, hash map.
+- Settimane 5-8: Parte 2 (OOP, template, C++ moderno) + liste concatenate, stack, queue.
+- Settimane 9-12: Parte 3 (STL e strutture dati) + alberi, heap, grafi (Medium).
+- Settimane 13-16: Parte 4 (algoritmi): ricerca binaria, backtracking, DP, grafi.
+- Settimane 17-18: Parte 5 (concorrenza, prestazioni, librerie, test).
+- Settimane 19-24: scegli un percorso di specializzazione (Parti 6-11) e realizza un progetto completo.
+
+Tecnica per LeetCode: leggi il problema, scrivi esempi, individua il pattern (hash map, two pointers, sliding window, stack, binary search, BFS/DFS, DP, heap, backtracking, union-find), stima la complessita', implementa, testa casi limite. Liste utili: **Blind 75**, **NeetCode 150**, **Grind 75**. Obiettivo: 150-300 problemi risolti in modo ragionato, non 1000 a memoria.
+
+LC: Blind 75 - lista curata di problemi fondamentali
+LC: NeetCode 150 - percorso per pattern
+LC: Grind 75 - piano di studio a settimane
+LC: LeetCode Explore Cards - "Arrays 101", "Linked List", "Binary Tree", "Graph", "Dynamic Programming"
+
+### Lezione 35.2 - Progetti finali consigliati
+
+1. **Libreria di strutture dati** generiche con concepts e test (Catch2).
+2. **Server HTTP** asincrono con Asio e database PostgreSQL.
+3. **Gioco 2D** con ECS (EnTT) e SDL/SFML, poi port su WebAssembly.
+4. **Firmware** per ESP32/STM32 con FreeRTOS, sensore e MQTT.
+5. **Mini kernel** x86_64/RISC-V che stampa su seriale, gestisce interrupt e memoria.
+6. **Key-value store** persistente con protocollo di rete.
+7. **App mobile** con core C++ condiviso tra Android (JNI) e iOS (Swift interop).
+
+### Lezione 35.3 - Risorse per continuare
+
+- Libri: "A Tour of C++" (Stroustrup), "Effective Modern C++" (Meyers), "C++ Concurrency in Action" (Williams), "C++ Templates: The Complete Guide", "The C++ Programming Language", "Programming: Principles and Practice Using C++", "Game Programming Patterns", "Computer Systems: A Programmer's Perspective", "Designing Data-Intensive Applications", "Introduction to Algorithms (CLRS)".
+- Siti: cppreference.com, isocpp.org, C++ Core Guidelines, Compiler Explorer (godbolt.org), learncpp.com, cp-algorithms.com.
+- Conferenze e canali: CppCon, C++Now, Meeting C++, The Cherno, Jason Turner (C++ Weekly).
+- Pratica: Exercism, Codeforces, AtCoder, Advent of Code, contributi open source (LLVM, Qt, Boost, SerenityOS).

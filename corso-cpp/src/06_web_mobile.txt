@@ -1,0 +1,142 @@
+# Parte 6 - Programmazione web e mobile
+
+## Capitolo 20 - Programmazione web con C++
+
+### Lezione 20.1 - Il C++ nel backend web
+
+Il C++ si usa sul web dove servono latenza minima e throughput elevato: server HTTP ad alte prestazioni, API gateway, motori di ricerca, servizi di trading, proxy (Envoy, NGINX moduli), browser engine. Framework e librerie principali: **Boost.Beast** (HTTP/WebSocket su Asio), **Crow**, **Drogon** (asincrono, ORM integrato), **Oat++**, **Pistache**, **cpp-httplib** (header-only, ottimo per iniziare), **Wt**, **gRPC** e **Thrift** per RPC.
+
+```cpp
+#include "httplib.h"
+#include <nlohmann/json.hpp>
+using json = nlohmann::json;
+
+int main() {
+    httplib::Server svr;
+    svr.Get("/api/saluto", [](const httplib::Request& req, httplib::Response& res) {
+        std::string nome = req.has_param("nome") ? req.get_param_value("nome") : "mondo";
+        res.set_content(json{{"messaggio", "Ciao " + nome}}.dump(), "application/json");
+    });
+    svr.Post("/api/somma", [](const httplib::Request& req, httplib::Response& res) {
+        auto j = json::parse(req.body);
+        res.set_content(json{{"risultato", j["a"].get<int>() + j["b"].get<int>()}}.dump(), "application/json");
+    });
+    svr.listen("0.0.0.0", 8080);
+}
+```
+
+Concetti da conoscere: HTTP/1.1, HTTP/2, REST, JSON, routing, middleware, autenticazione (JWT, OAuth2), TLS (OpenSSL), CORS, rate limiting, logging strutturato, deploy con Docker.
+
+LC: 146 - LRU Cache (cache di risposte)
+LC: 362 - Design Hit Counter
+LC: 359 - Logger Rate Limiter
+LC: 535 - Encode and Decode TinyURL
+LC: 588 - Design In-Memory File System
+LC: 981 - Time Based Key-Value Store
+
+### Lezione 20.2 - Server asincroni con Boost.Asio e coroutine
+
+Un server scalabile non usa un thread per connessione: usa un event loop (epoll/kqueue/IOCP) e I/O asincrono. Con le coroutine C++20 il codice asincrono ritorna lineare.
+
+```cpp
+#include <boost/asio.hpp>
+namespace asio = boost::asio;
+using asio::ip::tcp;
+
+asio::awaitable<void> sessione(tcp::socket s) {
+    char buf[1024];
+    for (;;) {
+        auto n = co_await s.async_read_some(asio::buffer(buf), asio::use_awaitable);
+        co_await asio::async_write(s, asio::buffer(buf, n), asio::use_awaitable);   // echo
+    }
+}
+asio::awaitable<void> ascolta(unsigned short porta) {
+    auto ex = co_await asio::this_coro::executor;
+    tcp::acceptor acc(ex, {tcp::v4(), porta});
+    for (;;) asio::co_spawn(ex, sessione(co_await acc.async_accept(asio::use_awaitable)), asio::detached);
+}
+int main() {
+    asio::io_context io;
+    asio::co_spawn(io, ascolta(9000), asio::detached);
+    io.run();
+}
+```
+
+### Lezione 20.3 - WebAssembly: C++ nel browser
+
+Con **Emscripten** si compila C++ in WebAssembly (WASM), eseguibile nei browser a velocita' quasi nativa. Casi d'uso: giochi, editor video/immagini, CAD, codec, porting di librerie esistenti (SQLite, OpenCV, FFmpeg). Binding con `embind`.
+
+```cpp
+#include <emscripten/bind.h>
+int fib(int n) { return n < 2 ? n : fib(n - 1) + fib(n - 2); }
+EMSCRIPTEN_BINDINGS(modulo) { emscripten::function("fib", &fib); }
+```
+
+```bash
+emcc fib.cpp -O3 -lembind -o fib.js -sMODULARIZE -sEXPORT_NAME=Fib
+```
+
+### Lezione 20.4 - Interfacce grafiche desktop e architettura full-stack
+
+Per le GUI desktop: **Qt** (Widgets e QML, il framework C++ piu' completo, con segnali/slot), **Dear ImGui** (tool e debug UI), **wxWidgets**, **GTKmm**. Architettura tipica: frontend in JavaScript/TypeScript che comunica via REST/gRPC/WebSocket con un servizio C++ ad alte prestazioni; oppure moduli C++ esposti a Node.js (N-API), Python (pybind11, nanobind) e altri linguaggi tramite FFI.
+
+```cpp
+#include <pybind11/pybind11.h>
+int somma(int a, int b) { return a + b; }
+PYBIND11_MODULE(esempio, m) { m.def("somma", &somma); }
+```
+
+## Capitolo 21 - Programmazione mobile
+
+### Lezione 21.1 - C++ su Android (NDK, JNI)
+
+Android permette di scrivere parti native in C++ con l'**NDK**: motori di gioco, elaborazione audio/video, crittografia, librerie multipiattaforma. La comunicazione con Kotlin/Java avviene via **JNI**. Il build usa CMake integrato in Gradle.
+
+```cpp
+#include <jni.h>
+#include <string>
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_esempio_app_MainActivity_saluto(JNIEnv* env, jobject /*thiz*/) {
+    std::string s = "Ciao da C++";
+    return env->NewStringUTF(s.c_str());
+}
+```
+
+```kotlin
+// Kotlin
+external fun saluto(): String
+companion object { init { System.loadLibrary("nativo") } }
+```
+
+Punti chiave: ABI (arm64-v8a, armeabi-v7a, x86_64), gestione dei riferimenti locali/globali JNI, thread e `AttachCurrentThread`, `AAssetManager`, Vulkan/OpenGL ES, Oboe (audio a bassa latenza), logging con `__android_log_print`.
+
+### Lezione 21.2 - C++ su iOS (Objective-C++ e Swift interop)
+
+Su iOS il C++ si integra con **Objective-C++** (file `.mm`) e, da Swift 5.9, con l'**interoperabilita' diretta Swift/C++**. Si usa per core condivisi tra piattaforme (logica, parser, motori), con interfaccia nativa in SwiftUI/UIKit. Build con Xcode o CMake (`-G Xcode`), Metal per la grafica.
+
+```cpp
+// motore.hpp - core condiviso
+class Motore { public: int calcola(int x) const { return x * 2; } };
+```
+
+```swift
+// Swift 5.9+ con interop C++
+import Motore
+let m = Motore()
+print(m.calcola(21))
+```
+
+### Lezione 21.3 - Framework multipiattaforma: Qt/QML, Flutter, React Native
+
+- **Qt/QML**: un'unica base di codice C++/QML per Android, iOS, desktop, embedded.
+- **Flutter** e **React Native**: UI in Dart/JS con moduli nativi in C++ (FFI di Dart, TurboModules/JSI di React Native).
+- **Kotlin Multiplatform**, **Djinni**, **SWIG**: generazione di binding.
+- **Cocos2d-x**, **Unreal Engine**, **Godot (GDExtension)**: giochi mobili.
+
+Linee guida architetturali: logica di business e algoritmi in C++ portabile (C++17/20, niente dipendenze di piattaforma), strato sottile di binding, UI nativa; test del core su desktop con CI, cross-compilazione con toolchain NDK/Xcode.
+
+LC: 355 - Design Twitter (feed)
+LC: 635 - Design Log Storage System
+LC: 1166 - Design File System
+LC: 380 - Insert Delete GetRandom O(1)
+LC: 432 - All O`one Data Structure

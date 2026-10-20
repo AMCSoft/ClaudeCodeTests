@@ -1,0 +1,197 @@
+# Parte 3 - STL e strutture dati
+
+## Capitolo 9 - La Standard Template Library
+
+### Lezione 9.1 - Contenitori sequenziali
+
+La STL si compone di **contenitori**, **iteratori** e **algoritmi**. Contenitori sequenziali: `std::array` (dimensione fissa), `std::vector` (array dinamico, il default), `std::deque`, `std::list` (lista doppia), `std::forward_list`.
+
+| Contenitore | Accesso | Inserimento in coda | Inserimento in mezzo |
+|---|---|---|---|
+| vector | O(1) | O(1) ammortizzato | O(n) |
+| deque | O(1) | O(1) | O(n) |
+| list | O(n) | O(1) | O(1) con iteratore |
+
+Nota pratica: `std::vector` e' quasi sempre piu' veloce di `std::list` grazie alla localita' di cache. Usa `reserve()` se conosci la dimensione e `emplace_back` per costruire in loco.
+
+```cpp
+std::vector<int> v;
+v.reserve(100);
+for (int i = 0; i < 100; ++i) v.emplace_back(i);
+v.erase(std::remove_if(v.begin(), v.end(), [](int x){ return x % 2; }), v.end()); // erase-remove
+std::erase_if(v, [](int x){ return x > 50; });   // C++20
+```
+
+LC: 88 - Merge Sorted Array
+LC: 283 - Move Zeroes
+LC: 66 - Plus One
+LC: 53 - Maximum Subarray
+LC: 121 - Best Time to Buy and Sell Stock
+LC: 238 - Product of Array Except Self
+LC: 189 - Rotate Array
+
+### Lezione 9.2 - Contenitori associativi e hash
+
+`std::map`/`std::set` (albero rosso-nero, O(log n), ordinati), `std::unordered_map`/`unordered_set` (tabella hash, O(1) medio), `multimap`, `multiset`. C++23 aggiunge `flat_map`/`flat_set`.
+
+```cpp
+#include <unordered_map>
+#include <string>
+std::unordered_map<std::string, int> freq;
+for (const std::string& w : parole) ++freq[w];
+if (auto it = freq.find("ciao"); it != freq.end()) { /* trovato */ }
+// chiave custom: servono std::hash e operator==
+struct Punto { int x, y; bool operator==(const Punto&) const = default; };
+template<> struct std::hash<Punto> {
+    std::size_t operator()(const Punto& p) const noexcept { return std::hash<int>()(p.x) * 31 + std::hash<int>()(p.y); }
+};
+```
+
+LC: 217 - Contains Duplicate
+LC: 219 - Contains Duplicate II
+LC: 347 - Top K Frequent Elements
+LC: 560 - Subarray Sum Equals K
+LC: 128 - Longest Consecutive Sequence
+LC: 3 - Longest Substring Without Repeating Characters
+LC: 4 - Median of Two Sorted Arrays
+
+### Lezione 9.3 - Adattatori, iteratori e algoritmi
+
+Adattatori: `stack`, `queue`, `priority_queue`. Categorie di iteratori: input, forward, bidirectional, random access, contiguous. Algoritmi in `<algorithm>` e `<numeric>`: `sort`, `stable_sort`, `binary_search`, `lower_bound`, `find`, `accumulate`, `transform`, `partition`, `unique`, `reverse`, `rotate`, `next_permutation`, `iota`, `reduce`. In C++17 si possono eseguire in parallelo con `std::execution::par`.
+
+```cpp
+#include <algorithm>
+#include <numeric>
+#include <queue>
+std::vector<int> v{5, 3, 8, 1};
+std::sort(v.begin(), v.end(), std::greater<>{});
+int somma = std::accumulate(v.begin(), v.end(), 0);
+std::priority_queue<int, std::vector<int>, std::greater<>> minHeap;
+auto it = std::lower_bound(v.begin(), v.end(), 4);
+```
+
+LC: 215 - Kth Largest Element in an Array
+LC: 1046 - Last Stone Weight
+LC: 56 - Merge Intervals
+LC: 75 - Sort Colors
+LC: 31 - Next Permutation
+LC: 912 - Sort an Array
+
+## Capitolo 10 - Strutture dati classiche (implementarle da zero)
+
+### Lezione 10.1 - Liste concatenate, pile e code
+
+Implementare le strutture a mano insegna la gestione della memoria. Esempio: pila con lista singola e unique_ptr.
+
+```cpp
+template <typename T>
+class Pila {
+    struct Nodo { T val; std::unique_ptr<Nodo> next; };
+    std::unique_ptr<Nodo> testa_;
+    std::size_t n_ = 0;
+public:
+    void push(T v) { testa_ = std::unique_ptr<Nodo>(new Nodo{std::move(v), std::move(testa_)}); ++n_; }
+    T pop() { T v = std::move(testa_->val); testa_ = std::move(testa_->next); --n_; return v; }
+    const T& top() const { return testa_->val; }
+    bool empty() const { return n_ == 0; }
+};
+```
+
+Temi: lista doppia, lista circolare, coda circolare (ring buffer), deque. Tecniche: due puntatori (lento/veloce), nodo sentinella, inversione in loco.
+
+LC: 20 - Valid Parentheses
+LC: 234 - Palindrome Linked List
+LC: 19 - Remove Nth Node From End of List
+LC: 160 - Intersection of Two Linked Lists
+LC: 142 - Linked List Cycle II
+LC: 2 - Add Two Numbers
+LC: 23 - Merge k Sorted Lists
+LC: 25 - Reverse Nodes in k-Group
+LC: 739 - Daily Temperatures
+LC: 84 - Largest Rectangle in Histogram
+LC: 239 - Sliding Window Maximum
+
+### Lezione 10.2 - Alberi binari e di ricerca
+
+Un albero binario ha nodi con al massimo due figli. Un BST mantiene `sinistro < nodo < destro`. Visite: pre-order, in-order, post-order, per livelli (BFS). Alberi bilanciati: AVL, rosso-nero (usato da `std::map`), B-tree (database e file system).
+
+```cpp
+struct Nodo { int val; Nodo *sx = nullptr, *dx = nullptr; };
+
+void inorder(const Nodo* n, std::vector<int>& out) {
+    if (!n) return;
+    inorder(n->sx, out); out.push_back(n->val); inorder(n->dx, out);
+}
+int altezza(const Nodo* n) { return n ? 1 + std::max(altezza(n->sx), altezza(n->dx)) : 0; }
+```
+
+LC: 104 - Maximum Depth of Binary Tree
+LC: 94 - Binary Tree Inorder Traversal
+LC: 102 - Binary Tree Level Order Traversal
+LC: 226 - Invert Binary Tree
+LC: 100 - Same Tree
+LC: 101 - Symmetric Tree
+LC: 98 - Validate Binary Search Tree
+LC: 230 - Kth Smallest Element in a BST
+LC: 235 - Lowest Common Ancestor of a BST
+LC: 236 - Lowest Common Ancestor of a Binary Tree
+LC: 105 - Construct Binary Tree from Preorder and Inorder Traversal
+LC: 124 - Binary Tree Maximum Path Sum
+LC: 297 - Serialize and Deserialize Binary Tree
+
+### Lezione 10.3 - Heap, tabelle hash, trie, union-find
+
+- **Heap** (coda con priorita'): inserimento/estrazione O(log n); `std::priority_queue`, `make_heap`.
+- **Tabella hash**: funzione di hash + gestione collisioni (concatenamento o indirizzamento aperto); fattore di carico e rehash.
+- **Trie**: albero di prefissi per dizionari e autocompletamento.
+- **Union-Find (DSU)**: insiemi disgiunti con path compression e union by rank, quasi O(1).
+- **Segment tree / Fenwick tree**: query su intervalli in O(log n).
+- **Skip list, Bloom filter, LRU cache**: strutture usate nei database e nei sistemi distribuiti.
+
+```cpp
+struct DSU {
+    std::vector<int> p, r;
+    explicit DSU(int n) : p(n), r(n, 0) { std::iota(p.begin(), p.end(), 0); }
+    int find(int x) { return p[x] == x ? x : p[x] = find(p[x]); }
+    bool unisci(int a, int b) {
+        a = find(a); b = find(b); if (a == b) return false;
+        if (r[a] < r[b]) std::swap(a, b);
+        p[b] = a; if (r[a] == r[b]) ++r[a]; return true;
+    }
+};
+```
+
+LC: 684 - Redundant Connection
+LC: 547 - Number of Provinces
+LC: 721 - Accounts Merge
+LC: 307 - Range Sum Query - Mutable
+LC: 211 - Design Add and Search Words Data Structure
+LC: 212 - Word Search II
+LC: 460 - LFU Cache
+LC: 295 - Find Median from Data Stream
+
+### Lezione 10.4 - Grafi
+
+Rappresentazioni: matrice di adiacenza, liste di adiacenza (`vector<vector<int>>`), lista di archi. Visite: BFS (cammini minimi non pesati, livelli) e DFS (componenti connesse, cicli, ordinamento topologico).
+
+```cpp
+std::vector<int> bfs(const std::vector<std::vector<int>>& g, int s) {
+    std::vector<int> dist(g.size(), -1);
+    std::queue<int> q; q.push(s); dist[s] = 0;
+    while (!q.empty()) {
+        int u = q.front(); q.pop();
+        for (int v : g[u]) if (dist[v] < 0) { dist[v] = dist[u] + 1; q.push(v); }
+    }
+    return dist;
+}
+```
+
+LC: 200 - Number of Islands
+LC: 133 - Clone Graph
+LC: 207 - Course Schedule
+LC: 210 - Course Schedule II
+LC: 417 - Pacific Atlantic Water Flow
+LC: 994 - Rotting Oranges
+LC: 127 - Word Ladder
+LC: 785 - Is Graph Bipartite?
+LC: 261 - Graph Valid Tree

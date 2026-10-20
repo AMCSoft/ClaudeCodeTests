@@ -1,0 +1,92 @@
+# Parte 5 - Concorrenza, prestazioni e librerie
+
+## Capitolo 17 - Concorrenza e parallelismo
+
+### Lezione 17.1 - Thread, mutex e variabili di condizione
+
+Dal C++11 la libreria standard include `std::thread` (e `std::jthread` in C++20, che fa join automatico), `std::mutex`, `std::lock_guard`, `std::scoped_lock`, `std::condition_variable`, `std::atomic`, `std::future`, `std::async`. Una **data race** (accesso concorrente non sincronizzato con almeno una scrittura) e' comportamento indefinito.
+
+```cpp
+#include <thread>
+#include <mutex>
+#include <vector>
+#include <iostream>
+
+int main() {
+    long contatore = 0;
+    std::mutex m;
+    std::vector<std::jthread> ts;
+    for (int i = 0; i < 4; ++i)
+        ts.emplace_back([&] {
+            for (int k = 0; k < 100000; ++k) { std::scoped_lock lk(m); ++contatore; }
+        });
+    ts.clear();                       // join
+    std::cout << contatore << '\n';   // 400000
+}
+```
+
+Pattern: produttore/consumatore con coda bloccante, thread pool, `std::latch`/`std::barrier`/`std::semaphore` (C++20), `std::stop_token` per la cancellazione cooperativa. Per il lock-free: `std::atomic` e i memory order (relaxed, acquire, release, seq_cst).
+
+LC: 1114 - Print in Order
+LC: 1115 - Print FooBar Alternately
+LC: 1116 - Print Zero Even Odd
+LC: 1117 - Building H2O
+LC: 1188 - Design Bounded Blocking Queue
+LC: 1226 - The Dining Philosophers
+LC: 1242 - Web Crawler Multithreaded
+
+### Lezione 17.2 - Async, coroutine e algoritmi paralleli
+
+`std::async` e `std::future` offrono un modello a task. Le coroutine C++20 permettono di scrivere codice asincrono in stile sequenziale (usate da librerie come Boost.Asio e cppcoro). Gli algoritmi paralleli (`std::execution::par`) parallelizzano `sort`, `transform`, `reduce`. Librerie: Intel oneTBB, OpenMP, Taskflow, HPX; per la GPU CUDA, SYCL, OpenCL.
+
+```cpp
+#include <future>
+#include <numeric>
+#include <execution>
+auto f = std::async(std::launch::async, [] { return 6 * 7; });
+int r = f.get();
+double s = std::reduce(std::execution::par, v.begin(), v.end(), 0.0);
+```
+
+## Capitolo 18 - Prestazioni e ottimizzazione
+
+### Lezione 18.1 - Misurare, profilare, ottimizzare
+
+Prima misura, poi ottimizza. Strumenti: `perf`, Valgrind/Callgrind, Google Benchmark, Tracy, VTune, flamegraph. Principi: scegliere l'algoritmo giusto, migliorare la localita' di cache (struct of arrays, contenitori contigui), evitare allocazioni inutili (`reserve`, `string_view`, pool/arena allocator, `std::pmr`), usare SIMD (intrinsics, `std::simd`), ottimizzazioni del compilatore (`-O3`, LTO, PGO), `constexpr` per spostare calcoli a compile time.
+
+### Lezione 18.2 - Comportamento indefinito e sicurezza
+
+Undefined behavior: overflow dei signed, accesso fuori limiti, dereferenziazione di nullptr, uso di oggetti distrutti, data race, violazione dello strict aliasing. Difese: sanitizer (ASan, UBSan, TSan, MSan), `at()` invece di `[]` quando serve, `std::span`, analisi statica, fuzzing (libFuzzer, AFL++), hardening del compilatore (`-D_GLIBCXX_ASSERTIONS`, `-fstack-protector`, CFI).
+
+## Capitolo 19 - Le principali librerie del C++
+
+### Lezione 19.1 - Librerie generali e utilita'
+
+- **Boost**: Asio (rete/asincrono), Beast (HTTP/WebSocket), Spirit, Graph, Program_options, Filesystem, Multiprecision, Serialization.
+- **Abseil** (Google): contenitori hash veloci, stringhe, tempo. **Folly** (Meta).
+- **fmt / spdlog**: formattazione e logging (fmt e' alla base di `std::format`).
+- **nlohmann/json, simdjson, RapidJSON**: JSON. **protobuf, FlatBuffers, Cap'n Proto**: serializzazione binaria.
+- **CLI11, cxxopts**: argomenti da riga di comando. **Catch2, GoogleTest, doctest**: test.
+- **Eigen, Armadillo, BLAS/LAPACK**: algebra lineare. **OpenCV**: visione artificiale. **Qt, wxWidgets, Dear ImGui**: interfacce grafiche.
+- **SDL2, SFML, GLFW, Vulkan, OpenGL, DirectX**: grafica e multimedia.
+
+### Lezione 19.2 - Gestione delle dipendenze e build avanzato
+
+Gestori di pacchetti: **vcpkg**, **Conan**, **CPM.cmake**/`FetchContent`. Concetti CMake moderni: target, `target_link_libraries`, `PUBLIC/PRIVATE/INTERFACE`, `find_package`, `install`, presets, toolchain file per la cross-compilazione. Altri sistemi: Meson, Bazel, Ninja. CI: GitHub Actions con matrice GCC/Clang/MSVC, sanitizer e clang-tidy.
+
+```cmake
+include(FetchContent)
+FetchContent_Declare(fmt GIT_REPOSITORY https://github.com/fmtlib/fmt GIT_TAG 10.2.1)
+FetchContent_MakeAvailable(fmt)
+target_link_libraries(corso PRIVATE fmt::fmt)
+```
+
+### Lezione 19.3 - Test e qualita' del codice
+
+Test unitari con GoogleTest/Catch2, mocking (gMock), TDD, code coverage (gcov/lcov), benchmark, fuzzing, analisi statica (clang-tidy, cppcheck, SonarQube), formattazione automatica con clang-format.
+
+```cpp
+#include <catch2/catch_test_macros.hpp>
+int somma(int a, int b) { return a + b; }
+TEST_CASE("somma") { REQUIRE(somma(2, 3) == 5); }
+```
