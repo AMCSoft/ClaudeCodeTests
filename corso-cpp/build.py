@@ -10,11 +10,13 @@ from xml.sax.saxutils import escape
 
 BLUE = colors.HexColor("#1f4e8c"); LIGHT = colors.HexColor("#eef3fa")
 GREEN = colors.HexColor("#2e7d32"); AMBER = colors.HexColor("#fff4d6")
+VIOLA = colors.HexColor("#6a1b9a"); LILLA = colors.HexColor("#f5effb")
 body = ParagraphStyle("b", fontName="Helvetica", fontSize=10, leading=14.5, spaceAfter=6)
 bul = ParagraphStyle("bul", parent=body, leftIndent=16, bulletIndent=5, spaceAfter=2)
 h1 = ParagraphStyle("h1", fontName="Helvetica-Bold", fontSize=26, leading=32, textColor=BLUE, spaceAfter=14)
 h2 = ParagraphStyle("h2", fontName="Helvetica-Bold", fontSize=16, leading=20, textColor=BLUE, spaceBefore=14, spaceAfter=8)
 h3 = ParagraphStyle("h3", fontName="Helvetica-Bold", fontSize=12.5, leading=16, textColor=colors.HexColor("#222222"), spaceBefore=12, spaceAfter=5)
+h4 = ParagraphStyle("h4", fontName="Helvetica-Bold", fontSize=11, leading=14, textColor=colors.HexColor("#00695c"), spaceBefore=10, spaceAfter=4)
 codest = ParagraphStyle("c", fontName="Courier", fontSize=8.3, leading=10.4)
 boxst = ParagraphStyle("box", parent=body, fontSize=9.3, leading=13, spaceAfter=2)
 
@@ -53,7 +55,11 @@ def box(items, title, bg, fg):
     return [Spacer(1,4), t, Spacer(1,8)]
 
 def code(lines):
-    t = Table([[Preformatted("\n".join(lines), codest)]], colWidths=[17*cm])
+    # riduce il corpo del carattere se una riga non entrerebbe nel riquadro
+    larghezza = max((len(l) for l in lines), default=0)
+    fs = min(codest.fontSize, (17*cm - 16) / (0.6 * max(larghezza, 1)))
+    st = codest if fs == codest.fontSize else ParagraphStyle("c%.1f" % fs, parent=codest, fontSize=fs, leading=fs * 1.25)
+    t = Table([[Preformatted("\n".join(lines), st)]], colWidths=[17*cm])
     t.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),colors.HexColor("#f5f5f5")),
         ("BOX",(0,0),(-1,-1),0.5,colors.HexColor("#cccccc")),("LEFTPADDING",(0,0),(-1,-1),8),
         ("TOPPADDING",(0,0),(-1,-1),6),("BOTTOMPADDING",(0,0),(-1,-1),6)]))
@@ -63,13 +69,14 @@ def parse(path_list):
     st = []; lessons = 0
     for p in path_list:
         lines = open(p, encoding="utf-8").read().split("\n")
-        i = 0; para = []; lc = []; notes = []
+        i = 0; para = []; lc = []; notes = []; es = []
         def flush():
             nonlocal para
             if para: st.append(Paragraph(inline(" ".join(para)), body)); para = []
         def flushbox():
-            nonlocal lc, notes
+            nonlocal lc, notes, es
             if notes: st.extend(box([inline(n) for n in notes], "Nota", AMBER, colors.HexColor("#b8860b"))); notes = []
+            if es: st.extend(box([inline(x) for x in es], "Esercizi (soluzioni nell'Appendice)", LILLA, VIOLA)); es = []
             if lc: st.extend(box([inline(x) for x in lc], "Esercizi consigliati su LeetCode", LIGHT, GREEN)); lc = []
         while i < len(lines):
             l = lines[i]
@@ -82,6 +89,8 @@ def parse(path_list):
                 flush(); flushbox(); st.append(NextPageTemplate("main")); st.append(PageBreak()); st.append(Paragraph(inline(l[2:]), h1))
             elif l.startswith("## "):
                 flush(); flushbox(); st.append(Paragraph(inline(l[3:]), h2))
+            elif l.startswith("#### "):
+                flush(); flushbox(); st.append(Paragraph(inline(l[5:]), h4))
             elif l.startswith("### "):
                 flush(); flushbox(); lessons += 1; st.append(Paragraph(inline(l[4:]), h3))
             elif l.startswith("|"):
@@ -98,6 +107,7 @@ def parse(path_list):
                 flush(); st.append(Paragraph(inline(l[2:]), bul, bulletText="•"))
             elif l.startswith("LC: "): flush(); lc.append(l[4:])
             elif l.startswith("NOTA: "): flush(); notes.append(l[6:])
+            elif l.startswith("ES: "): flush(); es.append(l[4:])
             elif l.strip() == "": flush()
             else: para.append(l.strip())
             i += 1
@@ -111,7 +121,7 @@ toc = TableOfContents(); toc.levelStyles = [
     ParagraphStyle("t1", fontName="Helvetica", fontSize=9.5, leading=13, leftIndent=14)]
 cover = [Spacer(1,6*cm), Paragraph("Corso completo di<br/>C++ moderno", ParagraphStyle("ct", fontName="Helvetica-Bold", fontSize=38, leading=46, textColor=BLUE)),
     Spacer(1,1*cm), Paragraph("Dalle basi al C++20/23: strutture dati, algoritmi, web, mobile, videogiochi, embedded, sistemi operativi, reti e database", ParagraphStyle("cs", parent=body, fontSize=14, leading=20, textColor=colors.HexColor("#444444"))),
-    Spacer(1,1.5*cm), Paragraph(f"Con esercizi consigliati da LeetCode per ogni sezione", ParagraphStyle("cs2", parent=body, fontSize=11, textColor=GREEN)),
+    Spacer(1,1.5*cm), Paragraph(f"Con esempi svolti, esercizi risolti e problemi consigliati da LeetCode per ogni capitolo", ParagraphStyle("cs2", parent=body, fontSize=11, textColor=GREEN)),
     NextPageTemplate("main"), PageBreak(), Paragraph("Indice", ParagraphStyle("idx", parent=h1)), toc]
 Doc("Corso_Cpp_Moderno.pdf").multiBuild(cover + story)
 print("lezioni:", nl)

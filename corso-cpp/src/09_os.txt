@@ -50,6 +50,150 @@ LC: 1166 - Design File System
 LC: 636 - Exclusive Time of Functions
 LC: 862 - Shortest Subarray with Sum at Least K
 
+### Lezione 27.4 - Esempi svolti ed esercizi
+
+#### Esempio svolto 27.1 - Due processi che dialogano con le pipe
+
+**Problema.** Il processo padre invia delle parole a un processo figlio, che le restituisce in maiuscolo; il padre stampa le risposte e attende la terminazione del figlio.
+
+**Ragionamento.** Una pipe e' unidirezionale, quindi ne servono due: padre -> figlio e figlio -> padre. Dopo `fork()` ciascun processo **chiude le estremita' che non usa**: e' fondamentale, perche' chi legge riceve fine-file (read che restituisce 0) solo quando **tutte** le estremita' di scrittura sono chiuse. Il figlio termina con `_exit` per non eseguire distruttori e flush ereditati dal padre.
+
+```cpp
+#include <sys/wait.h>
+#include <unistd.h>
+#include <cctype>
+#include <cstring>
+#include <iostream>
+#include <string>
+
+int main() {
+    int versoFiglio[2], versoPadre[2];
+    if (pipe(versoFiglio) < 0 || pipe(versoPadre) < 0) { perror("pipe"); return 1; }
+
+    pid_t pid = fork();
+    if (pid < 0) { perror("fork"); return 1; }
+    if (pid == 0) {                                   // ---- figlio ----
+        close(versoFiglio[1]); close(versoPadre[0]);
+        char buf[256];
+        ssize_t n;
+        while ((n = read(versoFiglio[0], buf, sizeof buf)) > 0) {
+            for (ssize_t i = 0; i < n; ++i)
+                buf[i] = std::toupper(static_cast<unsigned char>(buf[i]));
+            if (write(versoPadre[1], buf, n) != n) _exit(1);
+        }
+        close(versoFiglio[0]); close(versoPadre[1]);
+        _exit(0);                                     // read == 0: il padre ha chiuso
+    }
+    close(versoFiglio[0]); close(versoPadre[1]);      // ---- padre ----
+    const char* messaggio = "ciao figlio, come stai?";
+    if (write(versoFiglio[1], messaggio, std::strlen(messaggio)) < 0) return 1;
+    close(versoFiglio[1]);                            // segnala la fine dei dati
+
+    std::string risposta;
+    char buf[256];
+    ssize_t n;
+    while ((n = read(versoPadre[0], buf, sizeof buf)) > 0) risposta.append(buf, n);
+    close(versoPadre[0]);
+    int stato;
+    waitpid(pid, &stato, 0);
+    std::cout << "risposta: " << risposta << '\n'
+              << "figlio uscito con " << WEXITSTATUS(stato) << '\n';
+}
+```
+
+```text
+risposta: CIAO FIGLIO, COME STAI?
+figlio uscito con 0
+```
+
+Se il padre dimenticasse `close(versoFiglio[1])`, il figlio resterebbe bloccato nella `read` e il padre nella sua: un **deadlock** classico.
+
+#### Esempio svolto 27.2 - Il cuore di una shell: eseguire una pipeline
+
+**Problema.** Eseguire una riga come `printf "pera\nmela\nuva\nmela\n" | sort | uniq -c`, collegando l'uscita di ogni comando all'ingresso del successivo, come fa `bash`.
+
+**Ragionamento.** Per n comandi servono n-1 pipe. Ogni figlio usa `dup2` per sostituire il proprio stdin (fd 0) con l'estremita' di lettura della pipe precedente e il proprio stdout (fd 1) con l'estremita' di scrittura della successiva, poi chiude **tutti** i descrittori delle pipe ed esegue il programma con `execvp`. Il padre chiude le sue copie e attende tutti i figli. Il tokenizzatore qui e' volutamente semplice (spazi e virgolette doppie).
+
+```cpp
+#include <sys/wait.h>
+#include <unistd.h>
+#include <iostream>
+#include <string>
+#include <vector>
+
+std::vector<std::string> tokenizza(const std::string& s) {
+    std::vector<std::string> t;
+    std::string cur;
+    bool virgolette = false, inToken = false;
+    for (std::size_t i = 0; i < s.size(); ++i) {
+        char c = s[i];
+        if (c == '"') { virgolette = !virgolette; inToken = true; }
+        else if (c == '\\' && virgolette && i + 1 < s.size() && s[i + 1] == 'n') {
+            cur += '\n'; ++i;                                     // \n tra virgolette
+        } else if (c == ' ' && !virgolette) {
+            if (inToken) t.push_back(cur);
+            cur.clear(); inToken = false;
+        }
+        else { cur += c; inToken = true; }
+    }
+    if (inToken) t.push_back(cur);
+    return t;
+}
+
+int eseguiPipeline(const std::string& riga) {
+    std::vector<std::vector<std::string>> comandi(1);
+    for (auto& tok : tokenizza(riga))
+        if (tok == "|") comandi.emplace_back(); else comandi.back().push_back(tok);
+
+    std::size_t n = comandi.size();
+    std::vector<int> fd(2 * (n - 1));
+    for (std::size_t i = 0; i + 1 < n; ++i)
+        if (pipe(&fd[2 * i]) < 0) return -1;
+
+    std::vector<pid_t> figli;
+    for (std::size_t i = 0; i < n; ++i) {
+        pid_t pid = fork();
+        if (pid == 0) {
+            if (i > 0) dup2(fd[2 * (i - 1)], 0);         // stdin dalla pipe precedente
+            if (i + 1 < n) dup2(fd[2 * i + 1], 1);       // stdout verso la successiva
+            for (int f : fd) close(f);
+            std::vector<char*> argv;
+            for (auto& a : comandi[i]) argv.push_back(a.data());
+            argv.push_back(nullptr);
+            execvp(argv[0], argv.data());
+            perror(argv[0]);                             // raggiunto solo se exec fallisce
+            _exit(127);
+        }
+        figli.push_back(pid);
+    }
+    for (int f : fd) close(f);
+    int stato = 0;
+    for (pid_t p : figli) waitpid(p, &stato, 0);
+    return WEXITSTATUS(stato);                           // come bash: stato dell'ultimo comando
+}
+
+int main() {
+    std::cout.flush();
+    int s = eseguiPipeline(R"(printf "pera\nmela\nuva\nmela\n" | sort | uniq -c)");
+    std::cout << "stato: " << s << '\n';
+}
+```
+
+```text
+      2 mela
+      1 pera
+      1 uva
+stato: 0
+```
+
+Per una shell completa (Lezione 27.3) mancano il ciclo di lettura con prompt, i comandi interni (`cd` deve essere eseguito dal processo shell stesso, non da un figlio, altrimenti cambierebbe la directory del figlio), le redirezioni e la gestione di `SIGINT`.
+
+ES: **Esercizio 27.1** [Base] - Simplify Path (LeetCode 71): semplifica un percorso Unix assoluto gestendo `.`, `..` e barre ripetute, usando un vettore come pila.
+ES: **Esercizio 27.2** [Base] - Scrivi `std::string leggiTutto(int fd)` che legge un descrittore fino alla fine gestendo letture parziali ed `EINTR`, e usala con la classe RAII `Fd` della Lezione 27.2 per leggere `/proc/self/status` (solo su Linux).
+ES: **Esercizio 27.3** [Medio] - Installa con `sigaction` un gestore di `SIGINT` che imposta un flag `volatile std::sig_atomic_t`; il ciclo principale deve terminare in modo ordinato. Perche' non si puo' chiamare `std::cout` o `malloc` dentro il gestore?
+ES: **Esercizio 27.4** [Medio] - Aggiungi a `eseguiPipeline` le redirezioni `> file` e `< file` con `open` e `dup2`.
+ES: **Esercizio 27.5** [Avanzato] - Exclusive Time of Functions (LeetCode 636): dati i log `id:start:t` e `id:end:t` di un processore single core, calcola il tempo esclusivo di ogni funzione con una pila.
+
 ## Capitolo 28 - Concetti di sistemi operativi
 
 ### Lezione 28.1 - Scheduling, memoria virtuale, paginazione
@@ -77,6 +221,127 @@ LC: 207 - Course Schedule (rilevare cicli di dipendenza)
 ### Lezione 28.3 - File system e I/O
 
 Struttura di un file system: superblocco, inode, blocchi dati, directory, journaling (ext4), copy-on-write (Btrfs, ZFS, APFS), FAT. Operazioni di I/O: buffered vs direct, `mmap`, `io_uring`, `epoll`, I/O asincrono. Implementa un mini file system in un file immagine.
+
+### Lezione 28.4 - Esempi svolti ed esercizi
+
+#### Esempio svolto 28.1 - Simulare lo scheduler Round Robin
+
+**Problema.** Quattro processi arrivano con tempi di arrivo e di CPU noti. Con Round Robin e quanto di 2 unita', calcolare il diagramma di esecuzione (Gantt), il tempo di completamento (turnaround) e di attesa di ciascuno.
+
+**Ragionamento.** Una coda FIFO contiene i processi pronti. Il processo in testa esegue per `min(quanto, residuo)`; i processi arrivati **durante** il quanto entrano in coda **prima** che il processo interrotto vi rientri (e' la convenzione dei libri di testo). Turnaround = completamento - arrivo; attesa = turnaround - burst.
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <queue>
+#include <string>
+#include <vector>
+
+struct Processo { std::string nome; int arrivo, burst, residuo = 0, fine = 0; };
+
+int main() {
+    std::vector<Processo> p{{"P1", 0, 5}, {"P2", 1, 3}, {"P3", 2, 1}, {"P4", 4, 2}};
+    for (auto& x : p) x.residuo = x.burst;
+    const int quanto = 2;
+    std::queue<int> pronti;
+    std::size_t prossimo = 0;
+    int t = 0;
+    auto arrivi = [&](int finoA) {
+        while (prossimo < p.size() && p[prossimo].arrivo <= finoA) pronti.push(prossimo++);
+    };
+    arrivi(t);
+    std::string gantt;
+    while (!pronti.empty() || prossimo < p.size()) {
+        if (pronti.empty()) { t = p[prossimo].arrivo; arrivi(t); }   // CPU inattiva
+        int i = pronti.front(); pronti.pop();
+        int esegui = std::min(quanto, p[i].residuo);
+        gantt += "|" + std::to_string(t) + " " + p[i].nome + " ";
+        t += esegui;
+        p[i].residuo -= esegui;
+        arrivi(t);                                    // prima i nuovi arrivati...
+        if (p[i].residuo > 0) pronti.push(i);         // ...poi chi e' stato interrotto
+        else p[i].fine = t;
+    }
+    std::cout << gantt << "|" << t << '\n';
+    double attesaTot = 0;
+    for (auto& x : p) {
+        int tat = x.fine - x.arrivo, attesa = tat - x.burst;
+        attesaTot += attesa;
+        std::cout << x.nome << ": turnaround " << tat << ", attesa " << attesa << '\n';
+    }
+    std::cout << "attesa media " << attesaTot / p.size() << '\n';
+}
+```
+
+```text
+|0 P1 |2 P2 |4 P3 |5 P1 |7 P4 |9 P2 |10 P1 |11
+P1: turnaround 11, attesa 6
+P2: turnaround 9, attesa 6
+P3: turnaround 3, attesa 2
+P4: turnaround 5, attesa 3
+attesa media 4.25
+```
+
+Un quanto piccolo migliora la reattivita' ma aumenta i cambi di contesto (ognuno costa microsecondi e svuota cache e TLB); un quanto enorme degenera in FCFS.
+
+#### Esempio svolto 28.2 - Sostituzione delle pagine: FIFO, LRU e l'anomalia di Belady
+
+**Problema.** Contare i page fault della sequenza di riferimenti `1 2 3 4 1 2 5 1 2 3 4 5` con 3 e 4 frame, usando FIFO e LRU.
+
+**Ragionamento.** FIFO espelle la pagina caricata da piu' tempo; LRU quella usata meno di recente (la stessa idea della LRU cache, Soluzione 6.5). Con FIFO puo' succedere che **piu' memoria produca piu' fault**: e' l'anomalia di Belady. LRU e' un algoritmo "a pila" e non ne soffre.
+
+```cpp
+#include <algorithm>
+#include <deque>
+#include <iostream>
+#include <list>
+#include <vector>
+
+int faultFIFO(const std::vector<int>& rif, std::size_t frame) {
+    std::deque<int> mem;
+    int fault = 0;
+    for (int p : rif) {
+        if (std::find(mem.begin(), mem.end(), p) != mem.end()) continue;
+        ++fault;
+        if (mem.size() == frame) mem.pop_front();      // la piu' vecchia
+        mem.push_back(p);
+    }
+    return fault;
+}
+
+int faultLRU(const std::vector<int>& rif, std::size_t frame) {
+    std::list<int> mem;                                // in testa la piu' recente
+    int fault = 0;
+    for (int p : rif) {
+        auto it = std::find(mem.begin(), mem.end(), p);
+        if (it != mem.end()) { mem.splice(mem.begin(), mem, it); continue; }
+        ++fault;
+        if (mem.size() == frame) mem.pop_back();       // la meno recente
+        mem.push_front(p);
+    }
+    return fault;
+}
+
+int main() {
+    std::vector<int> rif{1, 2, 3, 4, 1, 2, 5, 1, 2, 3, 4, 5};
+    for (std::size_t f : {3, 4})
+        std::cout << f << " frame: FIFO " << faultFIFO(rif, f) << ", LRU " << faultLRU(rif, f)
+                  << '\n';
+}
+```
+
+```text
+3 frame: FIFO 9, LRU 10
+4 frame: FIFO 10, LRU 8
+```
+
+I sistemi reali non possono aggiornare una lista a ogni accesso alla memoria: approssimano LRU con il **bit di accesso** delle pagine e l'algoritmo Clock (Esercizio 28.2).
+
+ES: **Esercizio 28.1** [Base] - Ripeti l'Esempio 28.1 con SJF non preemptive (tra i processi arrivati si sceglie quello con burst minore) e confronta l'attesa media.
+ES: **Esercizio 28.2** [Medio] - Implementa l'algoritmo Clock (seconda possibilita') e conta i fault sulla sequenza dell'Esempio 28.2 con 3 e 4 frame.
+ES: **Esercizio 28.3** [Medio] - Rilevare un deadlock: dato un grafo di attesa "il thread A aspetta una risorsa tenuta da B", trova un ciclo con una DFS a tre colori e stampalo.
+ES: **Esercizio 28.4** [Medio] - The Dining Philosophers (LeetCode 1226): cinque filosofi e cinque forchette con `std::mutex`. Mostra la soluzione con `std::scoped_lock` e quella con l'ordinamento delle risorse.
+ES: **Esercizio 28.5** [Avanzato] - Scrivi un allocatore first-fit su un buffer statico di 4 KB: ogni blocco ha un'intestazione con dimensione e flag "libero"; `alloca(n)` divide i blocchi troppo grandi, `libera(p)` fonde i blocchi liberi adiacenti.
 
 ## Capitolo 29 - Costruire un sistema operativo
 
@@ -122,3 +387,145 @@ LC: 705 - Design HashSet
 LC: 622 - Design Circular Queue
 LC: 1396 - Design Underground System
 LC: 1348 - Tweet Counts Per Frequency
+
+### Lezione 29.3 - Esempi svolti ed esercizi
+
+#### Esempio svolto 29.1 - Allocatore di frame fisici a bitmap
+
+**Problema.** Il kernel deve tenere traccia di quali frame fisici da 4 KB sono liberi. Scrivere un allocatore a bitmap che supporti l'allocazione di un frame e di N frame contigui (per i buffer DMA), testandolo in user space.
+
+**Ragionamento.** Un bit per frame: con 4 GB di RAM e frame da 4 KB servono 1.048.576 bit = 128 KB. Per trovare velocemente un frame libero si scorre la bitmap a parole di 64 bit, saltando quelle piene (`~0`), e dentro una parola si usa `std::countr_one` per trovare il primo bit a 0. La classe non usa heap ne' eccezioni: e' utilizzabile in ambiente freestanding, dove la bitmap viene posizionata in una zona di memoria nota.
+
+```cpp
+#include <bit>
+#include <cstddef>
+#include <cstdint>
+#include <iostream>
+#include <optional>
+
+template <std::size_t NFrame>
+class AllocatoreFrame {
+    static constexpr std::size_t PAROLE = (NFrame + 63) / 64;
+    std::uint64_t bit_[PAROLE] = {};
+    bool occupato(std::size_t f) const { return bit_[f / 64] >> (f % 64) & 1; }
+    void segna(std::size_t f, bool v) {
+        if (v) bit_[f / 64] |= 1ull << (f % 64); else bit_[f / 64] &= ~(1ull << (f % 64));
+    }
+public:
+    static constexpr std::size_t DIM_FRAME = 4096;
+    void riserva(std::size_t da, std::size_t n) {
+        for (std::size_t f = da; f < da + n; ++f) segna(f, true);
+    }
+
+    std::optional<std::size_t> alloca() {
+        for (std::size_t w = 0; w < PAROLE; ++w) {
+            if (bit_[w] == ~0ull) continue;                       // 64 frame occupati: salta
+            std::size_t f = w * 64 + std::countr_one(bit_[w]);    // primo bit a 0
+            if (f >= NFrame) break;
+            segna(f, true);
+            return f;
+        }
+        return std::nullopt;
+    }
+    std::optional<std::size_t> allocaContigui(std::size_t n) {
+        std::size_t corsa = 0;
+        for (std::size_t f = 0; f < NFrame; ++f) {
+            corsa = occupato(f) ? 0 : corsa + 1;
+            if (corsa == n) { riserva(f + 1 - n, n); return f + 1 - n; }
+        }
+        return std::nullopt;
+    }
+    void libera(std::size_t f, std::size_t n = 1) {
+        for (std::size_t i = f; i < f + n; ++i) segna(i, false);
+    }
+    std::size_t liberi() const {
+        std::size_t occ = 0;
+        for (auto w : bit_) occ += std::popcount(w);
+        return NFrame - occ;
+    }
+};
+
+int main() {
+    AllocatoreFrame<256> pmm;                    // 1 MB di RAM simulata
+    pmm.riserva(0, 70);                          // kernel e strutture del boot
+    auto a = pmm.alloca(), b = pmm.alloca();
+    auto dma = pmm.allocaContigui(16);
+    pmm.libera(*a);
+    auto c = pmm.alloca();                       // riusa il frame appena liberato
+    std::cout << "a=" << *a << " b=" << *b << " dma=" << *dma << " c=" << *c
+              << " liberi=" << pmm.liberi() << " indirizzo dma=0x" << std::hex
+              << *dma * pmm.DIM_FRAME << '\n';
+}
+```
+
+```text
+a=70 b=71 dma=72 c=70 liberi=168 indirizzo dma=0x48000
+```
+
+#### Esempio svolto 29.2 - Console di testo in stile VGA, testabile sul PC
+
+**Problema.** Il primo driver di ogni kernel didattico scrive caratteri nella memoria video VGA in modalita' testo (80 x 25 celle a partire da `0xB8000`, ogni cella = carattere + attributo colore). Scrivere la console con a capo e scorrimento, in modo che si possa provare senza QEMU.
+
+**Ragionamento.** Ogni cella e' un `uint16_t`: byte basso il carattere, byte alto il colore. Quando il cursore supera l'ultima riga si spostano tutte le righe in su (`memmove`) e si pulisce l'ultima. La classe riceve il puntatore al buffer: nel kernel `reinterpret_cast<volatile std::uint16_t*>(0xB8000)`, nei test un array. Qui usiamo una console piccola (20 x 4) per vedere lo scorrimento.
+
+```cpp
+#include <cstdint>
+#include <cstring>
+#include <iostream>
+
+template <int COL, int RIG>
+class Console {
+    std::uint16_t* buf_;
+    int x_ = 0, y_ = 0;
+    std::uint8_t colore_ = 0x07;                  // grigio su nero
+    void scorri() {
+        std::memmove(buf_, buf_ + COL, sizeof(std::uint16_t) * COL * (RIG - 1));
+        for (int i = 0; i < COL; ++i) buf_[COL * (RIG - 1) + i] = ' ' | colore_ << 8;
+        y_ = RIG - 1;
+    }
+public:
+    explicit Console(std::uint16_t* b) : buf_(b) {
+        for (int i = 0; i < COL * RIG; ++i) b[i] = ' ' | 0x0700;
+    }
+    void colore(std::uint8_t c) { colore_ = c; }
+    void put(char c) {
+        if (c == '\n') { x_ = 0; ++y_; }
+        else {
+            buf_[y_ * COL + x_] = static_cast<std::uint8_t>(c) | colore_ << 8;
+            if (++x_ == COL) { x_ = 0; ++y_; }
+        }
+        if (y_ == RIG) scorri();
+    }
+    void stampa(const char* s) { while (*s) put(*s++); }
+};
+
+int main() {
+    std::uint16_t memoriaVideo[20 * 4];           // nel kernel: 0xB8000, 80 x 25
+    Console<20, 4> con(memoriaVideo);
+    con.stampa("Kernel avviato\n");
+    con.colore(0x0C);                             // rosso chiaro
+    con.stampa("Errore: page fault\n");
+    con.colore(0x07);
+    con.stampa("riga tre\nriga quattro, troppo lunga\n");
+    for (int r = 0; r < 4; ++r) {
+        std::cout << '[';
+        for (int c = 0; c < 20; ++c)
+            std::cout << static_cast<char>(memoriaVideo[r * 20 + c] & 0xFF);
+        std::cout << "] attr 0x" << std::hex << (memoriaVideo[r * 20] >> 8) << std::dec << '\n';
+    }
+}
+```
+
+```text
+[riga tre            ] attr 0x7
+[riga quattro, troppo] attr 0x7
+[ lunga              ] attr 0x7
+[                    ] attr 0x7
+```
+
+Le prime due righe (compresa quella rossa) sono uscite dallo schermo per lo scorrimento; la riga troppo lunga e' andata a capo da sola dopo 20 caratteri e il `\n` finale ha lasciato il cursore su una riga vuota. Nel kernel lo stesso codice viene compilato con `-ffreestanding -fno-exceptions -fno-rtti` e `memmove` va fornita dal kernel stesso.
+
+ES: **Esercizio 29.1** [Medio] - Dato un indirizzo virtuale x86_64 a 48 bit, estrai i quattro indici delle tabelle delle pagine (PML4, PDPT, PD, PT, 9 bit ciascuno) e l'offset (12 bit). Verifica con l'indirizzo `0xFFFF800000201ABC`.
+ES: **Esercizio 29.2** [Medio] - Scrivi `kprintf` freestanding (senza libreria standard) che supporti `%d`, `%u`, `%x`, `%s`, `%c` e `%%`, usando `va_list` e scrivendo carattere per carattere con la `put` della console.
+ES: **Esercizio 29.3** [Avanzato] - Simula in user space il cambio di contesto di uno scheduler cooperativo con `<ucontext.h>` (`getcontext`, `makecontext`, `swapcontext`): tre "thread" che stampano e cedono la CPU a turno.
+ES: **Esercizio 29.4** [Avanzato] - Implementa un buddy allocator su 1 MB con blocchi da 4 KB a 1 MB: allocazione arrotondata alla potenza di 2, divisione dei blocchi e fusione con il "compagno" (`indirizzo ^ dimensione`) alla liberazione.

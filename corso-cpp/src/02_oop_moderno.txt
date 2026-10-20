@@ -89,6 +89,173 @@ LC: 706 - Design HashMap
 LC: 208 - Implement Trie (Prefix Tree)
 LC: 355 - Design Twitter
 
+### Lezione 6.5 - Esempi svolti ed esercizi
+
+#### Esempio svolto 6.1 - Una classe valore: Frazione
+
+**Problema.** Progettare un tipo `Frazione` che si comporti come un numero: somma, prodotto, confronti e stampa, mantenendo sempre la forma ridotta con denominatore positivo.
+
+**Ragionamento.** L'**invariante** della classe (ridotta, denominatore > 0) viene stabilito nel costruttore e preservato da ogni operazione, quindi il resto del codice puo' darlo per scontato. Gli operatori aritmetici si scrivono come funzioni libere `friend` (cosi' funzionano anche con un `int` a sinistra grazie al costruttore implicito); `operator<=>` di default non andrebbe bene, perche' confronterebbe i campi e non i valori, quindi lo definiamo con la moltiplicazione incrociata.
+
+```cpp
+#include <compare>
+#include <iostream>
+#include <numeric>
+#include <stdexcept>
+
+class Frazione {
+    long long num_, den_;
+public:
+    Frazione(long long n = 0, long long d = 1) : num_(n), den_(d) {
+        if (d == 0) throw std::invalid_argument("denominatore nullo");
+        if (den_ < 0) { num_ = -num_; den_ = -den_; }
+        long long g = std::gcd(num_, den_);
+        num_ /= g; den_ /= g;
+    }
+    long long num() const { return num_; }
+    long long den() const { return den_; }
+
+    friend Frazione operator+(const Frazione& a, const Frazione& b) {
+        return {a.num_ * b.den_ + b.num_ * a.den_, a.den_ * b.den_};
+    }
+    friend Frazione operator*(const Frazione& a, const Frazione& b) {
+        return {a.num_ * b.num_, a.den_ * b.den_};
+    }
+    friend bool operator==(const Frazione&, const Frazione&) = default;  // forma ridotta
+    friend std::strong_ordering operator<=>(const Frazione& a, const Frazione& b) {
+        return a.num_ * b.den_ <=> b.num_ * a.den_;   // den > 0: il verso non cambia
+    }
+    friend std::ostream& operator<<(std::ostream& os, const Frazione& f) {
+        return f.den_ == 1 ? os << f.num_ : os << f.num_ << '/' << f.den_;
+    }
+};
+
+int main() {
+    Frazione a{1, 2}, b{3, -4};
+    std::cout << a << " + " << b << " = " << a + b << '\n';
+    std::cout << a << " * " << b << " = " << a * b << '\n';
+    std::cout << "2 + a = " << 2 + a << '\n';
+    std::cout << std::boolalpha << (Frazione{2, 4} == a) << ' ' << (b < a) << '\n';
+}
+```
+
+```text
+1/2 + -3/4 = -1/4
+1/2 * -3/4 = -3/8
+2 + a = 5/2
+true true
+```
+
+#### Esempio svolto 6.2 - Min Stack (LeetCode 155)
+
+**Problema.** Progettare una pila che supporti `push`, `pop`, `top` e `getMin` tutte in O(1).
+
+**Ragionamento.** Cercare il minimo a ogni chiamata costerebbe O(n). Trucco: accanto a ogni elemento memorizziamo il minimo della pila **fino a quel punto**. Quando togliamo un elemento, il minimo precedente e' gia' pronto nella coppia sottostante. L'interfaccia nasconde la rappresentazione: chi usa `MinStack` non sa (e non deve sapere) che dentro ci sono coppie.
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <stdexcept>
+#include <utility>
+#include <vector>
+
+class MinStack {
+    std::vector<std::pair<int, int>> d_;   // (valore, minimo fino a qui)
+public:
+    void push(int x) { d_.emplace_back(x, d_.empty() ? x : std::min(x, d_.back().second)); }
+    void pop() {
+        if (d_.empty()) throw std::out_of_range("pila vuota");
+        d_.pop_back();
+    }
+    int top() const { return d_.back().first; }
+    int getMin() const { return d_.back().second; }
+    bool empty() const { return d_.empty(); }
+};
+
+int main() {
+    MinStack s;
+    for (int x : {5, 3, 7, 2, 8}) s.push(x);
+    while (!s.empty()) {
+        std::cout << "top " << s.top() << " min " << s.getMin() << '\n';
+        s.pop();
+    }
+}
+```
+
+```text
+top 8 min 2
+top 2 min 2
+top 7 min 3
+top 3 min 3
+top 5 min 5
+```
+
+#### Esempio svolto 6.3 - Polimorfismo e pattern Strategy
+
+**Problema.** Un carrello calcola il totale applicando uno sconto che puo' cambiare a runtime (nessuno, percentuale, "3x2"). Aggiungere nuovi sconti non deve richiedere modifiche al carrello (principio Open/Closed).
+
+**Ragionamento.** Definiamo un'interfaccia astratta `Sconto` e la iniettiamo nel carrello tramite `std::unique_ptr` (dependency inversion: il carrello dipende dall'astrazione, non dalle classi concrete).
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <memory>
+#include <vector>
+
+struct Sconto {
+    virtual ~Sconto() = default;
+    virtual double applica(const std::vector<double>& prezzi) const = 0;
+};
+struct NessunoSconto : Sconto {
+    double applica(const std::vector<double>& p) const override {
+        double t = 0; for (double x : p) t += x; return t;
+    }
+};
+struct Percentuale : Sconto {
+    double perc;
+    explicit Percentuale(double p) : perc(p) {}
+    double applica(const std::vector<double>& p) const override {
+        return NessunoSconto{}.applica(p) * (1 - perc / 100);
+    }
+};
+struct TrePerDue : Sconto {          // ogni 3 articoli il meno caro e' gratis (semplificato)
+    double applica(const std::vector<double>& p) const override {
+        double t = NessunoSconto{}.applica(p), minimo = p.empty() ? 0 : p[0];
+        for (double x : p) minimo = std::min(minimo, x);
+        return p.size() >= 3 ? t - minimo : t;
+    }
+};
+
+class Carrello {
+    std::vector<double> prezzi_;
+    std::unique_ptr<Sconto> sconto_ = std::make_unique<NessunoSconto>();
+public:
+    void aggiungi(double p) { prezzi_.push_back(p); }
+    void impostaSconto(std::unique_ptr<Sconto> s) { sconto_ = std::move(s); }
+    double totale() const { return sconto_->applica(prezzi_); }
+};
+
+int main() {
+    Carrello c;
+    for (double p : {10.0, 20.0, 5.0}) c.aggiungi(p);
+    std::cout << c.totale() << ' ';
+    c.impostaSconto(std::make_unique<Percentuale>(10));
+    std::cout << c.totale() << ' ';
+    c.impostaSconto(std::make_unique<TrePerDue>());
+    std::cout << c.totale() << '\n';
+}
+```
+
+```text
+35 31.5 30
+```
+
+ES: **Esercizio 6.1** [Base] - Estendi la classe `Conto` della Lezione 6.1 con `preleva(double)` che lancia `std::invalid_argument` per importi non positivi e `std::runtime_error` se il saldo non basta. Scrivi un `main` che gestisce entrambe le eccezioni.
+ES: **Esercizio 6.2** [Base] - Crea una gerarchia `Animale` (astratta, con `virtual std::string verso() const = 0`) e le classi `Cane`, `Gatto`, `Mucca`. Riempi un `std::vector<std::unique_ptr<Animale>>` e stampa i versi.
+ES: **Esercizio 6.3** [Medio] - Scrivi una classe `Traccia` che stampa un messaggio in ognuna delle sei funzioni speciali (costruttore, distruttore, copia, assegnazione di copia, move, assegnazione di move). Usala per scoprire cosa succede con `push_back`, `emplace_back`, `std::move` e la restituzione per valore.
+ES: **Esercizio 6.4** [Medio] - Implementa una coda con due pile (LeetCode 232) e dimostra che `pop` costa O(1) ammortizzato.
+ES: **Esercizio 6.5** [Avanzato] - LRU Cache (LeetCode 146): `get` e `put` in O(1) con capacita' fissa, usando `std::list` e `std::unordered_map` di iteratori.
+
 ## Capitolo 7 - Template e programmazione generica
 
 ### Lezione 7.1 - Template di funzione e di classe
@@ -135,6 +302,92 @@ auto descrivi(const T& v) {
 
 LC: 703 - Kth Largest Element in a Stream
 LC: 295 - Find Median from Data Stream
+
+### Lezione 7.3 - Esempi svolti ed esercizi
+
+#### Esempio svolto 7.1 - Un algoritmo generico vincolato da concepts
+
+**Problema.** Scrivere una funzione che restituisce l'elemento massimo di **qualsiasi** range (vettore, array, lista, `string`...) purche' i suoi elementi siano confrontabili, con un errore di compilazione chiaro negli altri casi.
+
+**Ragionamento.** Il concept `std::ranges::forward_range` vincola il contenitore; `std::totally_ordered` vincola il tipo degli elementi, ricavato con `std::ranges::range_value_t`. Restituiamo `std::optional` perche' un range vuoto non ha massimo.
+
+```cpp
+#include <concepts>
+#include <iostream>
+#include <list>
+#include <optional>
+#include <ranges>
+#include <string>
+#include <vector>
+
+template <std::ranges::forward_range R>
+    requires std::totally_ordered<std::ranges::range_value_t<R>>
+std::optional<std::ranges::range_value_t<R>> massimo(const R& r) {
+    auto it = std::ranges::begin(r);
+    if (it == std::ranges::end(r)) return std::nullopt;
+    auto m = *it;
+    for (; it != std::ranges::end(r); ++it)
+        if (m < *it) m = *it;
+    return m;
+}
+
+struct Punto { int x, y; };   // nessun operator<: non soddisfa totally_ordered
+
+int main() {
+    std::vector<int> v{3, 9, 2};
+    std::list<std::string> l{"pera", "mela", "uva"};
+    std::cout << *massimo(v) << ' ' << *massimo(l) << ' ' << massimo(std::string("ciao")).value()
+              << ' ' << massimo(std::vector<double>{}).has_value() << '\n';
+    // massimo(std::vector<Punto>{});  // errore: vincoli non soddisfatti (totally_ordered)
+}
+```
+
+```text
+9 uva o 0
+```
+
+#### Esempio svolto 7.2 - Template variadici, fold expression e if constexpr
+
+**Problema.** Scrivere `stampaTutto(args...)` che stampa un numero qualsiasi di argomenti separati da virgole, racchiudendo le stringhe tra virgolette e i booleani come `vero/falso`.
+
+**Ragionamento.** Un **pack** di parametri si espande con una fold expression sull'operatore virgola. Per ogni elemento, `if constexpr` sceglie a compile time come formattarlo: i rami scartati non vengono nemmeno istanziati, quindi possono contenere codice che per quel tipo non compilerebbe.
+
+```cpp
+#include <iostream>
+#include <string>
+#include <string_view>
+#include <type_traits>
+
+template <typename T>
+void stampaUno(const T& x) {
+    using D = std::decay_t<T>;
+    if constexpr (std::is_same_v<D, bool>) std::cout << (x ? "vero" : "falso");
+    else if constexpr (std::is_convertible_v<D, std::string_view>) std::cout << '"' << x << '"';
+    else if constexpr (std::is_floating_point_v<D>) std::cout << x << 'f';
+    else std::cout << x;
+}
+
+template <typename... Args>
+void stampaTutto(const Args&... args) {
+    std::size_t i = 0;
+    ((std::cout << (i++ ? ", " : ""), stampaUno(args)), ...);   // fold sulla virgola
+    std::cout << " (" << sizeof...(args) << " argomenti)\n";
+}
+
+int main() {
+    stampaTutto(42, "ciao", 3.5, true, std::string("C++"), 'x');
+}
+```
+
+```text
+42, "ciao", 3.5f, vero, "C++", x (6 argomenti)
+```
+
+ES: **Esercizio 7.1** [Base] - Scrivi un template di classe `Coppia<T, U>` con membri `primo` e `secondo` e una funzione `scambiata()` che restituisce `Coppia<U, T>`. Verifica che `Coppia c{1, 2.5};` funzioni grazie alla CTAD.
+ES: **Esercizio 7.2** [Base] - Definisci un concept `Numerico` (interi o virgola mobile, ma non `bool`) e una funzione `media(std::span<const T>)` vincolata da esso.
+ES: **Esercizio 7.3** [Medio] - Scrivi un template di classe `Pila<T, N>` a capacita' fissa basato su `std::array`, con `push` che restituisce `false` quando e' piena. Aggiungi uno `static_assert(N > 0)`.
+ES: **Esercizio 7.4** [Medio] - Kth Largest Element in a Stream (LeetCode 703): una classe che riceve numeri uno alla volta e restituisce in ogni momento il k-esimo piu' grande. Rendila generica sul tipo e sul comparatore.
+ES: **Esercizio 7.5** [Avanzato] - Calcola a compile time la tabella dei primi 20 numeri di Fibonacci in un `std::array` con una funzione `consteval`, e verificane un valore con `static_assert`.
 
 ## Capitolo 8 - Il C++ moderno: C++11, 14, 17, 20, 23
 
@@ -185,3 +438,108 @@ int main() {
 ### Lezione 8.3 - Buone pratiche: C++ Core Guidelines
 
 Segui le **C++ Core Guidelines** (Stroustrup e Sutter): `const` per default, parametri di ingresso per `const&` o per valore se piccoli, restituire per valore (grazie a copy elision/RVO), `noexcept` sulle funzioni di move, evitare le variabili globali, usare `std::span` invece di coppie puntatore+dimensione, `gsl::not_null`, `[[nodiscard]]`. Strumenti: clang-tidy (`modernize-*`, `cppcoreguidelines-*`), cppcheck, sanitizer.
+
+### Lezione 8.4 - Esempi svolti ed esercizi
+
+#### Esempio svolto 8.1 - Configurazione con optional, variant e visit
+
+**Problema.** Leggere righe `chiave = valore` e memorizzare il valore con il tipo giusto (intero, reale, booleano o stringa); poi stampare ogni voce con il suo tipo. Le righe senza `=` vanno ignorate.
+
+**Ragionamento.** `std::variant` e' un'unione type-safe: contiene esattamente uno dei tipi elencati. Per visitarlo usiamo il classico idioma `overloaded`, che eredita da piu' lambda e ne unisce gli `operator()`. `std::optional` esprime il "forse": una riga non valida restituisce `std::nullopt` invece di un codice di errore.
+
+```cpp
+#include <charconv>
+#include <iostream>
+#include <map>
+#include <optional>
+#include <string>
+#include <variant>
+
+using Valore = std::variant<long, double, bool, std::string>;
+
+template <typename... F> struct overloaded : F... { using F::operator()...; };
+
+std::string ripulisci(std::string s) {
+    auto a = s.find_first_not_of(' '), b = s.find_last_not_of(' ');
+    return a == std::string::npos ? "" : s.substr(a, b - a + 1);
+}
+
+Valore interpreta(const std::string& s) {
+    if (s == "true" || s == "false") return s == "true";
+    long l; auto fine = s.data() + s.size();
+    if (auto [p, e] = std::from_chars(s.data(), fine, l); e == std::errc{} && p == fine) return l;
+    double d;
+    if (auto [p, e] = std::from_chars(s.data(), fine, d); e == std::errc{} && p == fine) return d;
+    return s;
+}
+
+std::optional<std::pair<std::string, Valore>> leggiRiga(const std::string& riga) {
+    auto pos = riga.find('=');
+    if (pos == std::string::npos) return std::nullopt;
+    return std::pair{ripulisci(riga.substr(0, pos)), interpreta(ripulisci(riga.substr(pos + 1)))};
+}
+
+int main() {
+    std::map<std::string, Valore> conf;
+    for (std::string r : {"porta = 8080", "ratio=0.75", "debug = true", "commento", "nome = srv"})
+        if (auto kv = leggiRiga(r)) conf.insert(*kv);
+
+    for (const auto& [k, v] : conf)
+        std::visit(overloaded{
+            [&](long x) { std::cout << k << ": intero " << x << '\n'; },
+            [&](double x) { std::cout << k << ": reale " << x << '\n'; },
+            [&](bool x) { std::cout << k << ": bool " << std::boolalpha << x << '\n'; },
+            [&](const std::string& x) { std::cout << k << ": stringa " << x << '\n'; },
+        }, v);
+}
+```
+
+```text
+debug: bool true
+nome: stringa srv
+porta: intero 8080
+ratio: reale 0.75
+```
+
+#### Esempio svolto 8.2 - Elaborare dati con ranges e proiezioni
+
+**Problema.** Data una lista di studenti con nome, corso e voto, stampare in ordine di voto decrescente i nomi dei promossi (voto >= 18) del corso "C++", e calcolarne la media.
+
+**Ragionamento.** Gli algoritmi `std::ranges::` accettano una **proiezione**: `std::ranges::sort(v, std::greater{}, &Studente::voto)` ordina per voto senza scrivere un comparatore. Le viste (`views::filter`, `views::transform`) sono pigre: non creano copie, calcolano gli elementi solo quando li si scorre.
+
+```cpp
+#include <algorithm>
+#include <functional>
+#include <iostream>
+#include <numeric>
+#include <ranges>
+#include <string>
+#include <vector>
+
+struct Studente { std::string nome, corso; int voto; };
+
+int main() {
+    std::vector<Studente> v{{"Anna", "C++", 28}, {"Bruno", "Java", 30}, {"Carla", "C++", 17},
+                            {"Dario", "C++", 24}, {"Elena", "C++", 30}};
+    std::ranges::sort(v, std::greater{}, &Studente::voto);
+
+    auto promossi = v | std::views::filter([](const Studente& s) {
+                            return s.corso == "C++" && s.voto >= 18; });
+    for (const auto& nome : promossi | std::views::transform(&Studente::nome))
+        std::cout << nome << ' ';
+
+    auto voti = promossi | std::views::transform(&Studente::voto);
+    double somma = std::accumulate(voti.begin(), voti.end(), 0.0);
+    std::cout << "| media " << somma / std::ranges::distance(promossi) << '\n';
+}
+```
+
+```text
+Elena Anna Dario | media 27.3333
+```
+
+ES: **Esercizio 8.1** [Base] - Modernizza questo codice C++03: `std::map<std::string, std::vector<int> >::const_iterator it; for (it = m.begin(); it != m.end(); ++it) { int* p = new int(it->second.size()); std::cout << it->first << *p; delete p; }`.
+ES: **Esercizio 8.2** [Base] - Con `std::views::iota`, `filter`, `transform` e `take` stampa i quadrati dei primi 5 numeri dispari maggiori di 10.
+ES: **Esercizio 8.3** [Medio] - Riscrivi `parseInt` della Lezione 8.1 restituendo `std::expected<int, std::string>` (C++23) con messaggi di errore diversi per "non e' un numero" e "fuori intervallo".
+ES: **Esercizio 8.4** [Medio] - Data una `std::map<std::string, int>` di prodotti e quantita', trova con `std::ranges::max_element` e una proiezione il prodotto con quantita' massima e stampalo con structured bindings.
+ES: **Esercizio 8.5** [Avanzato] - Modella una forma geometrica come `std::variant<Cerchio, Rettangolo, Triangolo>` e calcola l'area con `std::visit`, senza ereditarieta' ne' funzioni virtuali. Confronta pregi e difetti con la soluzione della Lezione 6.3.

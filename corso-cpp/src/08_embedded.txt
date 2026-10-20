@@ -59,6 +59,170 @@ LC: 78 - Subsets (bitmask)
 LC: 89 - Gray Code
 LC: 1318 - Minimum Flips to Make a OR b Equal to c
 
+### Lezione 25.4 - Esempi svolti ed esercizi
+
+#### Esempio svolto 25.1 - Registri type-safe a costo zero, testati sul PC
+
+**Problema.** Configurare un pin GPIO scrivendo campi di bit dentro registri a 32 bit, in modo che un errore (pin inesistente, campo troppo largo) sia un errore di **compilazione**, e poter testare il driver sul PC senza la scheda.
+
+**Ragionamento.** Un campo di bit si descrive con posizione e larghezza note a compile time: `Campo<Offset, Larghezza>`. Le funzioni `constexpr` calcolano maschere e valori, e `static_assert` rifiuta i campi impossibili. L'indirizzo del registro e' l'unica cosa che cambia tra scheda e PC: sul microcontrollore e' un indirizzo fisso, nel test punta a un array. Con `-O2` tutto si riduce alle stesse istruzioni che si scriverebbero a mano.
+
+```cpp
+#include <bit>
+#include <cstdint>
+#include <iostream>
+
+template <unsigned Offset, unsigned Larghezza>
+struct Campo {
+    static_assert(Larghezza > 0 && Offset + Larghezza <= 32, "campo fuori dal registro");
+    static constexpr std::uint32_t maschera = ((1ull << Larghezza) - 1) << Offset;
+    static constexpr std::uint32_t valore(std::uint32_t v) { return (v << Offset) & maschera; }
+};
+
+struct Registro {
+    volatile std::uint32_t* indirizzo;
+    template <typename C> void scrivi(std::uint32_t v) {          // read-modify-write
+        *indirizzo = (*indirizzo & ~C::maschera) | C::valore(v);
+    }
+    template <typename C> std::uint32_t leggi() const {
+        return (*indirizzo & C::maschera) >> std::countr_zero(C::maschera);
+    }
+};
+
+enum class Modo : std::uint32_t { Ingresso = 0, Uscita = 1, Alternativo = 2, Analogico = 3 };
+
+template <unsigned Pin>
+struct PinGPIO {
+    static_assert(Pin < 16, "la porta ha solo 16 pin");
+    using CampoModo = Campo<Pin * 2, 2>;                          // MODER: 2 bit per pin
+    using CampoUscita = Campo<Pin, 1>;                            // ODR: 1 bit per pin
+    Registro moder, odr;
+    void configura(Modo m) { moder.scrivi<CampoModo>(static_cast<std::uint32_t>(m)); }
+    void imposta(bool alto) { odr.scrivi<CampoUscita>(alto); }
+    void inverti() { odr.scrivi<CampoUscita>(!odr.leggi<CampoUscita>()); }
+};
+
+int main() {
+    // Sulla scheda: reinterpret_cast<volatile std::uint32_t*>(0x40020000) ecc.
+    volatile std::uint32_t registriFinti[2] = {0xABCD0000, 0};   // MODER, ODR simulati
+    PinGPIO<5> led{{&registriFinti[0]}, {&registriFinti[1]}};
+    led.configura(Modo::Uscita);
+    led.imposta(true);
+    led.inverti(); led.inverti();
+    std::cout << std::hex << "MODER=0x" << registriFinti[0] << " ODR=0x" << registriFinti[1]
+              << '\n';
+    // PinGPIO<16> errato;   // errore di compilazione: "la porta ha solo 16 pin"
+}
+```
+
+```text
+MODER=0xabcd0400 ODR=0x20
+```
+
+I 2 bit del pin 5 (bit 10-11 di MODER) valgono `01` = uscita e gli altri bit non sono stati toccati; in ODR e' acceso il bit 5.
+
+#### Esempio svolto 25.2 - Antirimbalzo di un pulsante come macchina a stati
+
+**Problema.** Un pulsante meccanico, quando viene premuto, oscilla per qualche millisecondo tra 0 e 1 ("rimbalzi"). Leggendolo ogni millisecondo da un interrupt di timer, generare un solo evento "premuto" e un solo evento "rilasciato" per ogni pressione reale.
+
+**Ragionamento.** Un nuovo livello viene accettato solo se resta stabile per N campioni consecutivi. La macchina a stati e' una funzione pura che riceve un campione e restituisce l'evento: niente `delay`, niente dipendenze dall'hardware, quindi la si testa sul PC con una sequenza di campioni registrata. Nel firmware `aggiorna` viene chiamata dall'ISR del timer e l'evento viene messo in una coda per il main loop.
+
+```cpp
+#include <cstdint>
+#include <iostream>
+#include <string>
+
+enum class Evento { Nessuno, Premuto, Rilasciato };
+
+class Antirimbalzo {
+    bool stabile_ = false, ultimo_ = false;
+    std::uint8_t contatore_ = 0;
+    static constexpr std::uint8_t N = 4;             // 4 ms di stabilita'
+public:
+    Evento aggiorna(bool campione) {
+        if (campione != ultimo_) { ultimo_ = campione; contatore_ = 0; return Evento::Nessuno; }
+        if (campione == stabile_ || ++contatore_ < N) return Evento::Nessuno;
+        stabile_ = campione;
+        return stabile_ ? Evento::Premuto : Evento::Rilasciato;
+    }
+};
+
+int main() {
+    std::string campioni = "000010110111111111101001000000";   // un campione al ms
+    Antirimbalzo a;
+    for (std::size_t t = 0; t < campioni.size(); ++t) {
+        Evento e = a.aggiorna(campioni[t] == '1');
+        if (e == Evento::Premuto) std::cout << "t=" << t << " premuto\n";
+        if (e == Evento::Rilasciato) std::cout << "t=" << t << " rilasciato\n";
+    }
+}
+```
+
+```text
+t=13 premuto
+t=28 rilasciato
+```
+
+#### Esempio svolto 25.3 - Coda lock-free tra interrupt e main loop
+
+**Problema.** L'ISR della UART riceve byte e li deve passare al main loop senza disabilitare gli interrupt e senza perdere dati.
+
+**Ragionamento.** Con **un solo produttore** (l'ISR) e **un solo consumatore** (il main loop) basta un ring buffer con due indici atomici: solo l'ISR scrive `testa`, solo il main scrive `coda`. Con una capacita' potenza di 2 il modulo diventa un AND. Gli ordini di memoria `release`/`acquire` garantiscono che il dato sia scritto prima che l'altro lato veda l'indice aggiornato (su un Cortex-M single core servono comunque a impedire al compilatore di riordinare).
+
+```cpp
+#include <array>
+#include <atomic>
+#include <cstddef>
+#include <cstdint>
+#include <iostream>
+#include <optional>
+
+template <typename T, std::size_t N>
+class RingSPSC {
+    static_assert((N & (N - 1)) == 0, "N deve essere una potenza di 2");
+    std::array<T, N> buf_{};
+    std::atomic<std::size_t> testa_{0}, coda_{0};   // testa: scrive l'ISR, coda: il main
+public:
+    bool push(T x) {                                 // chiamata dall'ISR
+        auto t = testa_.load(std::memory_order_relaxed);
+        if (t - coda_.load(std::memory_order_acquire) == N) return false;   // piena
+        buf_[t & (N - 1)] = x;
+        testa_.store(t + 1, std::memory_order_release);
+        return true;
+    }
+    std::optional<T> pop() {                         // chiamata dal main loop
+        auto c = coda_.load(std::memory_order_relaxed);
+        if (c == testa_.load(std::memory_order_acquire)) return std::nullopt;   // vuota
+        T x = buf_[c & (N - 1)];
+        coda_.store(c + 1, std::memory_order_release);
+        return x;
+    }
+};
+
+RingSPSC<std::uint8_t, 8> rx;
+unsigned persi = 0;
+void UART_IRQHandler(std::uint8_t byte) { if (!rx.push(byte)) ++persi; }   // simulata
+
+int main() {
+    for (char c : std::string_view("ciao, mondo!")) UART_IRQHandler(c);    // raffica di 12 byte
+    std::cout << "persi: " << persi << ", ricevuti: ";
+    while (auto b = rx.pop()) std::cout << static_cast<char>(*b);
+    std::cout << '\n';
+}
+```
+
+```text
+persi: 4, ricevuti: ciao, mo
+```
+
+Con una raffica piu' lunga della coda i byte in eccesso si perdono: il conteggio `persi` serve proprio a dimensionare il buffer durante i test.
+
+ES: **Esercizio 25.1** [Base] - Scrivi le funzioni `constexpr` `impostaBit`, `azzeraBit`, `invertiBit` e `leggiBit` su `std::uint32_t` e verificale con `static_assert`.
+ES: **Esercizio 25.2** [Base] - Design Circular Queue (LeetCode 622) senza allocazione dinamica: capacita' come parametro template e storage in `std::array`.
+ES: **Esercizio 25.3** [Medio] - Moving Average (LeetCode 346) in aritmetica intera: media mobile degli ultimi 8 campioni di un ADC a 12 bit, aggiornata in O(1) mantenendo la somma corrente. Perche' una finestra potenza di 2 e' vantaggiosa?
+ES: **Esercizio 25.4** [Medio] - Gray Code (LeetCode 89): genera la sequenza di Gray a n bit con la formula `i ^ (i >> 1)` e scrivi la funzione inversa. Dove si usano i codici di Gray negli encoder?
+ES: **Esercizio 25.5** [Medio] - Spiega perche' `volatile` non rende atomico `contatore++` condiviso tra ISR e main, e mostra due modi corretti per farlo su un Cortex-M.
+
 ## Capitolo 26 - Protocolli, RTOS e sistemi connessi
 
 ### Lezione 26.1 - Bus e protocolli: UART, I2C, SPI, CAN
@@ -125,3 +289,138 @@ LC: 295 - Find Median from Data Stream
 LC: 480 - Sliding Window Median
 LC: 362 - Design Hit Counter
 LC: 1429 - First Unique Number
+
+### Lezione 26.5 - Esempi svolti ed esercizi
+
+#### Esempio svolto 26.1 - Un protocollo seriale con framing e CRC
+
+**Problema.** Un sensore invia misure su UART in pacchetti `0x7E | lunghezza | payload | CRC-8`. Il ricevitore riceve un byte alla volta (dall'ISR, Esempio 25.3) e deve ricostruire i pacchetti, scartando quelli corrotti e risincronizzandosi dopo un errore.
+
+**Ragionamento.** Il parser e' una macchina a stati: `AttesaInizio -> Lunghezza -> Payload -> Crc`. Un byte di inizio fisso permette di ritrovare l'allineamento; la lunghezza massima protegge da valori assurdi; il CRC-8 (polinomio 0x07) rileva le corruzioni. Il parser non sa nulla della UART: riceve byte e restituisce pacchetti completi.
+
+```cpp
+#include <array>
+#include <cstdint>
+#include <iostream>
+#include <optional>
+#include <vector>
+
+std::uint8_t crc8(const std::uint8_t* d, std::size_t n) {
+    std::uint8_t crc = 0;
+    for (std::size_t i = 0; i < n; ++i) {
+        crc ^= d[i];
+        for (int b = 0; b < 8; ++b) crc = crc & 0x80 ? std::uint8_t((crc << 1) ^ 0x07) : crc << 1;
+    }
+    return crc;
+}
+
+std::vector<std::uint8_t> incapsula(const std::vector<std::uint8_t>& payload) {
+    std::vector<std::uint8_t> f{0x7E, std::uint8_t(payload.size())};
+    f.insert(f.end(), payload.begin(), payload.end());
+    f.push_back(crc8(payload.data(), payload.size()));
+    return f;
+}
+
+class Parser {
+    enum class Stato { AttesaInizio, Lunghezza, Payload, Crc } s_ = Stato::AttesaInizio;
+    std::array<std::uint8_t, 32> buf_{};
+    std::uint8_t len_ = 0, ricevuti_ = 0;
+public:
+    unsigned errori = 0;
+    std::optional<std::vector<std::uint8_t>> byte(std::uint8_t b) {
+        switch (s_) {
+            case Stato::AttesaInizio: if (b == 0x7E) s_ = Stato::Lunghezza; break;
+            case Stato::Lunghezza:
+                if (b == 0 || b > buf_.size()) { ++errori; s_ = Stato::AttesaInizio; break; }
+                len_ = b; ricevuti_ = 0; s_ = Stato::Payload; break;
+            case Stato::Payload:
+                buf_[ricevuti_++] = b;
+                if (ricevuti_ == len_) s_ = Stato::Crc;
+                break;
+            case Stato::Crc:
+                s_ = Stato::AttesaInizio;
+                if (b != crc8(buf_.data(), len_)) { ++errori; break; }
+                return std::vector<std::uint8_t>(buf_.begin(), buf_.begin() + len_);
+        }
+        return std::nullopt;
+    }
+};
+
+int main() {
+    std::vector<std::uint8_t> flusso{0x13, 0x37};                    // rumore iniziale
+    for (auto p : {std::vector<std::uint8_t>{21, 5}, {22, 0}, {23, 9}}) {
+        auto f = incapsula(p);
+        flusso.insert(flusso.end(), f.begin(), f.end());
+    }
+    flusso[2 + 4 + 3] ^= 0x01;                                       // corrompe il 2o pacchetto
+    Parser parser;
+    for (auto b : flusso)
+        if (auto p = parser.byte(b))
+            std::cout << "temperatura " << int((*p)[0]) << '.' << int((*p)[1]) << " C\n";
+    std::cout << "pacchetti scartati: " << parser.errori << '\n';
+}
+```
+
+```text
+temperatura 21.5 C
+temperatura 23.9 C
+pacchetti scartati: 1
+```
+
+NOTA: In un protocollo reale il byte 0x7E potrebbe comparire anche nel payload: si usa il **byte stuffing** (come in HDLC/PPP o COBS) per renderlo univoco, oppure un timeout tra i byte per risincronizzarsi.
+
+#### Esempio svolto 26.2 - Controllo PID di un motore simulato
+
+**Problema.** Portare la velocita' di un motore DC a 100 giri/s e mantenerla, confrontando un controllo solo proporzionale con un PID completo.
+
+**Ragionamento.** Il PID calcola il comando come `Kp * errore + Ki * integrale(errore) + Kd * derivata(errore)`. Il solo termine P lascia un **errore a regime** (al motore serve un comando non nullo per girare, quindi l'errore non puo' essere zero); il termine I lo elimina accumulando l'errore residuo; il termine D smorza le oscillazioni. Il motore e' simulato come sistema del primo ordine: `dv/dt = (K * comando - v) / tau`. Limitare il comando (saturazione) e congelare l'integrale quando si e' saturi (anti-windup) e' indispensabile sull'hardware reale.
+
+```cpp
+#include <algorithm>
+#include <iomanip>
+#include <iostream>
+
+struct PID {
+    double kp, ki, kd, integrale = 0, errorePrec = 0;
+    double aggiorna(double obiettivo, double misura, double dt) {
+        double e = obiettivo - misura;
+        double derivata = (e - errorePrec) / dt;
+        errorePrec = e;
+        double u = kp * e + ki * (integrale + e * dt) + kd * derivata;
+        double saturato = std::clamp(u, 0.0, 12.0);             // tensione 0-12 V
+        if (u == saturato) integrale += e * dt;                 // anti-windup
+        return saturato;
+    }
+};
+
+double simula(PID pid, bool stampa) {
+    double v = 0;                                               // giri/s
+    const double dt = 0.01, K = 10, tau = 0.5;
+    for (int passo = 1; passo <= 300; ++passo) {
+        double u = pid.aggiorna(100, v, dt);
+        v += (K * u - v) / tau * dt;
+        if (stampa && passo % 50 == 0) std::cout << std::setw(6) << v;
+    }
+    if (stampa) std::cout << '\n';
+    return v;
+}
+
+int main() {
+    std::cout << std::fixed << std::setprecision(1);
+    std::cout << "solo P:";  simula({0.05, 0, 0}, true);
+    std::cout << "PID:   ";  simula({0.05, 0.2, 0.001}, true);
+}
+```
+
+```text
+solo P:  26.1  31.7  33.0  33.3  33.3  33.3
+PID:     51.3  85.7 100.3 103.4 102.5 101.1
+```
+
+Con il solo P la velocita' si ferma a 33 giri/s: il comando `0.05 * errore` e' sufficiente solo quando l'errore e' ancora grande. Il PID raggiunge l'obiettivo con una piccola sovraelongazione (103,4) che poi si smorza. Aumentando `ki` si arriva prima ma la sovraelongazione cresce; diminuendolo sparisce, ma la risposta diventa piu' lenta: la taratura (manuale, Ziegler-Nichols o automatica) e' un compromesso tra rapidita' e stabilita'.
+
+ES: **Esercizio 26.1** [Base] - Calcola il CRC-16/CCITT-FALSE (polinomio 0x1021, valore iniziale 0xFFFF) della stringa `"123456789"`: il risultato deve essere `0x29B1`.
+ES: **Esercizio 26.2** [Medio] - Definisci un concept `BusI2C` (metodi `scrivi(indirizzo, dati)` e `leggi(indirizzo, n)`) e scrivi un driver `SensoreTemperatura<Bus>` che lo usa. Testalo sul PC con un bus finto che registra le transazioni.
+ES: **Esercizio 26.3** [Medio] - Implementa la macchina a stati di un semaforo pedonale (verde auto, giallo, rosso, verde pedoni, con prenotazione tramite pulsante) guidata da tick di 100 ms, e simulane un minuto.
+ES: **Esercizio 26.4** [Medio] - Progetta l'architettura FreeRTOS di una stazione meteo: quali task, con quali priorita', quali code o semafori, e chi gestisce Wi-Fi e scheda SD? Giustifica le scelte rispetto a inversione di priorita' e consumo.
+ES: **Esercizio 26.5** [Avanzato] - Sliding Window Median (LeetCode 480): mediana degli ultimi k campioni, utile come filtro anti-picchi. Usa un `std::multiset` con un iteratore alla mediana.

@@ -60,6 +60,183 @@ int main() {
 }
 ```
 
+### Lezione 33.3 - Esempi svolti ed esercizi
+
+#### Esempio svolto 33.1 - Un wrapper RAII per SQLite con transazioni
+
+**Problema.** L'API C di SQLite richiede di ricordarsi `sqlite3_finalize`, `sqlite3_close`, `COMMIT` e `ROLLBACK` e di controllare ogni codice di ritorno. Scrivere un piccolo strato C++ che renda impossibile dimenticarli, e usarlo per un registro di ordini.
+
+**Ragionamento.** Tre classi RAII: `Db` (chiude la connessione), `Statement` (finalizza la query preparata, con `bind` variadico) e `Transazione` (esegue `BEGIN` nel costruttore e `ROLLBACK` nel distruttore se nessuno ha chiamato `commit`). Gli errori diventano eccezioni con il messaggio di SQLite. Si usa un database `:memory:`, cosi' l'esempio non lascia file.
+
+```cpp
+// compila: -lsqlite3
+#include <sqlite3.h>
+#include <iostream>
+#include <stdexcept>
+#include <string>
+
+class Db {
+    sqlite3* db_ = nullptr;
+public:
+    explicit Db(const char* percorso) {
+        if (sqlite3_open(percorso, &db_) != SQLITE_OK)
+            throw std::runtime_error(sqlite3_errmsg(db_));
+    }
+    ~Db() { sqlite3_close(db_); }
+    Db(const Db&) = delete; Db& operator=(const Db&) = delete;
+    sqlite3* get() const { return db_; }
+    void esegui(const char* sql) {
+        char* err = nullptr;
+        if (sqlite3_exec(db_, sql, nullptr, nullptr, &err) != SQLITE_OK) {
+            std::string m = err; sqlite3_free(err);
+            throw std::runtime_error(m);
+        }
+    }
+};
+
+class Statement {
+    sqlite3_stmt* st_ = nullptr;
+    sqlite3* db_;
+    int i_ = 0;
+    void lega(int v) { sqlite3_bind_int(st_, ++i_, v); }
+    void lega(double v) { sqlite3_bind_double(st_, ++i_, v); }
+    void lega(const std::string& v) {
+        sqlite3_bind_text(st_, ++i_, v.c_str(), -1, SQLITE_TRANSIENT);   // SQLite copia il testo
+    }
+public:
+    Statement(Db& db, const char* sql) : db_(db.get()) {
+        if (sqlite3_prepare_v2(db_, sql, -1, &st_, nullptr) != SQLITE_OK)
+            throw std::runtime_error(sqlite3_errmsg(db_));
+    }
+    ~Statement() { sqlite3_finalize(st_); }
+    Statement(const Statement&) = delete; Statement& operator=(const Statement&) = delete;
+    template <typename... A> Statement& bind(const A&... a) { (lega(a), ...); return *this; }
+    bool passo() {                                       // true se c'e' una riga
+        int rc = sqlite3_step(st_);
+        if (rc == SQLITE_ROW) return true;
+        if (rc == SQLITE_DONE) return false;
+        throw std::runtime_error(sqlite3_errmsg(db_));
+    }
+    void reset() { sqlite3_reset(st_); sqlite3_clear_bindings(st_); i_ = 0; }
+    std::string testo(int c) const {
+        return reinterpret_cast<const char*>(sqlite3_column_text(st_, c));
+    }
+    double reale(int c) const { return sqlite3_column_double(st_, c); }
+};
+
+class Transazione {
+    Db& db_;
+    bool fatta_ = false;
+public:
+    explicit Transazione(Db& db) : db_(db) { db_.esegui("BEGIN"); }
+    void commit() { db_.esegui("COMMIT"); fatta_ = true; }
+    ~Transazione() { if (!fatta_) try { db_.esegui("ROLLBACK"); } catch (...) {} }
+};
+
+int main() {
+    Db db(":memory:");
+    db.esegui("CREATE TABLE ordini(id INTEGER PRIMARY KEY, cliente TEXT NOT NULL,"
+              " importo REAL CHECK(importo > 0))");
+    {
+        Transazione tx(db);
+        Statement ins(db, "INSERT INTO ordini(cliente, importo) VALUES(?, ?)");
+        for (auto [c, imp] : {std::pair{"Anna", 30.5}, {"Luca", 12.0}, {"Anna", 7.25}}) {
+            ins.bind(std::string(c), imp).passo();
+            ins.reset();
+        }
+        tx.commit();
+    }
+    try {                                                 // il secondo inserimento viola il CHECK
+        Transazione tx(db);
+        Statement ins(db, "INSERT INTO ordini(cliente, importo) VALUES(?, ?)");
+        ins.bind(std::string("Sara"), 50.0).passo(); ins.reset();
+        ins.bind(std::string("Sara"), -5.0).passo();
+        tx.commit();
+    } catch (const std::exception& e) {
+        std::cout << "errore: " << e.what() << " -> rollback\n";
+    }
+    Statement q(db, "SELECT cliente, SUM(importo) FROM ordini GROUP BY cliente ORDER BY cliente");
+    while (q.passo()) std::cout << q.testo(0) << ": " << q.reale(1) << '\n';
+}
+```
+
+```text
+errore: CHECK constraint failed: importo > 0 -> rollback
+Anna: 37.75
+Luca: 12
+```
+
+Sara non compare: anche il suo primo ordine, valido, e' stato annullato dal rollback, perche' la transazione e' **atomica**.
+
+#### Esempio svolto 33.2 - Query SQL classiche, eseguite da C++
+
+**Problema.** Su una tabella `dipendenti(nome, reparto, stipendio, capo)` rispondere a: (a) il secondo stipendio piu' alto (LeetCode 176); (b) chi guadagna piu' del proprio capo (LeetCode 181); (c) i due stipendi piu' alti di ogni reparto (LeetCode 185).
+
+**Ragionamento.** (a) `DISTINCT` + `ORDER BY ... LIMIT 1 OFFSET 1`, avvolto in una sottoquery perche' restituisca `NULL` se non esiste. (b) Un **self-join**: la tabella compare due volte, una come dipendente e una come capo. (c) Le **window function** (`DENSE_RANK() OVER (PARTITION BY ...)`) numerano le righe all'interno di ciascun gruppo. SQLite le supporta dalla versione 3.25.
+
+```cpp
+// compila: -lsqlite3
+#include <sqlite3.h>
+#include <iostream>
+
+int stampa(void*, int n, char** valori, char**) {
+    for (int i = 0; i < n; ++i) std::cout << (i ? " | " : "") << (valori[i] ? valori[i] : "NULL");
+    std::cout << '\n';
+    return 0;
+}
+
+int main() {
+    sqlite3* db;
+    sqlite3_open(":memory:", &db);
+    sqlite3_exec(db, R"(
+        CREATE TABLE dipendenti(id INTEGER PRIMARY KEY, nome TEXT, reparto TEXT,
+                                stipendio INT, capo INT REFERENCES dipendenti(id));
+        INSERT INTO dipendenti VALUES
+            (1, 'Rita', 'IT', 5000, NULL), (2, 'Ugo', 'IT', 5200, 1), (3, 'Ines', 'IT', 4000, 1),
+            (4, 'Gino', 'Vendite', 3500, NULL), (5, 'Lea', 'Vendite', 3900, 4),
+            (6, 'Ada', 'Vendite', 3500, 4), (7, 'Teo', 'IT', 4000, 1);)",
+        nullptr, nullptr, nullptr);
+
+    const char* query[] = {
+        "SELECT (SELECT DISTINCT stipendio FROM dipendenti ORDER BY stipendio DESC"
+        " LIMIT 1 OFFSET 1) AS secondo",
+
+        "SELECT d.nome, d.stipendio, c.nome FROM dipendenti d"
+        " JOIN dipendenti c ON d.capo = c.id WHERE d.stipendio > c.stipendio",
+
+        "SELECT reparto, nome, stipendio FROM ("
+        "  SELECT *, DENSE_RANK() OVER (PARTITION BY reparto ORDER BY stipendio DESC) AS r"
+        "  FROM dipendenti) WHERE r <= 2 ORDER BY reparto, stipendio DESC, nome",
+    };
+    for (const char* q : query) {
+        sqlite3_exec(db, q, stampa, nullptr, nullptr);
+        std::cout << "--\n";
+    }
+    sqlite3_close(db);
+}
+```
+
+```text
+5000
+--
+Ugo | 5200 | Rita
+Lea | 3900 | Gino
+--
+IT | Ugo | 5200
+IT | Rita | 5000
+Vendite | Lea | 3900
+Vendite | Ada | 3500
+Vendite | Gino | 3500
+--
+```
+
+`DENSE_RANK` assegna lo stesso rango ai pari merito (Ada e Gino), quindi in Vendite compaiono tre persone; con `ROW_NUMBER` se ne vedrebbero esattamente due, scelte arbitrariamente.
+
+ES: **Esercizio 33.1** [Base] - Scrivi la query di LeetCode 183 (clienti che non hanno mai ordinato) in due modi: con `LEFT JOIN ... WHERE o.id IS NULL` e con `NOT EXISTS`. Eseguile con il wrapper dell'Esempio 33.1.
+ES: **Esercizio 33.2** [Base] - Aggiungi a `Statement` un metodo `std::optional<std::string> testoOpzionale(int colonna)` che restituisce `std::nullopt` per i valori `NULL` (`sqlite3_column_type == SQLITE_NULL`).
+ES: **Esercizio 33.3** [Medio] - Mostra con un esempio concreto perche' `"SELECT * FROM utenti WHERE nome = '" + input + "'"` e' vulnerabile all'SQL injection (che cosa succede con `input = "x' OR '1'='1"`?) e verifica che la versione con `?` e `bind` non lo sia.
+ES: **Esercizio 33.4** [Medio] - Inserisci 100.000 righe con e senza una transazione esplicita e misura i tempi. Perche' la differenza e' cosi' grande? Poi crea un indice e confronta l'output di `EXPLAIN QUERY PLAN` di una ricerca prima e dopo.
+
 ## Capitolo 34 - Costruire un database: strutture e algoritmi
 
 ### Lezione 34.1 - Storage engine: pagine, B-tree, LSM-tree
@@ -121,6 +298,261 @@ LC: 1096 - Brace Expansion II
 - API REST (Parte 6) collegata a PostgreSQL con pool di connessioni.
 - Cache distribuita con protocollo Redis (RESP) sopra il server epoll della Parte 10.
 
+### Lezione 34.4 - Esempi svolti ed esercizi
+
+#### Esempio svolto 34.1 - Un mini LSM-tree: memtable, SSTable, tombstone e compaction
+
+**Problema.** Realizzare il cuore di uno storage engine stile LevelDB/RocksDB: scritture veloci in memoria, scarico periodico su "file" ordinati immutabili, letture che consultano i livelli dal piu' recente, cancellazioni tramite **tombstone** e compattazione.
+
+**Ragionamento.** La **memtable** e' una `std::map` ordinata: quando supera una soglia diventa una SSTable immutabile (qui un vettore ordinato; su disco sarebbe un file). Una lettura cerca prima nella memtable, poi nelle SSTable dalla piu' nuova alla piu' vecchia, con ricerca binaria; il primo valore trovato vince. Cancellare scrive un tombstone (`std::nullopt`), perche' le SSTable non si modificano. La **compaction** fonde tutte le SSTable tenendo solo la versione piu' recente di ogni chiave e scartando i tombstone.
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <map>
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
+
+using Valore = std::optional<std::string>;                    // nullopt = tombstone
+using SSTable = std::vector<std::pair<std::string, Valore>>;  // ordinata per chiave
+
+class LSM {
+    std::map<std::string, Valore> memtable_;
+    std::vector<SSTable> livelli_;                            // dal piu' vecchio al piu' nuovo
+    std::size_t soglia_;
+    void scarica() {
+        livelli_.emplace_back(memtable_.begin(), memtable_.end());
+        memtable_.clear();
+    }
+public:
+    explicit LSM(std::size_t soglia) : soglia_(soglia) {}
+    void put(const std::string& k, std::string v) {
+        memtable_[k] = std::move(v);
+        if (memtable_.size() >= soglia_) scarica();
+    }
+    void del(const std::string& k) {
+        memtable_[k] = std::nullopt;
+        if (memtable_.size() >= soglia_) scarica();
+    }
+    Valore get(const std::string& k) const {
+        if (auto it = memtable_.find(k); it != memtable_.end()) return it->second;
+        for (auto t = livelli_.rbegin(); t != livelli_.rend(); ++t) {
+            auto it = std::ranges::lower_bound(*t, k, {}, &SSTable::value_type::first);
+            if (it != t->end() && it->first == k) return it->second;
+        }
+        return std::nullopt;
+    }
+    void compatta() {
+        std::map<std::string, Valore> fuso;
+        for (const auto& t : livelli_)                          // i piu' nuovi sovrascrivono
+            for (const auto& [k, v] : t) fuso[k] = v;
+        SSTable unica;
+        for (auto& [k, v] : fuso) if (v) unica.emplace_back(k, v);   // via i tombstone
+        livelli_.assign(1, std::move(unica));
+    }
+    std::size_t numeroSSTable() const { return livelli_.size(); }
+    std::size_t vociSuDisco() const {
+        std::size_t n = 0;
+        for (auto& t : livelli_) n += t.size();
+        return n;
+    }
+};
+
+int main() {
+    LSM db(3);
+    db.put("mela", "1"); db.put("pera", "2"); db.put("uva", "3");      // -> SSTable 1
+    db.put("mela", "10"); db.del("pera"); db.put("kiwi", "4");         // -> SSTable 2
+    db.put("fico", "5");                                               // resta in memtable
+    auto mostra = [&](const char* k) { std::cout << k << '=' << db.get(k).value_or("-") << ' '; };
+    for (auto k : {"mela", "pera", "uva", "kiwi", "fico"}) mostra(k);
+    std::cout << "| sstable " << db.numeroSSTable() << ", voci " << db.vociSuDisco() << '\n';
+    db.compatta();
+    for (auto k : {"mela", "pera", "uva", "kiwi", "fico"}) mostra(k);
+    std::cout << "| sstable " << db.numeroSSTable() << ", voci " << db.vociSuDisco() << '\n';
+}
+```
+
+```text
+mela=10 pera=- uva=3 kiwi=4 fico=5 | sstable 2, voci 6
+mela=10 pera=- uva=3 kiwi=4 fico=5 | sstable 1, voci 3
+```
+
+Nei motori reali ogni SSTable ha anche un **Bloom filter** che evita di leggerla quando la chiave non c'e' di sicuro, la memtable e' protetta da un WAL (Esercizio 34.2) e la compattazione e' organizzata a livelli per limitare il lavoro.
+
+#### Esempio svolto 34.2 - Parser a discesa ricorsiva per espressioni e clausole WHERE
+
+**Problema.** Costruire l'albero sintattico (AST) di espressioni come `eta >= 18 AND (citta = 'Roma' OR punti * 2 > 100)` e valutarlo su righe di una tabella in memoria: e' cio' che fa la parte "parser + executor" di un DBMS.
+
+**Ragionamento.** La grammatica definisce le precedenze, e ogni regola diventa una funzione:
+
+- `or    := and ('OR' and)*`
+- `and   := cmp ('AND' cmp)*`
+- `cmp   := somma (('=' | '<' | '>' | '>=' | '<=') somma)?`
+- `somma := prod (('+' | '-') prod)*`, `prod := prim (('*' | '/') prim)*`
+- `prim  := numero | 'stringa' | colonna | '(' or ')'`
+
+Il lexer trasforma il testo in token. I nodi dell'AST sono classi con un metodo virtuale `valuta(riga)` (la classe `Espr` della Lezione 34.2); i valori sono `std::variant<double, std::string>`.
+
+```cpp
+#include <cctype>
+#include <iostream>
+#include <map>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <variant>
+#include <vector>
+
+using Valore = std::variant<double, std::string>;
+using Riga = std::map<std::string, Valore>;
+
+struct Espr {
+    virtual ~Espr() = default;
+    virtual Valore valuta(const Riga& r) const = 0;
+};
+using P = std::unique_ptr<Espr>;
+
+struct Costante : Espr {
+    Valore v; explicit Costante(Valore x) : v(std::move(x)) {}
+    Valore valuta(const Riga&) const override { return v; }
+};
+struct Colonna : Espr {
+    std::string n; explicit Colonna(std::string x) : n(std::move(x)) {}
+    Valore valuta(const Riga& r) const override { return r.at(n); }
+};
+struct Binaria : Espr {
+    std::string op; P a, b;
+    Binaria(std::string o, P x, P y) : op(std::move(o)), a(std::move(x)), b(std::move(y)) {}
+    Valore valuta(const Riga& r) const override {
+        Valore x = a->valuta(r), y = b->valuta(r);
+        auto num = [](const Valore& v) { return std::get<double>(v); };   // lancia se e' testo
+        if (op == "AND") return double(num(x) != 0 && num(y) != 0);
+        if (op == "OR") return double(num(x) != 0 || num(y) != 0);
+        if (op == "=") return double(x == y);
+        if (op == "<") return double(x < y);
+        if (op == ">") return double(x > y);
+        if (op == "<=") return double(x <= y);
+        if (op == ">=") return double(x >= y);
+        if (op == "+") return num(x) + num(y);
+        if (op == "-") return num(x) - num(y);
+        if (op == "*") return num(x) * num(y);
+        return num(x) / num(y);
+    }
+};
+
+class Parser {
+    std::vector<std::string> t_;
+    std::size_t i_ = 0;
+    bool vede(const std::string& s) const { return i_ < t_.size() && t_[i_] == s; }
+    bool accetta(const std::string& s) { if (vede(s)) { ++i_; return true; } return false; }
+public:
+    explicit Parser(const std::string& s) {                     // lexer
+        for (std::size_t i = 0; i < s.size();) {
+            char c = s[i];
+            if (std::isspace(static_cast<unsigned char>(c))) { ++i; continue; }
+            auto parola = [](char x) {
+                return std::isalnum(static_cast<unsigned char>(x)) || x == '.';
+            };
+            std::size_t j = i + 1;
+            if (parola(c))
+                while (j < s.size() && parola(s[j])) ++j;
+            else if (c == '\'') {
+                j = s.find('\'', i + 1) + 1;
+                if (j == 0) throw std::runtime_error("' mancante");
+            } else if ((c == '<' || c == '>') && i + 1 < s.size() && s[i + 1] == '=') j = i + 2;
+            t_.push_back(s.substr(i, j - i));
+            i = j;
+        }
+    }
+    P parseOr() {
+        P a = parseAnd();
+        while (accetta("OR")) a = std::make_unique<Binaria>("OR", std::move(a), parseAnd());
+        return a;
+    }
+    P parseAnd() {
+        P a = parseCmp();
+        while (accetta("AND")) a = std::make_unique<Binaria>("AND", std::move(a), parseCmp());
+        return a;
+    }
+    P parseCmp() {
+        P a = parseSomma();
+        for (const char* op : {"=", "<", ">", "<=", ">="})
+            if (accetta(op)) return std::make_unique<Binaria>(op, std::move(a), parseSomma());
+        return a;
+    }
+    P parseSomma() {
+        P a = parseProd();
+        for (;;) {
+            if (accetta("+")) a = std::make_unique<Binaria>("+", std::move(a), parseProd());
+            else if (accetta("-")) a = std::make_unique<Binaria>("-", std::move(a), parseProd());
+            else return a;
+        }
+    }
+    P parseProd() {
+        P a = parsePrim();
+        for (;;) {
+            if (accetta("*")) a = std::make_unique<Binaria>("*", std::move(a), parsePrim());
+            else if (accetta("/")) a = std::make_unique<Binaria>("/", std::move(a), parsePrim());
+            else return a;
+        }
+    }
+    P parsePrim() {
+        if (i_ >= t_.size()) throw std::runtime_error("espressione incompleta");
+        if (accetta("(")) {
+            P e = parseOr();
+            if (!accetta(")")) throw std::runtime_error("')' attesa");
+            return e;
+        }
+        std::string t = t_[i_++];
+        if (t[0] == '\'') return std::make_unique<Costante>(t.substr(1, t.size() - 2));
+        if (std::isdigit(static_cast<unsigned char>(t[0])))
+            return std::make_unique<Costante>(std::stod(t));
+        return std::make_unique<Colonna>(t);
+    }
+    P parse() {
+        P e = parseOr();
+        if (i_ != t_.size()) throw std::runtime_error("token inatteso: " + t_[i_]);
+        return e;
+    }
+};
+
+int main() {
+    std::vector<Riga> tabella{
+        {{"nome", "Anna"}, {"eta", 34.0}, {"citta", "Roma"}, {"punti", 20.0}},
+        {{"nome", "Bruno"}, {"eta", 17.0}, {"citta", "Roma"}, {"punti", 90.0}},
+        {{"nome", "Carla"}, {"eta", 41.0}, {"citta", "Milano"}, {"punti", 75.0}},
+        {{"nome", "Dario"}, {"eta", 25.0}, {"citta", "Torino"}, {"punti", 10.0}},
+    };
+    for (std::string where : {"eta >= 18 AND (citta = 'Roma' OR punti * 2 > 100)",
+                              "punti - eta < 0", "eta >= 18 AND (citta = 'Roma'"}) {
+        std::cout << "WHERE " << where << " ->";
+        try {
+            P filtro = Parser(where).parse();
+            for (const auto& r : tabella)
+                if (std::get<double>(filtro->valuta(r)) != 0)
+                    std::cout << ' ' << std::get<std::string>(r.at("nome"));
+        } catch (const std::exception& e) { std::cout << " errore: " << e.what(); }
+        std::cout << '\n';
+    }
+}
+```
+
+```text
+WHERE eta >= 18 AND (citta = 'Roma' OR punti * 2 > 100) -> Anna Carla
+WHERE punti - eta < 0 -> Anna Dario
+WHERE eta >= 18 AND (citta = 'Roma' -> errore: ')' attesa
+```
+
+Un DBMS vero fa un passo in piu': prima di valutare, il **planner** analizza l'AST e, per esempio, nota che `citta = 'Roma'` puo' usare un indice su `citta` invece di scorrere tutta la tabella.
+
+ES: **Esercizio 34.1** [Medio] - Basic Calculator II (LeetCode 227): valuta un'espressione con `+ - * /` tra interi non negativi senza parentesi, in una passata e con una pila (o con il parser dell'Esempio 34.2 ridotto alle regole `somma` e `prod`).
+ES: **Esercizio 34.2** [Medio] - Aggiungi al mini LSM un **Write-Ahead Log**: ogni `put`/`del` viene prima accodato a un file di testo (`P chiave valore` o `D chiave`); scrivi la funzione di recupero che, dopo un "crash", ricostruisce la memtable rileggendo il log.
+ES: **Esercizio 34.3** [Medio] - Evaluate Reverse Polish Notation (LeetCode 150), poi scrivi la funzione che converte un AST dell'Esempio 34.2 in notazione polacca inversa con una visita post-order.
+ES: **Esercizio 34.4** [Avanzato] - Buffer pool: una cache di N pagine da 4 KB con politica LRU in cui le pagine **fissate** (pin count > 0) non possono essere espulse e le pagine **sporche** vengono riscritte sul "disco" prima dell'espulsione. Conta letture e scritture su disco in uno scenario di prova.
+ES: **Esercizio 34.5** [Avanzato] - Merge k Sorted Lists (LeetCode 23) applicato alla compaction: fondi k SSTable ordinate in una sola con una `priority_queue`, in O(n log k), mantenendo la versione piu' recente in caso di chiavi uguali.
+
 # Parte 12 - Percorso di studio e progetti finali
 
 ## Capitolo 35 - Piano di studio e preparazione ai colloqui
@@ -157,3 +589,55 @@ LC: LeetCode Explore Cards - "Arrays 101", "Linked List", "Binary Tree", "Graph"
 - Siti: cppreference.com, isocpp.org, C++ Core Guidelines, Compiler Explorer (godbolt.org), learncpp.com, cp-algorithms.com.
 - Conferenze e canali: CppCon, C++Now, Meeting C++, The Cherno, Jason Turner (C++ Weekly).
 - Pratica: Exercism, Codeforces, AtCoder, Advent of Code, contributi open source (LLVM, Qt, Boost, SerenityOS).
+
+### Lezione 35.4 - Esempio svolto di colloquio ed esercizi di riepilogo
+
+#### Esempio svolto 35.1 - Un problema da colloquio affrontato passo passo
+
+**Problema.** Longest Consecutive Sequence (LeetCode 128): dato un vettore non ordinato di interi, trovare la lunghezza della piu' lunga sequenza di numeri consecutivi (in qualunque posizione). Esempio: `[100, 4, 200, 1, 3, 2]` -> 4 (la sequenza 1, 2, 3, 4). Richiesto O(n).
+
+**Ragionamento.** Ecco come conviene ragionare **ad alta voce** durante un colloquio.
+
+- **Chiarire**: ci sono duplicati? (si', vanno ignorati); il vettore puo' essere vuoto? (si', risposta 0); i numeri possono essere negativi? (si').
+- **Soluzione ovvia**: ordinare e contare le corse consecutive. O(n log n): corretta, ma non rispetta il vincolo. Dirlo comunque mostra che si ha un punto di partenza.
+- **Osservazione chiave**: una sequenza e' identificata dal suo **inizio**, cioe' un numero `x` tale che `x - 1` non e' presente. Con un `unordered_set` il test di presenza costa O(1).
+- **Algoritmo**: per ogni `x` che e' un inizio, contare `x + 1, x + 2, ...` finche' sono presenti.
+- **Complessita'**: sembra O(n^2) per il ciclo annidato, ma ogni numero viene visitato dal ciclo interno **una sola volta** (solo partendo dal proprio inizio): O(n) totale.
+- **Test**: vettore vuoto, un solo elemento, duplicati, negativi, tutto consecutivo.
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <unordered_set>
+#include <vector>
+
+int sequenzaPiuLunga(const std::vector<int>& a) {
+    std::unordered_set<int> s(a.begin(), a.end());
+    int best = 0;
+    for (int x : s) {
+        if (s.count(x - 1)) continue;                 // non e' l'inizio di una sequenza
+        int lung = 1;
+        while (s.count(x + lung)) ++lung;
+        best = std::max(best, lung);
+    }
+    return best;
+}
+
+int main() {
+    for (const auto& v : std::vector<std::vector<int>>{
+             {100, 4, 200, 1, 3, 2}, {}, {7}, {0, 3, 7, 2, 5, 8, 4, 6, 0, 1}, {-2, -1, 0, 5, 5}})
+        std::cout << sequenzaPiuLunga(v) << ' ';
+    std::cout << '\n';
+}
+```
+
+```text
+4 0 1 9 3
+```
+
+NOTA: Iterare su `s` e non su `a` evita di ripetere il lavoro per i duplicati: con un input come un milione di copie dello stesso numero, iterare su `a` resterebbe O(n), ma con piu' controlli inutili.
+
+ES: **Esercizio 35.1** [Medio] - Trapping Rain Water (LeetCode 42): quanta acqua resta intrappolata tra le barre di un istogramma? Parti dalla soluzione O(n) con due vettori di massimi (sinistra e destra), poi riducila a O(1) spazio con due puntatori.
+ES: **Esercizio 35.2** [Medio] - Word Break (LeetCode 139): una stringa si puo' dividere in parole di un dizionario? Formula la DP `ok[i]` = "i primi i caratteri sono divisibili" e spiega come la descriveresti in un colloquio.
+ES: **Esercizio 35.3** [Medio] - Merge k Sorted Lists (LeetCode 23): confronta tre approcci (fondere a coppie in sequenza, divide et impera, min-heap) indicando la complessita' di ciascuno con k liste e n elementi totali.
+ES: **Esercizio 35.4** [Avanzato] - Progetta (senza scrivere tutto il codice) un servizio di accorciamento URL capace di gestire 10.000 richieste al secondo: API, schema dei dati, generazione dei codici (Soluzione 20.2), cache (Esempio 32.1 e Soluzione 6.5), rate limiting (Esempio 20.2), stima di memoria e di spazio su disco per cinque anni.

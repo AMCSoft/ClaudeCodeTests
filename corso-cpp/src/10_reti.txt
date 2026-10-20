@@ -37,6 +37,145 @@ int main() {
 
 Client TCP: `socket` -> `getaddrinfo` -> `connect` -> `send/recv` -> `close`. Per UDP: `SOCK_DGRAM`, `sendto/recvfrom`. Gestire sempre: letture/scritture parziali, `EINTR`, timeout, chiusura ordinata (`shutdown`), `SIGPIPE`.
 
+### Lezione 30.3 - Esempi svolti ed esercizi
+
+#### Esempio svolto 30.1 - Client e server TCP nello stesso programma
+
+**Problema.** Scrivere un server echo e un client che si collega, invia tre messaggi e legge le risposte, facendo girare il server in un thread dello stesso programma su una porta scelta dal sistema operativo.
+
+**Ragionamento.** Facendo `bind` sulla porta 0 il kernel assegna una porta libera, che si legge con `getsockname`: niente conflitti con altri programmi. Il server viene messo in ascolto (`listen`) **prima** di avviare il client, cosi' la `connect` non puo' fallire. TCP e' un flusso di byte, non di messaggi: una `recv` puo' restituire meno byte di quelli inviati, per questo usiamo `inviaTutto` e leggiamo finche' non abbiamo la risposta completa.
+
+```cpp
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <iostream>
+#include <string>
+#include <thread>
+
+bool inviaTutto(int fd, const std::string& s) {
+    std::size_t inviati = 0;
+    while (inviati < s.size()) {
+        ssize_t n = send(fd, s.data() + inviati, s.size() - inviati, MSG_NOSIGNAL);
+        if (n <= 0) return false;
+        inviati += n;
+    }
+    return true;
+}
+
+int main() {
+    int srv = socket(AF_INET, SOCK_STREAM, 0);
+    sockaddr_in a{};
+    a.sin_family = AF_INET;
+    a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);              // 127.0.0.1
+    a.sin_port = 0;                                          // porta scelta dal kernel
+    if (bind(srv, (sockaddr*)&a, sizeof a) < 0 || listen(srv, 4) < 0) { perror("srv"); return 1; }
+    socklen_t len = sizeof a;
+    getsockname(srv, (sockaddr*)&a, &len);
+    unsigned short porta = ntohs(a.sin_port);
+
+    std::jthread server([srv] {
+        int c = accept(srv, nullptr, nullptr);
+        char buf[512];
+        ssize_t n;
+        while ((n = recv(c, buf, sizeof buf, 0)) > 0)        // 0 = il client ha chiuso
+            inviaTutto(c, "eco: " + std::string(buf, n));
+        close(c);
+    });
+
+    int cli = socket(AF_INET, SOCK_STREAM, 0);
+    sockaddr_in dest{};
+    dest.sin_family = AF_INET;
+    dest.sin_port = htons(porta);
+    inet_pton(AF_INET, "127.0.0.1", &dest.sin_addr);
+    if (connect(cli, (sockaddr*)&dest, sizeof dest) < 0) { perror("connect"); return 1; }
+    for (std::string msg : {"ciao", "come va?", "fine"}) {
+        inviaTutto(cli, msg);
+        std::string risposta;
+        char buf[512];
+        while (risposta.size() < msg.size() + 5) {           // "eco: " + messaggio
+            ssize_t n = recv(cli, buf, sizeof buf, 0);
+            if (n <= 0) break;
+            risposta.append(buf, n);
+        }
+        std::cout << risposta << '\n';
+    }
+    close(cli);                                              // il server vede recv == 0
+    server.join();
+    close(srv);
+    std::cout << "porta usata: " << (porta > 1024 ? "effimera" : "privilegiata") << '\n';
+}
+```
+
+```text
+eco: ciao
+eco: come va?
+eco: fine
+porta usata: effimera
+```
+
+NOTA: Qui il client conosce la lunghezza della risposta; in generale serve un **protocollo di framing** (delimitatore o prefisso di lunghezza, Esempio 31.1) per sapere dove finisce un messaggio.
+
+#### Esempio svolto 30.2 - Indirizzi IPv4, maschere e byte order
+
+**Problema.** Data la notazione CIDR `192.168.10.77/26`, calcolare indirizzo di rete, broadcast, primo e ultimo host e numero di host; mostrare poi come lo stesso intero appare in memoria in host order e in network order.
+
+**Ragionamento.** Un indirizzo IPv4 e' un intero a 32 bit; `/26` significa maschera con i 26 bit alti a 1. Rete = `ip & maschera`, broadcast = `rete | ~maschera`. Sulle CPU x86 e ARM (little endian) il byte meno significativo sta all'indirizzo piu' basso, mentre in rete si trasmette per primo il piu' significativo (big endian): `htonl` converte, `std::endian` permette di saperlo a compile time.
+
+```cpp
+#include <arpa/inet.h>
+#include <bit>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <iostream>
+#include <string>
+
+std::uint32_t parseIPv4(const std::string& s) {
+    unsigned a, b, c, d;
+    std::sscanf(s.c_str(), "%u.%u.%u.%u", &a, &b, &c, &d);
+    return a << 24 | b << 16 | c << 8 | d;
+}
+std::string comeTesto(std::uint32_t ip) {
+    return std::to_string(ip >> 24) + '.' + std::to_string(ip >> 16 & 255) + '.' +
+           std::to_string(ip >> 8 & 255) + '.' + std::to_string(ip & 255);
+}
+
+int main() {
+    std::string cidr = "192.168.10.77/26";
+    auto barra = cidr.find('/');
+    std::uint32_t ip = parseIPv4(cidr.substr(0, barra));
+    int prefisso = std::stoi(cidr.substr(barra + 1));
+    std::uint32_t maschera = prefisso == 0 ? 0 : ~0u << (32 - prefisso);
+    std::uint32_t rete = ip & maschera, broadcast = rete | ~maschera;
+    std::cout << "maschera  " << comeTesto(maschera) << "\nrete      " << comeTesto(rete)
+              << "\nbroadcast " << comeTesto(broadcast) << "\nhost      " << comeTesto(rete + 1)
+              << " - " << comeTesto(broadcast - 1) << " (" << broadcast - rete - 1 << ")\n";
+
+    unsigned char host[4], net[4];
+    std::uint32_t inRete = htonl(ip);
+    std::memcpy(host, &ip, 4);
+    std::memcpy(net, &inRete, 4);
+    std::cout << "little endian? " << (std::endian::native == std::endian::little)
+              << " | in memoria host: " << int(host[0]) << ' ' << int(host[3])
+              << " | network: " << int(net[0]) << ' ' << int(net[3]) << '\n';
+}
+```
+
+```text
+maschera  255.255.255.192
+rete      192.168.10.64
+broadcast 192.168.10.127
+host      192.168.10.65 - 192.168.10.126 (62)
+little endian? 1 | in memoria host: 77 192 | network: 192 77
+```
+
+ES: **Esercizio 30.1** [Base] - Scrivi un server e un client UDP (`SOCK_DGRAM`, `sendto`, `recvfrom`) nello stesso programma, sul modello dell'Esempio 30.1. Che cosa cambia nella gestione dei messaggi rispetto a TCP?
+ES: **Esercizio 30.2** [Base] - Scrivi `bool riceviTutto(int fd, char* buf, std::size_t n)` che legge esattamente n byte gestendo letture parziali, `EINTR` e la chiusura della connessione.
+ES: **Esercizio 30.3** [Medio] - Usa `getaddrinfo` per risolvere `localhost` e stampa tutti gli indirizzi restituiti (IPv4 e IPv6) con `inet_ntop`. Ricordati di `freeaddrinfo` (meglio: un `unique_ptr` con deleter).
+ES: **Esercizio 30.4** [Medio] - Implementa il checksum di Internet (RFC 1071) usato da IP, ICMP, TCP e UDP: somma in complemento a uno delle parole di 16 bit. Verifica che ricalcolando il checksum su un'intestazione che lo contiene gia' si ottenga 0.
+
 ## Capitolo 31 - Server scalabili
 
 ### Lezione 31.1 - Modelli di concorrenza dei server
@@ -87,6 +226,163 @@ LC: 981 - Time Based Key-Value Store
 LC: 1396 - Design Underground System
 LC: 1500 - Design a File Sharing System
 
+### Lezione 31.4 - Esempi svolti ed esercizi
+
+#### Esempio svolto 31.1 - Framing con prefisso di lunghezza e messaggi spezzati
+
+**Problema.** Su una connessione TCP si inviano messaggi di testo. Il ricevitore riceve i byte in blocchi arbitrari (un messaggio puo' arrivare a pezzi, o piu' messaggi in un solo blocco) e deve ricostruire i messaggi originali.
+
+**Ragionamento.** Ogni messaggio e' preceduto dalla sua lunghezza in 4 byte big endian. Il ricevitore accumula i byte in un buffer e, finche' il buffer contiene almeno un'intestazione **e** il payload corrispondente, estrae un messaggio completo. Un limite alla lunghezza massima impedisce a un client malevolo di far allocare gigabyte annunciando una lunghezza enorme. La classe non usa socket: la si testa simulando la frammentazione.
+
+```cpp
+#include <cstdint>
+#include <iostream>
+#include <optional>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
+std::string incapsula(const std::string& msg) {
+    std::uint32_t n = msg.size();
+    std::string out{char(n >> 24), char(n >> 16), char(n >> 8), char(n)};   // big endian
+    return out + msg;
+}
+
+class Deframer {
+    std::string buf_;
+    static constexpr std::uint32_t MAX = 1 << 20;            // 1 MB
+public:
+    void ricevi(const std::string& blocco) { buf_ += blocco; }
+    std::optional<std::string> prossimo() {
+        if (buf_.size() < 4) return std::nullopt;
+        auto b = [&](int i) { return std::uint32_t(static_cast<unsigned char>(buf_[i])); };
+        std::uint32_t n = b(0) << 24 | b(1) << 16 | b(2) << 8 | b(3);
+        if (n > MAX) throw std::runtime_error("messaggio troppo lungo: chiudo la connessione");
+        if (buf_.size() < 4 + n) return std::nullopt;        // payload incompleto
+        std::string msg = buf_.substr(4, n);
+        buf_.erase(0, 4 + n);
+        return msg;
+    }
+};
+
+int main() {
+    std::string flusso = incapsula("ciao") + incapsula("") + incapsula("messaggio piu' lungo");
+    Deframer d;
+    for (std::size_t dim : {3, 5, 1, 30}) {                  // blocchi come li darebbe recv()
+        std::string blocco = flusso.substr(0, dim);
+        flusso.erase(0, dim);
+        d.ricevi(blocco);
+        std::cout << "ricevuti " << blocco.size() << " byte:";
+        while (auto m = d.prossimo()) std::cout << " [" << *m << ']';
+        std::cout << '\n';
+    }
+}
+```
+
+```text
+ricevuti 3 byte:
+ricevuti 5 byte: [ciao]
+ricevuti 1 byte:
+ricevuti 27 byte: [] [messaggio piu' lungo]
+```
+
+#### Esempio svolto 31.2 - Un server epoll che gestisce piu' client con un solo thread
+
+**Problema.** Scrivere un server che serve contemporaneamente molti client con un unico thread, usando socket non bloccanti ed `epoll`, e verificarlo con tre client concorrenti.
+
+**Ragionamento.** Il socket di ascolto e quelli dei client sono registrati in un'unica istanza epoll. `epoll_wait` restituisce solo i descrittori **pronti**: sul socket di ascolto si accettano le nuove connessioni, sugli altri si legge. Con socket non bloccanti una `recv` senza dati restituisce `EAGAIN` invece di bloccare l'intero server. Ogni client invia un numero e riceve il doppio; quando tutti hanno chiuso, il server termina. Per semplicita' si assume che ogni messaggio arrivi in una sola `recv` (vero su loopback con messaggi piccoli; in produzione si usa il framing dell'Esempio 31.1 e un buffer per connessione).
+
+```cpp
+#include <arpa/inet.h>
+#include <fcntl.h>
+#include <netinet/in.h>
+#include <sys/epoll.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <iostream>
+#include <string>
+#include <thread>
+#include <vector>
+
+int main() {
+    int srv = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+    sockaddr_in a{};
+    a.sin_family = AF_INET;
+    a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    bind(srv, (sockaddr*)&a, sizeof a);
+    listen(srv, 16);
+    socklen_t len = sizeof a;
+    getsockname(srv, (sockaddr*)&a, &len);
+
+    std::vector<std::string> risultati(3);
+    std::vector<std::jthread> client;
+    for (int i = 0; i < 3; ++i)
+        client.emplace_back([&, i, porta = a.sin_port] {
+            int c = socket(AF_INET, SOCK_STREAM, 0);
+            sockaddr_in d{};
+            d.sin_family = AF_INET; d.sin_port = porta; d.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            connect(c, (sockaddr*)&d, sizeof d);
+            std::string msg = std::to_string((i + 1) * 10);
+            send(c, msg.data(), msg.size(), 0);
+            char buf[64];
+            ssize_t n = recv(c, buf, sizeof buf, 0);
+            risultati[i] = msg + " -> " + std::string(buf, n > 0 ? n : 0);
+            close(c);
+        });
+
+    int ep = epoll_create1(0);
+    epoll_event ev{};
+    ev.events = EPOLLIN; ev.data.fd = srv;
+    epoll_ctl(ep, EPOLL_CTL_ADD, srv, &ev);
+    int aperti = 0, chiusi = 0;
+    epoll_event eventi[16];
+    while (chiusi < 3) {
+        int n = epoll_wait(ep, eventi, 16, 5000);
+        if (n <= 0) break;                                       // timeout di sicurezza
+        for (int i = 0; i < n; ++i) {
+            int fd = eventi[i].data.fd;
+            if (fd == srv) {                                     // nuove connessioni
+                int c;
+                while ((c = accept4(srv, nullptr, nullptr, SOCK_NONBLOCK)) >= 0) {
+                    epoll_event e{};
+                    e.events = EPOLLIN; e.data.fd = c;
+                    epoll_ctl(ep, EPOLL_CTL_ADD, c, &e);
+                    ++aperti;
+                }
+            } else {
+                char buf[64];
+                ssize_t r = recv(fd, buf, sizeof buf, 0);
+                if (r > 0) {
+                    std::string risposta = std::to_string(2 * std::stoi(std::string(buf, r)));
+                    send(fd, risposta.data(), risposta.size(), MSG_NOSIGNAL);
+                } else if (r == 0) {                             // il client ha chiuso
+                    epoll_ctl(ep, EPOLL_CTL_DEL, fd, nullptr);
+                    close(fd);
+                    ++chiusi;
+                }                                                // r < 0 con EAGAIN: niente
+            }
+        }
+    }
+    client.clear();                                              // join dei client
+    for (auto& r : risultati) std::cout << r << '\n';
+    std::cout << "connessioni servite: " << aperti << " con un solo thread\n";
+    close(ep); close(srv);
+}
+```
+
+```text
+10 -> 20
+20 -> 40
+30 -> 60
+connessioni servite: 3 con un solo thread
+```
+
+ES: **Esercizio 31.1** [Base] - Encode and Decode Strings (LeetCode 271): codifica un vettore di stringhe arbitrarie (che possono contenere qualsiasi carattere) in una sola stringa e viceversa, usando il formato `lunghezza#contenuto`.
+ES: **Esercizio 31.2** [Medio] - Estendi il parser HTTP dell'Esempio 20.1 per supportare il keep-alive: da un buffer che contiene piu' richieste consecutive, estrai una richiesta completa usando `Content-Length` per sapere dove finisce il corpo.
+ES: **Esercizio 31.3** [Medio] - Design Hit Counter (LeetCode 362): conta gli accessi negli ultimi 300 secondi con memoria costante, usando due array circolari di 300 posizioni.
+ES: **Esercizio 31.4** [Medio] - Snapshot Array (LeetCode 1146): un array con `set`, `snap` e `get(indice, idSnap)`, memorizzando per ogni cella solo le modifiche (la stessa idea delle versioni MVCC nei database).
+ES: **Esercizio 31.5** [Avanzato] - Modifica il server dell'Esempio 31.2 perche' usi un buffer per connessione e il framing dell'Esempio 31.1, e gestisca la scrittura non bloccante registrando `EPOLLOUT` quando `send` non riesce a inviare tutto.
+
 ## Capitolo 32 - Algoritmi e progetti di rete
 
 ### Lezione 32.1 - Algoritmi di rete
@@ -113,3 +409,137 @@ LC: 2092 - Find All People With Secret
 - Trasferimento file affidabile sopra UDP (ritrasmissioni, finestra scorrevole).
 - Client MQTT e broker minimale.
 - Gioco multiplayer client-server autoritativo (vedi Parte 7).
+
+### Lezione 32.3 - Esempi svolti ed esercizi
+
+#### Esempio svolto 32.1 - Consistent hashing per distribuire le chiavi tra i server
+
+**Problema.** Una cache distribuita assegna ogni chiave a uno tra N server. Con `hash(chiave) % N`, aggiungendo un server quasi tutte le chiavi cambiano posto (e la cache si svuota). Mostrare che con il consistent hashing se ne sposta solo circa 1/(N+1).
+
+**Ragionamento.** Server e chiavi vengono mappati su un anello di valori hash; ogni chiave appartiene al primo server che si incontra procedendo in senso orario. Aggiungendo un server, solo le chiavi dell'arco che esso "conquista" cambiano proprietario. Ogni server e' inserito piu' volte (**nodi virtuali**) per distribuire il carico in modo uniforme. L'anello e' una `std::map` ordinata: il proprietario si trova con `lower_bound` in O(log n). Usiamo FNV-1a come funzione di hash, perche' `std::hash` non garantisce lo stesso risultato su compilatori diversi.
+
+```cpp
+#include <cstdint>
+#include <iostream>
+#include <map>
+#include <string>
+#include <vector>
+
+std::uint32_t fnv1a(const std::string& s) {
+    std::uint32_t h = 2166136261u;
+    for (unsigned char c : s) { h ^= c; h *= 16777619u; }
+    h ^= h >> 15; h *= 0x2c1b3c6dU; h ^= h >> 12;           // mescola meglio i bit alti
+    return h;
+}
+
+class Anello {
+    std::map<std::uint32_t, std::string> nodi_;
+public:
+    void aggiungi(const std::string& server, int virtuali = 100) {
+        for (int i = 0; i < virtuali; ++i) nodi_[fnv1a(server + "#" + std::to_string(i))] = server;
+    }
+    const std::string& proprietario(const std::string& chiave) const {
+        auto it = nodi_.lower_bound(fnv1a(chiave));
+        return it == nodi_.end() ? nodi_.begin()->second : it->second;   // l'anello si chiude
+    }
+};
+
+int main() {
+    std::vector<std::string> chiavi;
+    for (int i = 0; i < 10000; ++i) chiavi.push_back("utente:" + std::to_string(i));
+
+    Anello anello;
+    for (auto s : {"cache-a", "cache-b", "cache-c", "cache-d"}) anello.aggiungi(s);
+    std::map<std::string, int> carico;
+    std::vector<std::string> prima;
+    for (auto& k : chiavi) { prima.push_back(anello.proprietario(k)); ++carico[prima.back()]; }
+    anello.aggiungi("cache-e");
+
+    int spostateAnello = 0, spostateModulo = 0;
+    for (std::size_t i = 0; i < chiavi.size(); ++i) {
+        spostateAnello += anello.proprietario(chiavi[i]) != prima[i];
+        spostateModulo += fnv1a(chiavi[i]) % 4 != fnv1a(chiavi[i]) % 5;
+    }
+    std::cout << "carico con 4 server:";
+    for (auto& [s, n] : carico) std::cout << ' ' << n;
+    std::cout << "\nchiavi spostate aggiungendo un server: anello " << spostateAnello / 100.0
+              << "%, modulo " << spostateModulo / 100.0 << "%\n";
+}
+```
+
+```text
+carico con 4 server: 2197 2885 2313 2605
+chiavi spostate aggiungendo un server: anello 19.36%, modulo 79.61%
+```
+
+Con l'anello si sposta circa il 20% delle chiavi (il minimo possibile: 1/5 deve andare sul nuovo server), con il modulo circa l'80%. Il carico non e' perfettamente uniforme (da 2197 a 2885 chiavi): aumentando i nodi virtuali per server le differenze si riducono, al prezzo di un anello piu' grande.
+
+#### Esempio svolto 32.2 - Compressione di Huffman
+
+**Problema.** Comprimere un testo assegnando ai caratteri frequenti codici binari corti e a quelli rari codici lunghi, senza ambiguita' in decodifica.
+
+**Ragionamento.** L'algoritmo greedy di Huffman unisce ripetutamente i due nodi meno frequenti (una `priority_queue`) finche' resta un solo albero; il codice di un carattere e' il percorso dalla radice (0 = sinistra, 1 = destra). Poiche' i caratteri stanno solo nelle foglie, nessun codice e' prefisso di un altro: la decodifica scorre l'albero bit per bit. Huffman e' usato in DEFLATE (zip, gzip, PNG), JPEG e HTTP/2 (HPACK).
+
+```cpp
+#include <iostream>
+#include <map>
+#include <memory>
+#include <queue>
+#include <string>
+#include <vector>
+
+struct Nodo {
+    int freq; char c; std::unique_ptr<Nodo> sx, dx;
+    bool foglia() const { return !sx; }
+};
+
+void codici(const Nodo* n, const std::string& pref, std::map<char, std::string>& out) {
+    if (n->foglia()) { out[n->c] = pref.empty() ? "0" : pref; return; }
+    codici(n->sx.get(), pref + '0', out);
+    codici(n->dx.get(), pref + '1', out);
+}
+
+int main() {
+    std::string testo = "abracadabra alla cabala";
+    std::map<char, int> freq;
+    for (char c : testo) ++freq[c];
+
+    auto cmp = [](const Nodo* a, const Nodo* b) {          // min-heap, spareggio deterministico
+        return a->freq != b->freq ? a->freq > b->freq : a->c > b->c;
+    };
+    std::priority_queue<Nodo*, std::vector<Nodo*>, decltype(cmp)> pq(cmp);
+    for (auto [c, f] : freq) pq.push(new Nodo{f, c, nullptr, nullptr});
+    while (pq.size() > 1) {
+        Nodo* a = pq.top(); pq.pop();
+        Nodo* b = pq.top(); pq.pop();
+        pq.push(new Nodo{a->freq + b->freq, std::min(a->c, b->c),
+                         std::unique_ptr<Nodo>(a), std::unique_ptr<Nodo>(b)});
+    }
+    std::unique_ptr<Nodo> radice(pq.top());                // da qui l'albero si libera da solo
+
+    std::map<char, std::string> cod;
+    codici(radice.get(), "", cod);
+    std::string bit;
+    for (char c : testo) bit += cod[c];
+    for (auto& [c, s] : cod) std::cout << "'" << c << "'=" << s << ' ';
+
+    std::string decodificato;
+    for (const Nodo* n = radice.get(); char b : bit) {
+        n = b == '0' ? n->sx.get() : n->dx.get();
+        if (n->foglia()) { decodificato += n->c; n = radice.get(); }
+    }
+    std::cout << "\n" << testo.size() * 8 << " bit -> " << bit.size() << " bit, decodifica "
+              << (decodificato == testo ? "corretta" : "ERRATA") << '\n';
+}
+```
+
+```text
+' '=1001 'a'=0 'b'=101 'c'=1110 'd'=1000 'l'=110 'r'=1111
+184 bit -> 56 bit, decodifica corretta
+```
+
+ES: **Esercizio 32.1** [Base] - Number of Operations to Make Network Connected (LeetCode 1319): con quanti spostamenti di cavi si collegano tutti i computer? Usa Union-Find: servono `componenti - 1` cavi, se ce ne sono almeno `n - 1`.
+ES: **Esercizio 32.2** [Medio] - Implementa un leaky bucket (coda a uscita costante) e confrontalo con il token bucket dell'Esempio 20.2 sulla stessa raffica di richieste: quale dei due ammette i picchi?
+ES: **Esercizio 32.3** [Medio] - Calcola il CRC-32 (polinomio riflesso 0xEDB88320, usato da Ethernet, zip e PNG) con una tabella di 256 voci precalcolata a compile time. Il check value di `"123456789"` e' `0xCBF43926`.
+ES: **Esercizio 32.4** [Medio] - Scrivi due bilanciatori di carico, round robin e least connections, e simula 20 richieste di durata variabile su 3 backend: quale distribuisce meglio il lavoro quando le durate sono molto diverse?
+ES: **Esercizio 32.5** [Avanzato] - Simula un protocollo affidabile Go-Back-N sopra un canale che perde pacchetti in modo deterministico (per esempio ogni quinto pacchetto): mittente con finestra di 4, ACK cumulativi, ritrasmissione allo scadere del timeout. Conta le trasmissioni totali per consegnare 20 pacchetti.

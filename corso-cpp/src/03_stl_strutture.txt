@@ -77,6 +77,120 @@ LC: 75 - Sort Colors
 LC: 31 - Next Permutation
 LC: 912 - Sort an Array
 
+### Lezione 9.4 - Esempi svolti ed esercizi
+
+#### Esempio svolto 9.1 - Merge Intervals (LeetCode 56)
+
+**Problema.** Dato un elenco di intervalli `[inizio, fine]`, fondere quelli sovrapposti. Esempio: `[1,3] [2,6] [8,10] [15,18]` diventa `[1,6] [8,10] [15,18]`.
+
+**Ragionamento.** Dopo aver ordinato per inizio, due intervalli che si sovrappongono sono per forza **consecutivi**. Scorriamo una volta: se l'intervallo corrente inizia prima della fine dell'ultimo fuso, estendiamo quest'ultimo; altrimenti ne apriamo uno nuovo. Costo: O(n log n) per l'ordinamento, O(n) per la scansione. Un `std::pair` si ordina gia' lessicograficamente, quindi basta `std::sort` senza comparatore.
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <utility>
+#include <vector>
+
+using Intervallo = std::pair<int, int>;
+
+std::vector<Intervallo> fondi(std::vector<Intervallo> v) {   // per valore: lo ordiniamo
+    std::sort(v.begin(), v.end());
+    std::vector<Intervallo> out;
+    for (const auto& [a, b] : v) {
+        if (!out.empty() && a <= out.back().second)
+            out.back().second = std::max(out.back().second, b);
+        else
+            out.emplace_back(a, b);
+    }
+    return out;
+}
+
+int main() {
+    for (auto [a, b] : fondi({{8, 10}, {1, 3}, {15, 18}, {2, 6}, {17, 20}}))
+        std::cout << '[' << a << ',' << b << "] ";
+    std::cout << '\n';
+}
+```
+
+```text
+[1,6] [8,10] [15,20]
+```
+
+#### Esempio svolto 9.2 - Top K Frequent Elements (LeetCode 347)
+
+**Problema.** Restituire i `k` elementi piu' frequenti di un vettore.
+
+**Ragionamento.** Primo passo: contare le occorrenze con `std::unordered_map` (O(n)). Secondo passo: scegliere i k migliori. Ordinare tutte le coppie costerebbe O(m log m) con m valori distinti; `std::partial_sort` ordina solo i primi k, in O(m log k). A parita' di frequenza ordiniamo per valore, cosi' l'output e' deterministico (l'ordine di iterazione di una `unordered_map` non lo e').
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
+std::vector<int> topK(const std::vector<int>& a, std::size_t k) {
+    std::unordered_map<int, int> freq;
+    for (int x : a) ++freq[x];
+    std::vector<std::pair<int, int>> v(freq.begin(), freq.end());   // (valore, frequenza)
+    k = std::min(k, v.size());
+    std::partial_sort(v.begin(), v.begin() + k, v.end(), [](const auto& x, const auto& y) {
+        return x.second != y.second ? x.second > y.second : x.first < y.first;
+    });
+    std::vector<int> out;
+    for (std::size_t i = 0; i < k; ++i) out.push_back(v[i].first);
+    return out;
+}
+
+int main() {
+    for (int x : topK({4, 1, 1, 1, 2, 2, 3, 4, 4, 5, 2, 2}, 3)) std::cout << x << ' ';
+    std::cout << '\n';
+}
+```
+
+```text
+2 1 4
+```
+
+Alternativa da conoscere: **bucket sort** per frequenza (vettore di liste indicizzato dalla frequenza) che porta il costo a O(n).
+
+#### Esempio svolto 9.3 - Scegliere il contenitore giusto
+
+**Problema.** Un sistema riceve eventi `(timestamp, utente)` e deve rispondere a: (a) "quanti utenti distinti?", (b) "quali eventi tra t1 e t2?", (c) "qual e' l'ultimo evento?". Quali contenitori usare?
+
+**Ragionamento.** (a) appartenenza senza ordine: `std::unordered_set` (O(1) medio). (b) ricerca per intervallo su chiavi ordinate: `std::multimap` (piu' eventi possono avere lo stesso timestamp) con `lower_bound`/`upper_bound` in O(log n). (c) l'ultimo elemento di una mappa ordinata e' `rbegin()`.
+
+```cpp
+#include <iostream>
+#include <map>
+#include <string>
+#include <unordered_set>
+
+int main() {
+    std::multimap<int, std::string> eventi{{10, "anna"}, {12, "bruno"}, {12, "anna"},
+                                           {15, "carla"}, {20, "dario"}};
+    std::unordered_set<std::string> utenti;
+    for (const auto& [t, u] : eventi) utenti.insert(u);
+    std::cout << "distinti: " << utenti.size() << '\n';
+
+    for (auto it = eventi.lower_bound(11); it != eventi.upper_bound(15); ++it)
+        std::cout << it->first << ':' << it->second << ' ';
+    std::cout << "\nultimo: " << eventi.rbegin()->second << '\n';
+}
+```
+
+```text
+distinti: 4
+12:bruno 12:anna 15:carla
+ultimo: dario
+```
+
+ES: **Esercizio 9.1** [Base] - Move Zeroes (LeetCode 283): sposta gli zeri in fondo mantenendo l'ordine degli altri elementi. Risolvilo prima con un indice di scrittura, poi con un solo algoritmo della STL.
+ES: **Esercizio 9.2** [Base] - Contains Duplicate II (LeetCode 219): esistono `i != j` con `a[i] == a[j]` e `|i - j| <= k`? Usa una `unordered_map` che ricorda l'ultimo indice di ogni valore.
+ES: **Esercizio 9.3** [Medio] - Longest Substring Without Repeating Characters (LeetCode 3) in O(n) con una finestra scorrevole e un array di 256 posizioni.
+ES: **Esercizio 9.4** [Medio] - Conta i punti distinti di un `std::vector<Punto>` con `std::unordered_set<Punto>`, definendo `operator==` e una specializzazione di `std::hash` (vedi Lezione 9.2). Poi risolvi lo stesso problema con `std::set` e confronta i requisiti.
+ES: **Esercizio 9.5** [Avanzato] - Product of Array Except Self (LeetCode 238) senza divisione, in O(n) tempo e O(1) spazio extra (escluso il vettore risultato).
+
 ## Capitolo 10 - Strutture dati classiche (implementarle da zero)
 
 ### Lezione 10.1 - Liste concatenate, pile e code
@@ -195,3 +309,168 @@ LC: 994 - Rotting Oranges
 LC: 127 - Word Ladder
 LC: 785 - Is Graph Bipartite?
 LC: 261 - Graph Valid Tree
+
+### Lezione 10.5 - Esempi svolti ed esercizi
+
+#### Esempio svolto 10.1 - Parentesi bilanciate con una pila (LeetCode 20)
+
+**Problema.** Verificare che in una stringa con `()[]{}` ogni parentesi aperta sia chiusa dal tipo giusto e nell'ordine giusto.
+
+**Ragionamento.** L'ultima parentesi aperta deve essere la prima a chiudersi: e' il comportamento LIFO di una pila. Per ogni apertura facciamo `push` della chiusura attesa; per ogni chiusura controlliamo che coincida con la cima. Alla fine la pila deve essere vuota.
+
+```cpp
+#include <iostream>
+#include <stack>
+#include <string_view>
+
+bool bilanciata(std::string_view s) {
+    std::stack<char> attese;
+    for (char c : s) {
+        switch (c) {
+            case '(': attese.push(')'); break;
+            case '[': attese.push(']'); break;
+            case '{': attese.push('}'); break;
+            case ')': case ']': case '}':
+                if (attese.empty() || attese.top() != c) return false;
+                attese.pop();
+                break;
+            default: break;                 // altri caratteri ignorati
+        }
+    }
+    return attese.empty();
+}
+
+int main() {
+    for (auto s : {"{[()]}", "([)]", "((", "f(a[i]) { return; }"})
+        std::cout << s << " -> " << (bilanciata(s) ? "ok" : "errore") << '\n';
+}
+```
+
+```text
+{[()]} -> ok
+([)] -> errore
+(( -> errore
+f(a[i]) { return; } -> ok
+```
+
+#### Esempio svolto 10.2 - Un albero binario di ricerca completo
+
+**Problema.** Implementare un BST di interi con inserimento, ricerca, visita in ordine, visita per livelli e altezza, senza memory leak.
+
+**Ragionamento.** Ogni nodo possiede i figli con `std::unique_ptr`. L'inserimento ricorsivo prende un **riferimento** al puntatore da riempire, cosi' non serve distinguere il caso "albero vuoto". La visita in ordine di un BST produce le chiavi ordinate; quella per livelli usa una coda (BFS). In un albero bilanciato le operazioni costano O(log n), ma con inserimenti gia' ordinati degenera in una lista: O(n).
+
+```cpp
+#include <iostream>
+#include <memory>
+#include <queue>
+#include <vector>
+
+class BST {
+    struct Nodo {
+        int k;
+        std::unique_ptr<Nodo> sx, dx;
+    };
+    std::unique_ptr<Nodo> radice_;
+
+    static void inserisci(std::unique_ptr<Nodo>& n, int k) {
+        if (!n) n = std::make_unique<Nodo>(Nodo{k, nullptr, nullptr});
+        else if (k < n->k) inserisci(n->sx, k);
+        else if (k > n->k) inserisci(n->dx, k);        // duplicati ignorati
+    }
+    static void inordine(const Nodo* n, std::vector<int>& out) {
+        if (!n) return;
+        inordine(n->sx.get(), out); out.push_back(n->k); inordine(n->dx.get(), out);
+    }
+    static int altezza(const Nodo* n) {
+        return n ? 1 + std::max(altezza(n->sx.get()), altezza(n->dx.get())) : 0;
+    }
+public:
+    void inserisci(int k) { inserisci(radice_, k); }
+    bool contiene(int k) const {
+        for (const Nodo* n = radice_.get(); n; n = k < n->k ? n->sx.get() : n->dx.get())
+            if (n->k == k) return true;
+        return false;
+    }
+    std::vector<int> ordinati() const { std::vector<int> v; inordine(radice_.get(), v); return v; }
+    int altezza() const { return altezza(radice_.get()); }
+    void stampaLivelli() const {
+        std::queue<const Nodo*> q;
+        if (radice_) q.push(radice_.get());
+        while (!q.empty()) {
+            for (auto n = q.size(); n > 0; --n) {      // un livello alla volta
+                const Nodo* x = q.front(); q.pop();
+                std::cout << x->k << ' ';
+                if (x->sx) q.push(x->sx.get());
+                if (x->dx) q.push(x->dx.get());
+            }
+            std::cout << '\n';
+        }
+    }
+};
+
+int main() {
+    BST t;
+    for (int k : {50, 30, 70, 20, 40, 60, 80, 35}) t.inserisci(k);
+    for (int k : t.ordinati()) std::cout << k << ' ';
+    std::cout << "\naltezza " << t.altezza() << ", contiene 35? " << t.contiene(35)
+              << ", contiene 36? " << t.contiene(36) << '\n';
+    t.stampaLivelli();
+}
+```
+
+```text
+20 30 35 40 50 60 70 80
+altezza 4, contiene 35? 1, contiene 36? 0
+50
+30 70
+20 40 60 80
+35
+```
+
+#### Esempio svolto 10.3 - Ordinamento topologico: Course Schedule (LeetCode 207/210)
+
+**Problema.** Ci sono `n` corsi e coppie `(a, b)` che significano "per seguire a devi aver seguito b". Trovare un ordine valido in cui seguirli, o stabilire che non esiste (dipendenze circolari).
+
+**Ragionamento.** E' un grafo orientato: arco `b -> a`. L'algoritmo di **Kahn** parte dai corsi senza prerequisiti (grado entrante 0), li "segue" e decrementa il grado entrante dei successori; chi arriva a 0 entra in coda. Se alla fine non abbiamo seguito tutti i corsi, c'e' un ciclo. Costo O(V + E).
+
+```cpp
+#include <iostream>
+#include <queue>
+#include <utility>
+#include <vector>
+
+std::vector<int> ordineCorsi(int n, const std::vector<std::pair<int, int>>& prereq) {
+    std::vector<std::vector<int>> g(n);
+    std::vector<int> gradoIn(n, 0);
+    for (auto [a, b] : prereq) { g[b].push_back(a); ++gradoIn[a]; }
+
+    std::queue<int> q;
+    for (int i = 0; i < n; ++i) if (gradoIn[i] == 0) q.push(i);
+    std::vector<int> ordine;
+    while (!q.empty()) {
+        int u = q.front(); q.pop();
+        ordine.push_back(u);
+        for (int v : g[u]) if (--gradoIn[v] == 0) q.push(v);
+    }
+    if ((int)ordine.size() != n) return {};                 // ciclo
+    return ordine;
+}
+
+int main() {
+    auto o = ordineCorsi(6, {{1, 0}, {2, 0}, {3, 1}, {3, 2}, {4, 3}, {5, 4}});
+    for (int c : o) std::cout << c << ' ';
+    std::cout << "\nciclo? " << ordineCorsi(3, {{0, 1}, {1, 2}, {2, 0}}).empty() << '\n';
+}
+```
+
+```text
+0 1 2 3 4 5
+ciclo? 1
+```
+
+ES: **Esercizio 10.1** [Base] - Implementa un template `CodaCircolare<T>` (ring buffer, LeetCode 622) con capacita' fissata nel costruttore e metodi `push`, `pop`, `front`, `piena`, `vuota`, usando un `std::vector<T>` e due indici.
+ES: **Esercizio 10.2** [Medio] - Implementa un Trie (LeetCode 208) con `inserisci`, `cerca` e `iniziaCon`, usando nodi con `std::array<std::unique_ptr<Nodo>, 26>`.
+ES: **Esercizio 10.3** [Medio] - Number of Provinces (LeetCode 547): data una matrice di adiacenza, conta le componenti connesse usando la struttura `DSU` della Lezione 10.3.
+ES: **Esercizio 10.4** [Medio] - Daily Temperatures (LeetCode 739): per ogni giorno, quanti giorni bisogna aspettare per una temperatura piu' alta? Risolvilo in O(n) con una pila monotona di indici.
+ES: **Esercizio 10.5** [Avanzato] - Validate BST (LeetCode 98): verifica che un albero binario sia un BST. Perche' non basta controllare che ogni nodo sia maggiore del figlio sinistro e minore del destro?
+ES: **Esercizio 10.6** [Avanzato] - Number of Islands (LeetCode 200): conta le isole di `'1'` in una griglia, con una BFS che marca le celle visitate.

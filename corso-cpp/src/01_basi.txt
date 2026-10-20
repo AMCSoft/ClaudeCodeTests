@@ -54,6 +54,83 @@ cmake --build build -j
 
 Altri strumenti: **gdb/lldb** (debugger), **valgrind**, **clang-format** (formattazione), **clang-tidy** (analisi statica), **Conan/vcpkg** (gestione dipendenze), **Catch2/GoogleTest** (test), IDE come CLion, VS Code (con clangd) e Visual Studio.
 
+### Lezione 1.4 - Esempi svolti ed esercizi
+
+#### Esempio svolto 1.1 - Un programma che legge la riga di comando
+
+**Problema.** Scrivere un programma che riceve dei numeri come argomenti (`./somma 3 4 5`) e ne stampa quantita', somma e media; se un argomento non e' un numero va segnalato senza interrompere il programma.
+
+**Ragionamento.** `main` puo' ricevere `argc` (numero di argomenti, compreso il nome del programma) e `argv` (array di stringhe C). Per convertire usiamo `std::from_chars` (C++17): non lancia eccezioni, non dipende dal locale e ci dice esattamente fin dove ha letto. Per rendere l'esempio riproducibile simuliamo gli argomenti con un array.
+
+```cpp
+#include <charconv>
+#include <iostream>
+#include <string_view>
+
+int elabora(int argc, const char* argv[]) {
+    int validi = 0;
+    long long somma = 0;
+    for (int i = 1; i < argc; ++i) {
+        std::string_view s = argv[i];
+        long long v = 0;
+        auto [fine, err] = std::from_chars(s.data(), s.data() + s.size(), v);
+        if (err != std::errc{} || fine != s.data() + s.size()) {
+            std::cerr << "ignoro '" << s << "'\n";
+            continue;
+        }
+        somma += v;
+        ++validi;
+    }
+    std::cout << "numeri: " << validi << ", somma: " << somma;
+    if (validi > 0) std::cout << ", media: " << static_cast<double>(somma) / validi;
+    std::cout << '\n';
+    return validi > 0 ? 0 : 1;
+}
+
+int main() {
+    const char* args[] = {"somma", "3", "4", "x7", "5"};   // come da shell
+    return elabora(5, args);
+}
+```
+
+```text
+numeri: 3, somma: 12, media: 4
+```
+
+Nel programma reale si scrive `int main(int argc, char* argv[]) { ... }`. Il codice di uscita (0 = successo) e' visibile nella shell con `echo $?` ed e' cio' che usano script e sistemi di CI.
+
+#### Esempio svolto 1.2 - Trovare un bug con i sanitizer
+
+**Problema.** Il programma seguente "funziona" sulla macchina dell'autore ma a volte stampa valori casuali. Trovare l'errore.
+
+```cpp
+// versione con bug - non eseguire
+#include <iostream>
+#include <vector>
+int main() {
+    std::vector<int> v{1, 2, 3, 4};
+    int somma = 0;
+    for (std::size_t i = 0; i <= v.size(); ++i) somma += v[i];   // <= invece di <
+    std::cout << somma << '\n';
+}
+```
+
+**Ragionamento.** Compiliamo con `-fsanitize=address -g`: AddressSanitizer inserisce controlli su ogni accesso alla memoria e al primo accesso fuori limiti stampa un rapporto con file e riga.
+
+```console
+$ g++ -std=c++20 -g -fsanitize=address,undefined bug.cpp -o bug && ./bug
+==1234==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x502000000020
+READ of size 4 at 0x502000000020 thread T0
+    #0 0x55d1 in main bug.cpp:7
+```
+
+Il rapporto indica la riga 7: con `i <= v.size()` l'ultima iterazione legge `v[4]`, che non esiste. La correzione migliore elimina l'indice: `for (int x : v) somma += x;` oppure `std::accumulate(v.begin(), v.end(), 0)`. Se un indice e' davvero necessario, `v.at(i)` lancia `std::out_of_range` invece di produrre comportamento indefinito.
+
+ES: **Esercizio 1.1** [Base] - Modifica "Ciao, mondo!" perche' saluti il nome passato come primo argomento (`./ciao Anna` stampa `Ciao, Anna!`) e usi "mondo" se non viene passato nulla.
+ES: **Esercizio 1.2** [Base] - Compila con `-Wall -Wextra` il frammento `int f(int x) { int y; if (x > 0) return x; }` e spiega i due avvisi che ottieni. Correggilo.
+ES: **Esercizio 1.3** [Medio] - Scrivi un `CMakeLists.txt` per un progetto con una libreria `matematica` (file `src/matematica.cpp` e `include/matematica.hpp`) e un eseguibile `app` che la usa. La libreria deve esporre la cartella `include` a chi la collega.
+ES: **Esercizio 1.4** [Medio] - Esegui manualmente le quattro fasi della compilazione di `main.cpp` (`-E`, `-S`, `-c`, linking) e descrivi cosa contiene ciascun file prodotto.
+
 ## Capitolo 2 - Tipi, variabili e operatori
 
 ### Lezione 2.1 - Tipi fondamentali
@@ -100,6 +177,91 @@ LC: 231 - Power of Two
 LC: 136 - Single Number (XOR)
 LC: 338 - Counting Bits
 LC: 190 - Reverse Bits
+
+### Lezione 2.3 - Esempi svolti ed esercizi
+
+#### Esempio svolto 2.1 - Invertire le cifre senza overflow (LeetCode 7)
+
+**Problema.** Data un intero a 32 bit, restituire le sue cifre in ordine inverso; se il risultato non sta in un `int32_t` restituire 0. Non e' consentito usare un tipo piu' grande.
+
+**Ragionamento.** Ad ogni passo togliamo l'ultima cifra con `% 10` e la accodiamo con `r = r * 10 + cifra`. L'overflow dei signed e' comportamento indefinito, quindi va **evitato prima** che accada: confrontiamo `r` con `INT_MAX / 10` (e `INT_MIN / 10`) prima della moltiplicazione. Nota: in C++ `%` su un negativo da' un resto negativo (`-123 % 10 == -3`), il che semplifica il codice.
+
+```cpp
+#include <cstdint>
+#include <iostream>
+#include <limits>
+
+std::int32_t inverti(std::int32_t x) {
+    constexpr auto MAX = std::numeric_limits<std::int32_t>::max();
+    constexpr auto MIN = std::numeric_limits<std::int32_t>::min();
+    std::int32_t r = 0;
+    while (x != 0) {
+        int cifra = x % 10;
+        x /= 10;
+        if (r > MAX / 10 || (r == MAX / 10 && cifra > 7)) return 0;   // MAX = 2147483647
+        if (r < MIN / 10 || (r == MIN / 10 && cifra < -8)) return 0;  // MIN = -2147483648
+        r = r * 10 + cifra;
+    }
+    return r;
+}
+
+int main() {
+    for (std::int32_t x : {123, -120, 1534236469, 0})
+        std::cout << x << " -> " << inverti(x) << '\n';
+}
+```
+
+```text
+123 -> 321
+-120 -> -21
+1534236469 -> 0
+0 -> 0
+```
+
+Complessita': O(numero di cifre) = O(log10 x) tempo, O(1) spazio.
+
+#### Esempio svolto 2.2 - Flag a bit con enum class
+
+**Problema.** Rappresentare i permessi di un file (lettura, scrittura, esecuzione) in un solo byte, in modo type-safe.
+
+**Ragionamento.** Ogni permesso e' un bit. Con `enum class` i valori non si convertono implicitamente in interi, quindi definiamo noi gli operatori `|` e `&`. `std::to_underlying` (C++23) o `static_cast` estraggono il valore numerico; `std::popcount` (in `<bit>`, C++20) conta i bit accesi.
+
+```cpp
+#include <bit>
+#include <cstdint>
+#include <iostream>
+
+enum class Permesso : std::uint8_t {
+    Nessuno = 0, Lettura = 1, Scrittura = 2, Esecuzione = 4
+};
+
+constexpr Permesso operator|(Permesso a, Permesso b) {
+    auto x = static_cast<std::uint8_t>(a) | static_cast<std::uint8_t>(b);
+    return static_cast<Permesso>(x);
+}
+constexpr bool ha(Permesso insieme, Permesso p) {
+    return (static_cast<std::uint8_t>(insieme) & static_cast<std::uint8_t>(p)) != 0;
+}
+
+int main() {
+    Permesso p = Permesso::Lettura | Permesso::Esecuzione;
+    auto bit = static_cast<std::uint8_t>(p);
+    std::cout << "valore: " << int(bit) << ", attivi: " << std::popcount(bit) << '\n';
+    std::cout << "scrittura? " << std::boolalpha << ha(p, Permesso::Scrittura) << '\n';
+    static_assert(ha(Permesso::Lettura | Permesso::Scrittura, Permesso::Scrittura));
+}
+```
+
+```text
+valore: 5, attivi: 2
+scrittura? false
+```
+
+ES: **Esercizio 2.1** [Base] - Stampa una tabella di conversione da Celsius a Fahrenheit (F = C * 9/5 + 32) per C da -20 a 40 a passi di 10. Attenzione: `9/5` tra interi vale 1.
+ES: **Esercizio 2.2** [Base] - Scrivi `bool bisestile(int anno)`: un anno e' bisestile se divisibile per 4, ma non per 100, a meno che sia divisibile per 400.
+ES: **Esercizio 2.3** [Medio] - Conta i bit a 1 di un `uint32_t` senza `std::popcount`, usando il trucco di Kernighan `n &= n - 1`. Perche' il ciclo esegue tante iterazioni quanti sono i bit accesi?
+ES: **Esercizio 2.4** [Medio] - Prevedi e poi verifica l'output di: `std::cout << (-1 < 0u) << ' ' << (7 / 2) << ' ' << (-7 / 2) << ' ' << (-7 % 3);`. Spiega ogni risultato.
+ES: **Esercizio 2.5** [Medio] - Converti un numero romano in intero (LeetCode 13): `"MCMXCIV"` vale 1994.
 
 ## Capitolo 3 - Controllo di flusso e funzioni
 
@@ -160,6 +322,85 @@ LC: 70 - Climbing Stairs
 LC: 50 - Pow(x, n)
 LC: 344 - Reverse String
 
+### Lezione 3.3 - Esempi svolti ed esercizi
+
+#### Esempio svolto 3.1 - Numeri primi con una funzione e un ciclo
+
+**Problema.** Stampare i numeri primi minori di 50, dieci per riga.
+
+**Ragionamento.** Un numero `n >= 2` e' primo se nessun `d` con `d * d <= n` lo divide: basta provare fino alla radice, perche' se `n = a * b` almeno uno dei due fattori e' `<= sqrt(n)`. Scriviamo una funzione `constexpr` (cosi' possiamo anche verificarla a compile time) e un ciclo che va a capo ogni dieci numeri.
+
+```cpp
+#include <iostream>
+
+constexpr bool primo(int n) {
+    if (n < 2) return false;
+    for (int d = 2; d * d <= n; ++d)
+        if (n % d == 0) return false;
+    return true;
+}
+static_assert(primo(97) && !primo(91));   // 91 = 7 * 13
+
+int main() {
+    int trovati = 0;
+    for (int n = 2; n < 50; ++n) {
+        if (!primo(n)) continue;
+        std::cout << n << (++trovati % 10 == 0 ? '\n' : ' ');
+    }
+    std::cout << "\ntotale: " << trovati << '\n';
+}
+```
+
+```text
+2 3 5 7 11 13 17 19 23 29
+31 37 41 43 47
+totale: 15
+```
+
+#### Esempio svolto 3.2 - Fibonacci: ricorsione, memoizzazione, iterazione
+
+**Problema.** Calcolare F(n) (F(0)=0, F(1)=1) per n fino a 90 e confrontare tre implementazioni.
+
+**Ragionamento.** La ricorsione diretta ricalcola gli stessi valori un numero esponenziale di volte: O(phi^n). Memorizzando i risultati (memoizzazione) ogni valore si calcola una volta: O(n). La versione iterativa tiene solo gli ultimi due valori: O(n) tempo e O(1) spazio. F(90) sta in un `long long` (F(92) e' l'ultimo che ci sta).
+
+```cpp
+#include <iostream>
+#include <vector>
+
+long long fibRic(int n) { return n < 2 ? n : fibRic(n - 1) + fibRic(n - 2); }
+
+long long fibMemo(int n, std::vector<long long>& memo) {
+    if (n < 2) return n;
+    if (memo[n] != 0) return memo[n];
+    return memo[n] = fibMemo(n - 1, memo) + fibMemo(n - 2, memo);
+}
+
+long long fibIter(int n) {
+    long long a = 0, b = 1;
+    for (int i = 0; i < n; ++i) { long long c = a + b; a = b; b = c; }
+    return a;
+}
+
+int main() {
+    std::vector<long long> memo(91, 0);
+    std::cout << fibRic(25) << ' ' << fibMemo(25, memo) << ' ' << fibIter(25) << '\n';
+    std::cout << "F(90) = " << fibIter(90) << '\n';   // fibRic(90) non terminerebbe mai
+}
+```
+
+```text
+75025 75025 75025
+F(90) = 2880067194370816120
+```
+
+La stessa idea (non ricalcolare i sottoproblemi) e' la base della programmazione dinamica del Capitolo 14.
+
+ES: **Esercizio 3.1** [Base] - Scrivi `mcd(a, b)` con l'algoritmo di Euclide (iterativo) e `mcm(a, b)` usando `a / mcd(a, b) * b`. Perche' si divide prima di moltiplicare?
+ES: **Esercizio 3.2** [Base] - Dato `std::vector<std::string>` di parole, conta con `std::count_if` e una lambda quante hanno piu' di `k` lettere, con `k` letto da una variabile catturata.
+ES: **Esercizio 3.3** [Medio] - Two Sum (LeetCode 1): restituisci gli indici di due elementi con somma `target`. Scrivi prima la versione O(n^2) con due cicli, poi quella O(n) con `std::unordered_map`.
+ES: **Esercizio 3.4** [Medio] - Torre di Hanoi: stampa le mosse per spostare `n` dischi dal piolo A al piolo C. Quante mosse servono per `n` dischi?
+ES: **Esercizio 3.5** [Avanzato] - Implementa `double potenza(double x, long long n)` in O(log n) (LeetCode 50), gestendo anche `n` negativo e `n = LLONG_MIN`.
+
 ## Capitolo 4 - Puntatori, riferimenti e memoria
 
 ### Lezione 4.1 - Riferimenti e puntatori
@@ -198,6 +439,112 @@ LC: 141 - Linked List Cycle
 LC: 206 - Reverse Linked List
 LC: 21 - Merge Two Sorted Lists
 LC: 876 - Middle of the Linked List
+
+### Lezione 4.3 - Esempi svolti ed esercizi
+
+#### Esempio svolto 4.1 - Lista concatenata con unique_ptr e inversione in loco
+
+**Problema.** Costruire una lista singolarmente concatenata da un vettore, stamparla, invertirla senza allocare nuovi nodi (LeetCode 206) e liberarla senza memory leak.
+
+**Ragionamento.** Ogni nodo possiede il successivo tramite `std::unique_ptr`, quindi distruggendo la testa si distrugge tutta la lista. Per invertire scorriamo la lista spostando (`std::move`) i puntatori: `prec` e' la parte gia' invertita, `cur` quella da invertire. Usiamo puntatori grezzi solo per **osservare** (`const Nodo*` nella stampa), mai per possedere.
+
+```cpp
+#include <iostream>
+#include <memory>
+#include <vector>
+
+struct Nodo {
+    int val;
+    std::unique_ptr<Nodo> next;
+};
+
+std::unique_ptr<Nodo> daVettore(const std::vector<int>& v) {
+    std::unique_ptr<Nodo> testa;
+    for (auto it = v.rbegin(); it != v.rend(); ++it)        // inserimento in testa
+        testa = std::make_unique<Nodo>(Nodo{*it, std::move(testa)});
+    return testa;
+}
+
+void stampa(const Nodo* n) {
+    for (; n; n = n->next.get()) std::cout << n->val << (n->next ? " -> " : "\n");
+}
+
+std::unique_ptr<Nodo> inverti(std::unique_ptr<Nodo> cur) {
+    std::unique_ptr<Nodo> prec;
+    while (cur) {
+        auto succ = std::move(cur->next);   // stacca il resto
+        cur->next = std::move(prec);        // aggancia alla parte invertita
+        prec = std::move(cur);
+        cur = std::move(succ);
+    }
+    return prec;
+}
+
+int main() {
+    auto lista = daVettore({1, 2, 3, 4, 5});
+    stampa(lista.get());
+    lista = inverti(std::move(lista));
+    stampa(lista.get());
+}   // qui unique_ptr libera tutti i nodi
+```
+
+```text
+1 -> 2 -> 3 -> 4 -> 5
+5 -> 4 -> 3 -> 2 -> 1
+```
+
+NOTA: Con liste lunghissime (milioni di nodi) la distruzione ricorsiva dei `unique_ptr` puo' esaurire lo stack: in quel caso si scrive un distruttore iterativo che stacca i nodi uno alla volta.
+
+#### Esempio svolto 4.2 - RAII e ordine di distruzione anche con eccezioni
+
+**Problema.** Mostrare che le risorse acquisite in un blocco vengono rilasciate in ordine inverso anche quando viene lanciata un'eccezione.
+
+**Ragionamento.** Gli oggetti automatici vengono distrutti all'uscita dallo scope, in ordine inverso di costruzione, sia in uscita normale sia durante lo **stack unwinding** di un'eccezione. Una piccola classe che stampa in costruttore e distruttore lo rende visibile.
+
+```cpp
+#include <iostream>
+#include <stdexcept>
+#include <string>
+
+class Risorsa {
+    std::string nome_;
+public:
+    explicit Risorsa(std::string n) : nome_(std::move(n)) {
+        std::cout << "apro " << nome_ << '\n';
+    }
+    ~Risorsa() { std::cout << "chiudo " << nome_ << '\n'; }
+    Risorsa(const Risorsa&) = delete;
+    Risorsa& operator=(const Risorsa&) = delete;
+};
+
+void lavora() {
+    Risorsa file("file");
+    Risorsa conn("connessione");
+    throw std::runtime_error("errore di rete");
+    Risorsa mai("mai creata");      // non viene raggiunta
+}
+
+int main() {
+    try { lavora(); }
+    catch (const std::exception& e) { std::cout << "gestito: " << e.what() << '\n'; }
+}
+```
+
+```text
+apro file
+apro connessione
+chiudo connessione
+chiudo file
+gestito: errore di rete
+```
+
+Lo stesso meccanismo chiude file (`std::fstream`), rilascia mutex (`std::lock_guard`) e libera memoria (`std::unique_ptr`) senza `try/finally`.
+
+ES: **Esercizio 4.1** [Base] - Scrivi due versioni di `scambia`: una con puntatori (`void scambia(int* a, int* b)`) e una con riferimenti. Quale e' piu' sicura e perche'?
+ES: **Esercizio 4.2** [Base] - Trova l'errore: `const std::string& saluto() { std::string s = "ciao"; return s; }`. Come lo segnala il compilatore? Correggilo.
+ES: **Esercizio 4.3** [Medio] - Implementa una classe template `ScopeGuard` che esegue una lambda nel distruttore, con un metodo `annulla()`. Usala per ripristinare una variabile globale.
+ES: **Esercizio 4.4** [Medio] - Trova il nodo centrale di una lista (LeetCode 876) in una sola passata con due puntatori, uno che avanza di 1 e uno di 2.
+ES: **Esercizio 4.5** [Avanzato] - Due oggetti `Genitore` e `Figlio` si puntano a vicenda con `std::shared_ptr`: dimostra con stampe nel distruttore che non vengono mai distrutti, poi risolvi con `std::weak_ptr`.
 
 ## Capitolo 5 - Stringhe, I/O e file
 
@@ -248,3 +595,103 @@ int main() {
     for (auto& e : fs::directory_iterator(".")) std::cout << e.path() << '\n';
 }
 ```
+
+### Lezione 5.3 - Esempi svolti ed esercizi
+
+#### Esempio svolto 5.1 - Frequenza delle parole in un testo
+
+**Problema.** Dato un testo, contare le parole ignorando maiuscole e punteggiatura e stampare le tre piu' frequenti (a parita' di frequenza, in ordine alfabetico).
+
+**Ragionamento.** Scorriamo i caratteri: le lettere si accumulano (in minuscolo) nella parola corrente, qualunque altro carattere chiude la parola. Contiamo con una `std::map<std::string, int>`; poi copiamo le coppie in un vettore e ordiniamo con un comparatore a due criteri. `std::tolower` richiede un `unsigned char` per evitare comportamento indefinito con caratteri negativi.
+
+```cpp
+#include <algorithm>
+#include <cctype>
+#include <iostream>
+#include <map>
+#include <string>
+#include <vector>
+
+std::map<std::string, int> conta(const std::string& testo) {
+    std::map<std::string, int> freq;
+    std::string parola;
+    for (char c : testo + ' ') {                 // lo spazio finale chiude l'ultima parola
+        auto u = static_cast<unsigned char>(c);
+        if (std::isalpha(u)) parola += static_cast<char>(std::tolower(u));
+        else if (!parola.empty()) { ++freq[parola]; parola.clear(); }
+    }
+    return freq;
+}
+
+int main() {
+    std::string t = "Il gatto e il cane. Il cane dorme; il gatto no! Cane, gatto, topo.";
+    auto freq = conta(t);
+    std::vector<std::pair<std::string, int>> v(freq.begin(), freq.end());
+    std::sort(v.begin(), v.end(), [](const auto& a, const auto& b) {
+        return a.second != b.second ? a.second > b.second : a.first < b.first;
+    });
+    for (std::size_t i = 0; i < 3 && i < v.size(); ++i)
+        std::cout << v[i].first << ": " << v[i].second << '\n';
+}
+```
+
+```text
+il: 4
+cane: 3
+gatto: 3
+```
+
+#### Esempio svolto 5.2 - Leggere e analizzare un file CSV
+
+**Problema.** Scrivere un file `voti.csv` con righe `nome,voto1,voto2,voto3`, rileggerlo e stampare la media di ogni studente, scartando le righe malformate.
+
+**Ragionamento.** `std::getline(in, riga)` legge una riga alla volta; un `std::istringstream` sulla riga permette di usare `std::getline(ss, campo, ',')` per separare i campi. `std::stod` converte e lancia un'eccezione se il campo non e' un numero: la catturiamo per scartare la riga.
+
+```cpp
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+
+int main() {
+    {
+        std::ofstream out("voti.csv");
+        out << "Anna,8,7.5,9\nLuca,6,x,7\nSara,10,9,9.5\n";
+    }   // file chiuso qui (RAII)
+
+    std::ifstream in("voti.csv");
+    std::string riga;
+    int numRiga = 0;
+    while (std::getline(in, riga)) {
+        ++numRiga;
+        std::istringstream ss(riga);
+        std::string nome, campo;
+        std::getline(ss, nome, ',');
+        std::vector<double> voti;
+        try {
+            while (std::getline(ss, campo, ',')) voti.push_back(std::stod(campo));
+        } catch (const std::exception&) {
+            std::cout << "riga " << numRiga << " scartata\n";
+            continue;
+        }
+        double somma = 0;
+        for (double v : voti) somma += v;
+        std::cout << nome << ": " << std::fixed << std::setprecision(2)
+                  << somma / voti.size() << '\n';
+    }
+}
+```
+
+```text
+Anna: 8.17
+riga 2 scartata
+Sara: 9.50
+```
+
+ES: **Esercizio 5.1** [Base] - Valid Palindrome (LeetCode 125): verifica se una stringa e' palindroma considerando solo lettere e cifre e ignorando le maiuscole. Usa due indici, senza creare copie.
+ES: **Esercizio 5.2** [Base] - Scrivi `std::vector<std::string_view> dividi(std::string_view s, char sep)`. Che cosa succede se la stringa originale viene distrutta prima di usare il risultato?
+ES: **Esercizio 5.3** [Medio] - Cifrario di Cesare: implementa `cifra(s, k)` e `decifra(s, k)` che spostano solo le lettere (maiuscole e minuscole) di `k` posizioni con wrap-around.
+ES: **Esercizio 5.4** [Medio] - Scrivi un piccolo `wc`: dato il nome di un file, stampa numero di righe, parole e caratteri.
+ES: **Esercizio 5.5** [Avanzato] - Group Anagrams (LeetCode 49): raggruppa le parole che sono anagrammi tra loro usando come chiave la parola ordinata. Qual e' la complessita'?

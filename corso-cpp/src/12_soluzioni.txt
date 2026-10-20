@@ -1,0 +1,5975 @@
+# Appendice - Soluzioni degli esercizi
+
+Questa appendice contiene le soluzioni degli esercizi proposti nelle lezioni "Esempi svolti ed esercizi" di ogni capitolo. Prova sempre a risolvere l'esercizio da solo prima di leggere la soluzione: anche un tentativo fallito rende la soluzione molto piu' istruttiva. Le soluzioni non sono le uniche possibili: confronta la tua con quella proposta su correttezza, casi limite, complessita' e leggibilita'.
+
+Tutti i programmi completi (quelli con una funzione `main`) di esempi e soluzioni sono stati compilati con GCC 13 (`-std=c++20 -Wall -Wextra -fsanitize=address,undefined`) ed eseguiti, verificando che l'output coincida con quello riportato nel testo; i programmi che richiedono librerie esterne (SQLite, cpp-httplib, SFML) o hardware specifico sono indicati nel codice. Lo script `verifica_esempi.py` ripete il controllo: `python3 verifica_esempi.py src/*.txt`. Gli output indicati come "tipici" (tempi di esecuzione) dipendono dalla macchina. Lo script segnala anche una decina di frammenti delle lezioni originali che richiedono librerie esterne (Boost.Asio, SFML, EnTT, FreeRTOS, libpqxx), `<print>` del C++23 o un server in ascolto senza fine: per quelli e' normale.
+
+## Soluzioni - Parte 1
+
+### Capitolo 1 - Introduzione e ambiente di lavoro
+
+#### Soluzione 1.1
+
+```cpp
+#include <iostream>
+#include <string_view>
+
+int main(int argc, char* argv[]) {
+    std::string_view nome = argc > 1 ? argv[1] : "mondo";
+    std::cout << "Ciao, " << nome << "!\n";
+}
+```
+
+```text
+Ciao, mondo!
+```
+
+#### Soluzione 1.2
+
+Gli avvisi sono due: `y` e' una variabile inutilizzata (`-Wunused-variable`) e la funzione puo' terminare senza `return` quando `x <= 0` (`-Wreturn-type`). Il secondo e' grave: uscire da una funzione non-void senza `return` e' comportamento indefinito. Correzione: `int f(int x) { return x > 0 ? x : 0; }`. Conviene aggiungere `-Werror=return-type` alle opzioni di compilazione.
+
+#### Soluzione 1.3
+
+```cmake
+cmake_minimum_required(VERSION 3.20)
+project(esempio LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+add_library(matematica src/matematica.cpp)
+target_include_directories(matematica PUBLIC include)   # PUBLIC: vale anche per chi la usa
+target_compile_options(matematica PRIVATE -Wall -Wextra)
+
+add_executable(app src/main.cpp)
+target_link_libraries(app PRIVATE matematica)           # eredita include/ automaticamente
+```
+
+#### Soluzione 1.4
+
+```bash
+g++ -E main.cpp -o main.ii   # preprocessore: include espansi, macro sostituite (testo C++)
+g++ -S main.ii -o main.s     # compilazione: codice assembly della piattaforma
+g++ -c main.s  -o main.o     # assemblaggio: file oggetto binario con simboli non risolti
+g++ main.o -o main           # linking: risolve i simboli (std::cout...), crea l'eseguibile
+```
+
+Il file `.ii` di un semplice "Ciao, mondo" supera le 30.000 righe: e' il contenuto di `<iostream>` incluso testualmente, motivo per cui i moduli C++20 velocizzano la compilazione. Con `nm main.o` si vedono i simboli marcati `U` (undefined) che il linker deve risolvere.
+
+### Capitolo 2 - Tipi, variabili e operatori
+
+#### Soluzione 2.1
+
+```cpp
+#include <iomanip>
+#include <iostream>
+
+int main() {
+    for (int c = -20; c <= 40; c += 10) {
+        double f = c * 9.0 / 5.0 + 32;    // 9.0 forza la divisione in virgola mobile
+        std::cout << std::setw(4) << c << " C = " << std::setw(5) << f << " F\n";
+    }
+}
+```
+
+```text
+ -20 C =    -4 F
+ -10 C =    14 F
+   0 C =    32 F
+  10 C =    50 F
+  20 C =    68 F
+  30 C =    86 F
+  40 C =   104 F
+```
+
+#### Soluzione 2.2
+
+```cpp
+#include <iostream>
+
+constexpr bool bisestile(int anno) {
+    return (anno % 4 == 0 && anno % 100 != 0) || anno % 400 == 0;
+}
+static_assert(bisestile(2024) && bisestile(2000) && !bisestile(1900) && !bisestile(2023));
+
+int main() { std::cout << std::boolalpha << bisestile(2100) << '\n'; }
+```
+
+```text
+false
+```
+
+#### Soluzione 2.3
+
+`n - 1` spegne il bit a 1 meno significativo e accende tutti quelli a 0 alla sua destra; l'AND con `n` quindi azzera esattamente quel bit. Ogni iterazione elimina un bit acceso, percio' il ciclo gira `popcount(n)` volte invece di 32.
+
+```cpp
+#include <bit>
+#include <cstdint>
+#include <iostream>
+
+int contaBit(std::uint32_t n) {
+    int c = 0;
+    for (; n; n &= n - 1) ++c;
+    return c;
+}
+
+int main() {
+    for (std::uint32_t n : {0u, 11u, 255u, 0xFFFFFFFFu})
+        std::cout << n << ": " << contaBit(n) << " (" << std::popcount(n) << ")\n";
+}
+```
+
+```text
+0: 0 (0)
+11: 3 (3)
+255: 8 (8)
+4294967295: 32 (32)
+```
+
+#### Soluzione 2.4
+
+```cpp
+#include <iostream>
+int main() {
+    std::cout << (-1 < 0u) << ' ' << (7 / 2) << ' ' << (-7 / 2) << ' ' << (-7 % 3) << '\n';
+}
+```
+
+```text
+0 3 -3 -1
+```
+
+- `-1 < 0u` e' falso: nel confronto con un `unsigned` il `-1` viene convertito in `4294967295`. Il compilatore avvisa con `-Wsign-compare`; in C++20 si usa `std::cmp_less(-1, 0u)`, che restituisce il risultato matematicamente corretto.
+- `7 / 2` vale 3: la divisione tra interi tronca.
+- `-7 / 2` vale -3: dal C++11 la divisione tronca **verso zero**.
+- `-7 % 3` vale -1: il resto ha il segno del dividendo, cosi' che `(a / b) * b + a % b == a`.
+
+#### Soluzione 2.5
+
+Si scorre la stringa: se il simbolo corrente vale meno del successivo (come la `C` in `CM`) si sottrae, altrimenti si somma.
+
+```cpp
+#include <iostream>
+#include <string_view>
+
+int valore(char c) {
+    switch (c) {
+        case 'I': return 1;   case 'V': return 5;   case 'X': return 10;
+        case 'L': return 50;  case 'C': return 100; case 'D': return 500;
+        case 'M': return 1000;
+        default: return 0;
+    }
+}
+
+int romanoInIntero(std::string_view s) {
+    int tot = 0;
+    for (std::size_t i = 0; i < s.size(); ++i) {
+        int v = valore(s[i]);
+        if (i + 1 < s.size() && v < valore(s[i + 1])) tot -= v;
+        else tot += v;
+    }
+    return tot;
+}
+
+int main() {
+    std::cout << romanoInIntero("MCMXCIV") << ' ' << romanoInIntero("LVIII") << '\n';
+}
+```
+
+```text
+1994 58
+```
+
+### Capitolo 3 - Controllo di flusso e funzioni
+
+#### Soluzione 3.1
+
+Dividere prima riduce il rischio di overflow: `a * b` potrebbe superare il limite del tipo anche quando il mcm ci sta. Dal C++17 esistono anche `std::gcd` e `std::lcm` in `<numeric>`.
+
+```cpp
+#include <iostream>
+
+long long mcd(long long a, long long b) {
+    while (b != 0) { long long r = a % b; a = b; b = r; }
+    return a < 0 ? -a : a;
+}
+long long mcm(long long a, long long b) { return a / mcd(a, b) * b; }
+
+int main() { std::cout << mcd(84, 36) << ' ' << mcm(4, 6) << ' ' << mcm(21, 6) << '\n'; }
+```
+
+```text
+12 12 42
+```
+
+#### Soluzione 3.2
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <string>
+#include <vector>
+
+int main() {
+    std::vector<std::string> parole{"sole", "montagna", "re", "programmazione", "mare"};
+    std::size_t k = 4;
+    auto lunghe = std::count_if(parole.begin(), parole.end(),
+                                [k](const std::string& p) { return p.size() > k; });
+    std::cout << lunghe << '\n';
+}
+```
+
+```text
+2
+```
+
+#### Soluzione 3.3
+
+La versione con hash map memorizza, per ogni valore visto, il suo indice: per l'elemento corrente basta cercare il "complemento" `target - x`. Una sola passata: O(n) tempo, O(n) spazio.
+
+```cpp
+#include <iostream>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
+std::pair<int, int> twoSumLento(const std::vector<int>& a, int target) {
+    for (int i = 0; i < (int)a.size(); ++i)
+        for (int j = i + 1; j < (int)a.size(); ++j)
+            if (a[i] + a[j] == target) return {i, j};
+    return {-1, -1};
+}
+
+std::pair<int, int> twoSum(const std::vector<int>& a, int target) {
+    std::unordered_map<int, int> visti;            // valore -> indice
+    for (int i = 0; i < (int)a.size(); ++i) {
+        if (auto it = visti.find(target - a[i]); it != visti.end()) return {it->second, i};
+        visti[a[i]] = i;
+    }
+    return {-1, -1};
+}
+
+int main() {
+    std::vector<int> a{2, 7, 11, 15};
+    auto [i, j] = twoSum(a, 18);
+    auto [p, q] = twoSumLento(a, 18);
+    std::cout << i << ' ' << j << " | " << p << ' ' << q << '\n';
+}
+```
+
+```text
+1 2 | 1 2
+```
+
+#### Soluzione 3.4
+
+Per spostare `n` dischi da A a C: sposta `n-1` dischi su B, sposta il disco grande su C, riporta gli `n-1` da B a C. Le mosse sono `2^n - 1`.
+
+```cpp
+#include <iostream>
+
+int mosse = 0;
+void hanoi(int n, char da, char a, char via) {
+    if (n == 0) return;
+    hanoi(n - 1, da, via, a);
+    std::cout << "disco " << n << ": " << da << " -> " << a << '\n';
+    ++mosse;
+    hanoi(n - 1, via, a, da);
+}
+
+int main() {
+    hanoi(3, 'A', 'C', 'B');
+    std::cout << "mosse: " << mosse << '\n';
+}
+```
+
+```text
+disco 1: A -> C
+disco 2: A -> B
+disco 1: C -> B
+disco 3: A -> C
+disco 1: B -> A
+disco 2: B -> C
+disco 1: A -> C
+mosse: 7
+```
+
+#### Soluzione 3.5
+
+Esponenziazione per quadrati: `x^n = (x^2)^(n/2)`, moltiplicando per `x` quando il bit corrente di `n` e' 1. Per `n` negativo si usa `1/x` e `-n`; ma `-LLONG_MIN` va in overflow, quindi lavoriamo con un `unsigned long long`.
+
+```cpp
+#include <climits>
+#include <iostream>
+
+double potenza(double x, long long n) {
+    unsigned long long e = n < 0 ? 0ULL - static_cast<unsigned long long>(n) : n;
+    if (n < 0) x = 1 / x;
+    double r = 1;
+    for (; e; e >>= 1, x *= x)
+        if (e & 1) r *= x;
+    return r;
+}
+
+int main() {
+    std::cout << potenza(2, 10) << ' ' << potenza(2, -2) << ' '
+              << potenza(1, LLONG_MIN) << '\n';
+}
+```
+
+```text
+1024 0.25 1
+```
+
+### Capitolo 4 - Puntatori, riferimenti e memoria
+
+#### Soluzione 4.1
+
+I riferimenti sono piu' sicuri: non possono essere nulli e non vanno dereferenziati esplicitamente; con i puntatori il chiamante potrebbe passare `nullptr`. In pratica si usa `std::swap`.
+
+```cpp
+#include <iostream>
+
+void scambia(int* a, int* b) { if (a && b) { int t = *a; *a = *b; *b = t; } }
+void scambia(int& a, int& b) { int t = a; a = b; b = t; }
+
+int main() {
+    int x = 1, y = 2;
+    scambia(&x, &y);  std::cout << x << y << ' ';
+    scambia(x, y);    std::cout << x << y << '\n';
+}
+```
+
+```text
+21 12
+```
+
+#### Soluzione 4.2
+
+`s` e' una variabile locale distrutta all'uscita dalla funzione: il riferimento restituito e' **pendente** (dangling) e usarlo e' comportamento indefinito. GCC e Clang avvisano con `-Wreturn-local-addr` / `-Wreturn-stack-address`. Correzione: restituire per valore, `std::string saluto() { return "ciao"; }`; grazie alla copy elision non costa nulla.
+
+#### Soluzione 4.3
+
+```cpp
+#include <iostream>
+#include <utility>
+
+template <typename F>
+class ScopeGuard {
+    F f_;
+    bool attivo_ = true;
+public:
+    explicit ScopeGuard(F f) : f_(std::move(f)) {}
+    ~ScopeGuard() { if (attivo_) f_(); }
+    void annulla() noexcept { attivo_ = false; }
+    ScopeGuard(const ScopeGuard&) = delete;
+    ScopeGuard& operator=(const ScopeGuard&) = delete;
+};
+
+int livelloLog = 1;
+
+void operazioneVerbosa(bool conferma) {
+    int vecchio = livelloLog;
+    livelloLog = 3;
+    ScopeGuard g([&] { livelloLog = vecchio; });   // CTAD: deduce il tipo della lambda
+    std::cout << "durante: " << livelloLog << '\n';
+    if (conferma) g.annulla();                     // mantiene il nuovo valore
+}
+
+int main() {
+    operazioneVerbosa(false);
+    std::cout << "dopo: " << livelloLog << '\n';
+    operazioneVerbosa(true);
+    std::cout << "dopo: " << livelloLog << '\n';
+}
+```
+
+```text
+durante: 3
+dopo: 1
+durante: 3
+dopo: 3
+```
+
+#### Soluzione 4.4
+
+Quando il puntatore veloce raggiunge la fine, quello lento e' a meta'. Con un numero pari di nodi restituisce il secondo dei due centrali, come richiesto da LeetCode.
+
+```cpp
+#include <iostream>
+
+struct Nodo { int val; Nodo* next; };
+
+const Nodo* centro(const Nodo* testa) {
+    const Nodo *lento = testa, *veloce = testa;
+    while (veloce && veloce->next) { lento = lento->next; veloce = veloce->next->next; }
+    return lento;
+}
+
+int main() {
+    Nodo n6{6, nullptr}, n5{5, &n6}, n4{4, &n5}, n3{3, &n4}, n2{2, &n3}, n1{1, &n2};
+    std::cout << centro(&n2)->val << ' ' << centro(&n1)->val << '\n';   // 5 nodi, 6 nodi
+}
+```
+
+```text
+4 4
+```
+
+#### Soluzione 4.5
+
+Con due `shared_ptr` che si puntano a vicenda il contatore di ciascuno non scende mai a zero: memory leak. Il figlio deve **osservare** il genitore con un `weak_ptr`, che non incrementa il contatore; `lock()` lo trasforma temporaneamente in `shared_ptr`.
+
+```cpp
+#include <iostream>
+#include <memory>
+
+struct Genitore;
+struct Figlio {
+    std::weak_ptr<Genitore> genitore;        // con shared_ptr: ciclo e leak
+    ~Figlio() { std::cout << "~Figlio\n"; }
+};
+struct Genitore {
+    std::shared_ptr<Figlio> figlio;
+    ~Genitore() { std::cout << "~Genitore\n"; }
+};
+
+int main() {
+    auto g = std::make_shared<Genitore>();
+    g->figlio = std::make_shared<Figlio>();
+    g->figlio->genitore = g;
+    if (auto p = g->figlio->genitore.lock()) std::cout << "uso: " << p.use_count() << '\n';
+}
+```
+
+```text
+uso: 2
+~Genitore
+~Figlio
+```
+
+### Capitolo 5 - Stringhe, I/O e file
+
+#### Soluzione 5.1
+
+```cpp
+#include <cctype>
+#include <iostream>
+#include <string_view>
+
+bool palindroma(std::string_view s) {
+    auto ok = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) != 0; };
+    auto low = [](char c) { return std::tolower(static_cast<unsigned char>(c)); };
+    std::size_t i = 0, j = s.size();
+    while (i < j) {
+        if (!ok(s[i])) { ++i; continue; }
+        if (!ok(s[j - 1])) { --j; continue; }
+        if (low(s[i]) != low(s[j - 1])) return false;
+        ++i; --j;
+    }
+    return true;
+}
+
+int main() {
+    std::cout << palindroma("A man, a plan, a canal: Panama")
+              << palindroma("race a car") << '\n';
+}
+```
+
+```text
+10
+```
+
+#### Soluzione 5.2
+
+Le `string_view` puntano ai caratteri della stringa originale: se questa viene distrutta (o riallocata modificandola) le viste diventano pendenti. Il chiamante deve garantire che la stringa sopravviva al risultato; per esempio `dividi(std::string("a,b"), ',')` restituisce viste su un temporaneo gia' distrutto.
+
+```cpp
+#include <iostream>
+#include <string_view>
+#include <vector>
+
+std::vector<std::string_view> dividi(std::string_view s, char sep) {
+    std::vector<std::string_view> out;
+    std::size_t inizio = 0;
+    for (std::size_t i = 0; i <= s.size(); ++i)
+        if (i == s.size() || s[i] == sep) {
+            out.push_back(s.substr(inizio, i - inizio));
+            inizio = i + 1;
+        }
+    return out;
+}
+
+int main() {
+    for (auto p : dividi("rosso,,verde,blu", ',')) std::cout << '[' << p << ']';
+    std::cout << '\n';
+}
+```
+
+```text
+[rosso][][verde][blu]
+```
+
+#### Soluzione 5.3
+
+```cpp
+#include <iostream>
+#include <string>
+
+std::string cifra(std::string s, int k) {
+    k = ((k % 26) + 26) % 26;                  // normalizza anche k negativi
+    for (char& c : s) {
+        if (c >= 'a' && c <= 'z') c = static_cast<char>('a' + (c - 'a' + k) % 26);
+        else if (c >= 'A' && c <= 'Z') c = static_cast<char>('A' + (c - 'A' + k) % 26);
+    }
+    return s;
+}
+std::string decifra(const std::string& s, int k) { return cifra(s, -k); }
+
+int main() {
+    auto c = cifra("Veni, vidi, vici!", 3);
+    std::cout << c << " | " << decifra(c, 3) << '\n';
+}
+```
+
+```text
+Yhql, ylgl, ylfl! | Veni, vidi, vici!
+```
+
+#### Soluzione 5.4
+
+```cpp
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <string>
+
+int main() {
+    { std::ofstream("testo.txt") << "uno due tre\nquattro\n\ncinque sei\n"; }
+    std::ifstream in("testo.txt");
+    std::size_t righe = 0, parole = 0, caratteri = 0;
+    std::string riga, p;
+    while (std::getline(in, riga)) {
+        ++righe;
+        caratteri += riga.size() + 1;          // +1 per il '\n'
+        std::istringstream ss(riga);
+        while (ss >> p) ++parole;              // >> salta gli spazi
+    }
+    std::cout << righe << ' ' << parole << ' ' << caratteri << '\n';
+}
+```
+
+```text
+4 6 32
+```
+
+#### Soluzione 5.5
+
+Ordinare ogni parola costa O(L log L); in totale O(n L log L) con n parole di lunghezza massima L. Si puo' scendere a O(n L) usando come chiave il conteggio delle 26 lettere.
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <map>
+#include <string>
+#include <vector>
+
+int main() {
+    std::vector<std::string> parole{"eat", "tea", "tan", "ate", "nat", "bat"};
+    std::map<std::string, std::vector<std::string>> gruppi;
+    for (const auto& p : parole) {
+        std::string chiave = p;
+        std::sort(chiave.begin(), chiave.end());
+        gruppi[chiave].push_back(p);
+    }
+    for (const auto& [chiave, g] : gruppi) {
+        for (const auto& p : g) std::cout << p << ' ';
+        std::cout << '\n';
+    }
+}
+```
+
+```text
+bat
+eat tea ate
+tan nat
+```
+
+## Soluzioni - Parte 2
+
+### Capitolo 6 - Programmazione orientata agli oggetti
+
+#### Soluzione 6.1
+
+```cpp
+#include <iostream>
+#include <stdexcept>
+#include <string>
+#include <utility>
+
+class Conto {
+public:
+    explicit Conto(std::string titolare, double saldo = 0.0)
+        : titolare_(std::move(titolare)), saldo_(saldo) {}
+    void versa(double v) {
+        if (v <= 0) throw std::invalid_argument("importo non positivo");
+        saldo_ += v;
+    }
+    void preleva(double v) {
+        if (v <= 0) throw std::invalid_argument("importo non positivo");
+        if (v > saldo_) throw std::runtime_error("saldo insufficiente");
+        saldo_ -= v;
+    }
+    double saldo() const noexcept { return saldo_; }
+private:
+    std::string titolare_;
+    double saldo_;
+};
+
+int main() {
+    Conto c("Anna", 100);
+    for (double importo : {30.0, -5.0, 500.0}) {
+        try {
+            c.preleva(importo);
+            std::cout << "prelevati " << importo << ", saldo " << c.saldo() << '\n';
+        } catch (const std::invalid_argument& e) {
+            std::cout << "argomento non valido: " << e.what() << '\n';
+        } catch (const std::runtime_error& e) {
+            std::cout << "operazione rifiutata: " << e.what() << '\n';
+        }
+    }
+}
+```
+
+```text
+prelevati 30, saldo 70
+argomento non valido: importo non positivo
+operazione rifiutata: saldo insufficiente
+```
+
+L'ordine dei `catch` conta: vanno dal piu' specifico al piu' generale. Qui sono indipendenti perche' `invalid_argument` deriva da `logic_error`, non da `runtime_error`.
+
+#### Soluzione 6.2
+
+```cpp
+#include <iostream>
+#include <memory>
+#include <string>
+#include <vector>
+
+struct Animale {
+    virtual ~Animale() = default;
+    virtual std::string nome() const = 0;
+    virtual std::string verso() const = 0;
+};
+struct Cane : Animale {
+    std::string nome() const override { return "cane"; }
+    std::string verso() const override { return "bau"; }
+};
+struct Gatto : Animale {
+    std::string nome() const override { return "gatto"; }
+    std::string verso() const override { return "miao"; }
+};
+struct Mucca : Animale {
+    std::string nome() const override { return "mucca"; }
+    std::string verso() const override { return "muu"; }
+};
+
+int main() {
+    std::vector<std::unique_ptr<Animale>> fattoria;
+    fattoria.push_back(std::make_unique<Cane>());
+    fattoria.push_back(std::make_unique<Gatto>());
+    fattoria.push_back(std::make_unique<Mucca>());
+    for (const auto& a : fattoria) std::cout << a->nome() << ": " << a->verso() << '\n';
+}
+```
+
+```text
+cane: bau
+gatto: miao
+mucca: muu
+```
+
+#### Soluzione 6.3
+
+```cpp
+#include <iostream>
+#include <utility>
+#include <vector>
+
+struct Traccia {
+    Traccia() { std::cout << "ctor "; }
+    ~Traccia() { std::cout << "dtor "; }
+    Traccia(const Traccia&) { std::cout << "copia "; }
+    Traccia& operator=(const Traccia&) { std::cout << "=copia "; return *this; }
+    Traccia(Traccia&&) noexcept { std::cout << "move "; }
+    Traccia& operator=(Traccia&&) noexcept { std::cout << "=move "; return *this; }
+};
+
+Traccia crea() { return Traccia{}; }   // copy elision garantita (C++17)
+
+int main() {
+    std::vector<Traccia> v;
+    v.reserve(4);                          // niente riallocazioni: output piu' leggibile
+    Traccia t;              std::cout << "| ";
+    v.push_back(t);         std::cout << "| ";   // copia dell'lvalue
+    v.push_back(std::move(t)); std::cout << "| "; // move
+    v.emplace_back();       std::cout << "| ";   // costruito direttamente nel vettore
+    Traccia r = crea();     std::cout << "| ";   // nessuna copia ne' move
+    r = Traccia{};          std::cout << "| ";   // ctor del temporaneo, =move, dtor
+    std::cout << '\n';
+}
+```
+
+```text
+ctor | copia | move | ctor | ctor | ctor =move dtor |
+dtor dtor dtor dtor dtor
+```
+
+L'ultima riga contiene i cinque `dtor` di fine `main`: `r`, `t` e i tre elementi del vettore. Togliendo `noexcept` dal costruttore di move e rimuovendo `reserve`, le riallocazioni del vettore userebbero la **copia**: `std::vector` sposta gli elementi solo se il move non puo' lanciare eccezioni.
+
+#### Soluzione 6.4
+
+`in` riceve i `push`; quando `out` e' vuota vi si travasano tutti gli elementi di `in`, invertendone l'ordine. Ogni elemento viene spostato al massimo una volta da `in` a `out`, quindi n operazioni costano O(n) in totale: O(1) ammortizzato ciascuna.
+
+```cpp
+#include <iostream>
+#include <stack>
+
+class Coda {
+    std::stack<int> in_, out_;
+    void travasa() {
+        if (out_.empty())
+            while (!in_.empty()) { out_.push(in_.top()); in_.pop(); }
+    }
+public:
+    void push(int x) { in_.push(x); }
+    int pop() { travasa(); int x = out_.top(); out_.pop(); return x; }
+    int peek() { travasa(); return out_.top(); }
+    bool empty() const { return in_.empty() && out_.empty(); }
+};
+
+int main() {
+    Coda q;
+    q.push(1); q.push(2); q.push(3);
+    std::cout << q.pop() << ' ';
+    q.push(4);
+    while (!q.empty()) std::cout << q.pop() << ' ';
+    std::cout << '\n';
+}
+```
+
+```text
+1 2 3 4
+```
+
+#### Soluzione 6.5
+
+La lista mantiene l'ordine d'uso (in testa il piu' recente); la mappa associa a ogni chiave l'iteratore del suo nodo nella lista. `splice` sposta un nodo in testa in O(1) senza invalidare gli iteratori.
+
+```cpp
+#include <iostream>
+#include <list>
+#include <unordered_map>
+#include <utility>
+
+class LRUCache {
+    std::size_t cap_;
+    std::list<std::pair<int, int>> lista_;                        // (chiave, valore)
+    std::unordered_map<int, std::list<std::pair<int, int>>::iterator> pos_;
+public:
+    explicit LRUCache(std::size_t cap) : cap_(cap) {}
+    int get(int k) {
+        auto it = pos_.find(k);
+        if (it == pos_.end()) return -1;
+        lista_.splice(lista_.begin(), lista_, it->second);         // diventa il piu' recente
+        return it->second->second;
+    }
+    void put(int k, int v) {
+        if (auto it = pos_.find(k); it != pos_.end()) {
+            it->second->second = v;
+            lista_.splice(lista_.begin(), lista_, it->second);
+            return;
+        }
+        if (lista_.size() == cap_) {                               // espelle il meno recente
+            pos_.erase(lista_.back().first);
+            lista_.pop_back();
+        }
+        lista_.emplace_front(k, v);
+        pos_[k] = lista_.begin();
+    }
+};
+
+int main() {
+    LRUCache c(2);
+    c.put(1, 1); c.put(2, 2);
+    std::cout << c.get(1) << ' ';   // 1, ora 2 e' il meno recente
+    c.put(3, 3);                    // espelle 2
+    std::cout << c.get(2) << ' ';
+    c.put(4, 4);                    // espelle 1
+    std::cout << c.get(1) << ' ' << c.get(3) << ' ' << c.get(4) << '\n';
+}
+```
+
+```text
+1 -1 -1 3 4
+```
+
+### Capitolo 7 - Template e programmazione generica
+
+#### Soluzione 7.1
+
+```cpp
+#include <iostream>
+#include <string>
+
+template <typename T, typename U>
+struct Coppia {
+    T primo;
+    U secondo;
+    Coppia<U, T> scambiata() const { return {secondo, primo}; }
+};
+
+int main() {
+    Coppia c{1, 2.5};                      // CTAD per aggregati (C++20): Coppia<int, double>
+    auto s = c.scambiata();                // Coppia<double, int>
+    Coppia n{std::string("Anna"), 30};
+    std::cout << s.primo << ' ' << s.secondo << ' ' << n.primo << '\n';
+}
+```
+
+```text
+2.5 1 Anna
+```
+
+#### Soluzione 7.2
+
+```cpp
+#include <concepts>
+#include <iostream>
+#include <span>
+#include <vector>
+
+template <typename T>
+concept Numerico = (std::integral<T> || std::floating_point<T>) && !std::same_as<T, bool>;
+
+template <Numerico T>
+double media(std::span<const T> v) {
+    if (v.empty()) return 0.0;
+    double s = 0;
+    for (T x : v) s += x;
+    return s / v.size();
+}
+
+int main() {
+    std::vector<int> a{1, 2, 3, 4};
+    double b[] = {2.5, 3.5};
+    std::cout << media<int>(a) << ' ' << media<double>(b) << '\n';
+    // media<bool>(...)  -> errore: bool non soddisfa Numerico
+}
+```
+
+```text
+2.5 3
+```
+
+L'argomento template va indicato esplicitamente (`media<int>`) perche' la deduzione non considera la conversione da `vector` a `span`.
+
+#### Soluzione 7.3
+
+```cpp
+#include <array>
+#include <cstddef>
+#include <iostream>
+#include <optional>
+
+template <typename T, std::size_t N>
+class Pila {
+    static_assert(N > 0, "la capacita' deve essere positiva");
+    std::array<T, N> d_{};
+    std::size_t n_ = 0;
+public:
+    bool push(const T& x) {
+        if (n_ == N) return false;
+        d_[n_++] = x;
+        return true;
+    }
+    std::optional<T> pop() {
+        if (n_ == 0) return std::nullopt;
+        return d_[--n_];
+    }
+    std::size_t size() const { return n_; }
+};
+
+int main() {
+    Pila<int, 2> p;
+    std::cout << p.push(1) << p.push(2) << p.push(3) << ' ';
+    while (auto x = p.pop()) std::cout << *x;
+    std::cout << '\n';
+    // Pila<int, 0> q;   // errore di compilazione con il messaggio dello static_assert
+}
+```
+
+```text
+110 21
+```
+
+#### Soluzione 7.4
+
+Si mantiene un min-heap con i k elementi piu' grandi visti finora: la cima e' il k-esimo piu' grande. Ogni `aggiungi` costa O(log k).
+
+```cpp
+#include <functional>
+#include <iostream>
+#include <queue>
+#include <vector>
+
+template <typename T, typename Cmp = std::less<T>>
+class KthLargest {
+    std::size_t k_;
+    // con Cmp = less vogliamo un min-heap: invertiamo gli argomenti del comparatore
+    struct Inverso { Cmp c; bool operator()(const T& a, const T& b) const { return c(b, a); } };
+    std::priority_queue<T, std::vector<T>, Inverso> heap_;
+public:
+    KthLargest(std::size_t k, const std::vector<T>& iniziali) : k_(k) {
+        for (const T& x : iniziali) aggiungi(x);
+    }
+    const T& aggiungi(const T& x) {
+        heap_.push(x);
+        if (heap_.size() > k_) heap_.pop();
+        return heap_.top();
+    }
+};
+
+int main() {
+    KthLargest<int> k3(3, {4, 5, 8, 2});
+    for (int x : {3, 5, 10, 9, 4}) std::cout << k3.aggiungi(x) << ' ';
+    std::cout << '\n';
+}
+```
+
+```text
+4 5 5 8 8
+```
+
+#### Soluzione 7.5
+
+```cpp
+#include <array>
+#include <iostream>
+
+consteval std::array<long long, 20> tabellaFib() {
+    std::array<long long, 20> t{};
+    t[1] = 1;
+    for (std::size_t i = 2; i < t.size(); ++i) t[i] = t[i - 1] + t[i - 2];
+    return t;
+}
+
+constexpr auto FIB = tabellaFib();     // calcolata dal compilatore
+static_assert(FIB[19] == 4181);
+
+int main() {
+    for (auto x : FIB) std::cout << x << ' ';
+    std::cout << '\n';
+}
+```
+
+```text
+0 1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181
+```
+
+`consteval` obbliga la valutazione a compile time: se la funzione contenesse un'operazione non ammessa (per esempio un accesso fuori limiti) si otterrebbe un errore di compilazione invece di un bug a runtime.
+
+### Capitolo 8 - Il C++ moderno
+
+#### Soluzione 8.1
+
+```cpp
+#include <iostream>
+#include <map>
+#include <string>
+#include <vector>
+
+int main() {
+    const std::map<std::string, std::vector<int>> m{{"a", {1, 2}}, {"b", {3}}};
+    for (const auto& [nome, valori] : m)          // range-for + structured bindings
+        std::cout << nome << valori.size();       // nessuna allocazione: new/delete inutili
+    std::cout << '\n';
+}
+```
+
+```text
+a2b1
+```
+
+#### Soluzione 8.2
+
+```cpp
+#include <iostream>
+#include <ranges>
+
+int main() {
+    namespace vw = std::views;
+    for (int q : vw::iota(11)                                  // sequenza infinita e pigra
+                 | vw::filter([](int x) { return x % 2 == 1; })
+                 | vw::transform([](int x) { return x * x; })
+                 | vw::take(5))
+        std::cout << q << ' ';
+    std::cout << '\n';
+}
+```
+
+```text
+121 169 225 289 361
+```
+
+#### Soluzione 8.3
+
+```cpp
+// compila: -std=c++23
+#include <charconv>
+#include <expected>
+#include <iostream>
+#include <string>
+#include <string_view>
+
+std::expected<int, std::string> parseInt(std::string_view s) {
+    int v = 0;
+    auto [p, e] = std::from_chars(s.data(), s.data() + s.size(), v);
+    if (e == std::errc::result_out_of_range) return std::unexpected("fuori intervallo");
+    if (e != std::errc{} || p != s.data() + s.size())
+        return std::unexpected("'" + std::string(s) + "' non e' un numero");
+    return v;
+}
+
+int main() {
+    for (auto s : {"42", "12abc", "99999999999"}) {
+        if (auto r = parseInt(s)) std::cout << "ok " << *r << '\n';
+        else std::cout << "errore: " << r.error() << '\n';
+    }
+}
+```
+
+```text
+ok 42
+errore: '12abc' non e' un numero
+errore: fuori intervallo
+```
+
+A differenza di `std::optional`, `std::expected` trasporta il **motivo** dell'errore; a differenza delle eccezioni, l'errore fa parte del tipo di ritorno e il chiamante non puo' ignorarlo per sbaglio.
+
+#### Soluzione 8.4
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <map>
+#include <string>
+
+int main() {
+    std::map<std::string, int> magazzino{{"viti", 120}, {"bulloni", 340}, {"dadi", 95}};
+    auto it = std::ranges::max_element(magazzino, {}, [](const auto& kv) { return kv.second; });
+    const auto& [prodotto, quantita] = *it;
+    std::cout << prodotto << ' ' << quantita << '\n';
+}
+```
+
+```text
+bulloni 340
+```
+
+#### Soluzione 8.5
+
+Con `std::variant` l'insieme dei tipi e' chiuso e noto a compile time: niente allocazioni sull'heap, niente puntatori, e il compilatore segnala se una visita dimentica un tipo. Aggiungere una nuova **operazione** e' facile (un nuovo visitatore), aggiungere un nuovo **tipo** obbliga a modificare tutte le visite. Con l'ereditarieta' vale l'opposto: nuovi tipi si aggiungono senza toccare il codice esistente, nuove operazioni richiedono un nuovo metodo virtuale in tutta la gerarchia.
+
+```cpp
+#include <cmath>
+#include <iostream>
+#include <numbers>
+#include <variant>
+#include <vector>
+
+struct Cerchio { double r; };
+struct Rettangolo { double w, h; };
+struct Triangolo { double a, b, c; };
+using Forma = std::variant<Cerchio, Rettangolo, Triangolo>;
+
+double area(const Forma& f) {
+    return std::visit([](const auto& x) -> double {
+        using T = std::decay_t<decltype(x)>;
+        if constexpr (std::is_same_v<T, Cerchio>) return std::numbers::pi * x.r * x.r;
+        else if constexpr (std::is_same_v<T, Rettangolo>) return x.w * x.h;
+        else {                                             // formula di Erone
+            double s = (x.a + x.b + x.c) / 2;
+            return std::sqrt(s * (s - x.a) * (s - x.b) * (s - x.c));
+        }
+    }, f);
+}
+
+int main() {
+    std::vector<Forma> forme{Cerchio{1}, Rettangolo{3, 4}, Triangolo{3, 4, 5}};
+    for (const auto& f : forme) std::cout << area(f) << ' ';
+    std::cout << '\n';
+}
+```
+
+```text
+3.14159 12 6
+```
+
+## Soluzioni - Parte 3
+
+### Capitolo 9 - La Standard Template Library
+
+#### Soluzione 9.1
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <vector>
+
+void spostaZeri(std::vector<int>& a) {
+    std::size_t w = 0;                                  // prossima posizione da scrivere
+    for (int x : a) if (x != 0) a[w++] = x;
+    std::fill(a.begin() + w, a.end(), 0);
+}
+
+int main() {
+    std::vector<int> a{0, 1, 0, 3, 12}, b = a;
+    spostaZeri(a);
+    std::stable_partition(b.begin(), b.end(), [](int x) { return x != 0; });   // versione STL
+    for (int x : a) std::cout << x << ' ';
+    std::cout << "| ";
+    for (int x : b) std::cout << x << ' ';
+    std::cout << '\n';
+}
+```
+
+```text
+1 3 12 0 0 | 1 3 12 0 0
+```
+
+`std::stable_partition` mantiene l'ordine relativo; `std::partition` sarebbe piu' veloce ma non lo garantisce.
+
+#### Soluzione 9.2
+
+```cpp
+#include <iostream>
+#include <unordered_map>
+#include <vector>
+
+bool vicini(const std::vector<int>& a, int k) {
+    std::unordered_map<int, int> ultimo;                // valore -> ultimo indice visto
+    for (int i = 0; i < (int)a.size(); ++i) {
+        if (auto it = ultimo.find(a[i]); it != ultimo.end() && i - it->second <= k) return true;
+        ultimo[a[i]] = i;
+    }
+    return false;
+}
+
+int main() {
+    std::cout << vicini({1, 2, 3, 1}, 3) << vicini({1, 2, 3, 1, 2, 3}, 2) << '\n';
+}
+```
+
+```text
+10
+```
+
+#### Soluzione 9.3
+
+La finestra `[inizio, i]` non contiene ripetizioni. `ultimo[c]` ricorda dove abbiamo visto `c` l'ultima volta: se e' dentro la finestra, l'inizio salta subito dopo. Ogni carattere entra ed esce una volta: O(n).
+
+```cpp
+#include <algorithm>
+#include <array>
+#include <iostream>
+#include <string_view>
+
+int piuLunga(std::string_view s) {
+    std::array<int, 256> ultimo;
+    ultimo.fill(-1);
+    int inizio = 0, best = 0;
+    for (int i = 0; i < (int)s.size(); ++i) {
+        auto c = static_cast<unsigned char>(s[i]);
+        if (ultimo[c] >= inizio) inizio = ultimo[c] + 1;
+        ultimo[c] = i;
+        best = std::max(best, i - inizio + 1);
+    }
+    return best;
+}
+
+int main() {
+    std::cout << piuLunga("abcabcbb") << piuLunga("bbbbb") << piuLunga("pwwkew") << '\n';
+}
+```
+
+```text
+313
+```
+
+#### Soluzione 9.4
+
+`unordered_set` richiede `operator==` e una funzione di hash; `std::set` richiede invece un ordinamento stretto (`operator<` o `<=>`). L'hash combina i due campi: moltiplicare per un numero primo evita che `(1,2)` e `(2,1)` collidano sempre.
+
+```cpp
+#include <compare>
+#include <functional>
+#include <iostream>
+#include <set>
+#include <unordered_set>
+#include <vector>
+
+struct Punto {
+    int x, y;
+    bool operator==(const Punto&) const = default;
+    auto operator<=>(const Punto&) const = default;          // serve a std::set
+};
+template <> struct std::hash<Punto> {
+    std::size_t operator()(const Punto& p) const noexcept {
+        return std::hash<int>{}(p.x) * 31 + std::hash<int>{}(p.y);
+    }
+};
+
+int main() {
+    std::vector<Punto> v{{1, 2}, {2, 1}, {1, 2}, {0, 0}, {2, 1}};
+    std::unordered_set<Punto> u(v.begin(), v.end());
+    std::set<Punto> s(v.begin(), v.end());
+    std::cout << u.size() << ' ' << s.size() << " primo: " << s.begin()->x << s.begin()->y << '\n';
+}
+```
+
+```text
+3 3 primo: 00
+```
+
+#### Soluzione 9.5
+
+`out[i]` deve valere (prodotto a sinistra di i) * (prodotto a destra di i). Prima passata: riempiamo `out` con i prodotti a sinistra; seconda passata, da destra, moltiplichiamo per un accumulatore dei prodotti a destra.
+
+```cpp
+#include <iostream>
+#include <vector>
+
+std::vector<int> prodottoTranne(const std::vector<int>& a) {
+    std::vector<int> out(a.size(), 1);
+    for (std::size_t i = 1; i < a.size(); ++i) out[i] = out[i - 1] * a[i - 1];
+    int destra = 1;
+    for (std::size_t i = a.size(); i-- > 0;) { out[i] *= destra; destra *= a[i]; }
+    return out;
+}
+
+int main() {
+    for (int x : prodottoTranne({1, 2, 3, 4})) std::cout << x << ' ';
+    std::cout << '\n';
+}
+```
+
+```text
+24 12 8 6
+```
+
+### Capitolo 10 - Strutture dati classiche
+
+#### Soluzione 10.1
+
+Con due indici e un contatore si distinguono i casi "piena" e "vuota" (che altrimenti avrebbero `testa == coda` in entrambi i casi).
+
+```cpp
+#include <iostream>
+#include <optional>
+#include <vector>
+
+template <typename T>
+class CodaCircolare {
+    std::vector<T> d_;
+    std::size_t testa_ = 0, n_ = 0;
+public:
+    explicit CodaCircolare(std::size_t cap) : d_(cap) {}
+    bool vuota() const { return n_ == 0; }
+    bool piena() const { return n_ == d_.size(); }
+    bool push(const T& x) {
+        if (piena()) return false;
+        d_[(testa_ + n_) % d_.size()] = x;
+        ++n_;
+        return true;
+    }
+    std::optional<T> pop() {
+        if (vuota()) return std::nullopt;
+        T x = d_[testa_];
+        testa_ = (testa_ + 1) % d_.size();
+        --n_;
+        return x;
+    }
+    const T& front() const { return d_[testa_]; }
+};
+
+int main() {
+    CodaCircolare<int> q(3);
+    std::cout << q.push(1) << q.push(2) << q.push(3) << q.push(4) << ' ';
+    std::cout << *q.pop() << ' ';
+    q.push(5);                                        // riusa la cella liberata
+    while (auto x = q.pop()) std::cout << *x << ' ';
+    std::cout << '\n';
+}
+```
+
+```text
+1110 1 2 3 5
+```
+
+#### Soluzione 10.2
+
+```cpp
+#include <array>
+#include <iostream>
+#include <memory>
+#include <string_view>
+
+class Trie {
+    struct Nodo {
+        std::array<std::unique_ptr<Nodo>, 26> figli;
+        bool fine = false;
+    };
+    Nodo radice_;
+    const Nodo* trova(std::string_view s) const {
+        const Nodo* n = &radice_;
+        for (char c : s) {
+            n = n->figli[c - 'a'].get();
+            if (!n) return nullptr;
+        }
+        return n;
+    }
+public:
+    void inserisci(std::string_view s) {
+        Nodo* n = &radice_;
+        for (char c : s) {
+            auto& f = n->figli[c - 'a'];
+            if (!f) f = std::make_unique<Nodo>();
+            n = f.get();
+        }
+        n->fine = true;
+    }
+    bool cerca(std::string_view s) const { auto n = trova(s); return n && n->fine; }
+    bool iniziaCon(std::string_view p) const { return trova(p) != nullptr; }
+};
+
+int main() {
+    Trie t;
+    t.inserisci("casa"); t.inserisci("caso"); t.inserisci("cane");
+    std::cout << t.cerca("casa") << t.cerca("cas") << t.iniziaCon("cas") << t.iniziaCon("co")
+              << '\n';
+}
+```
+
+```text
+1010
+```
+
+#### Soluzione 10.3
+
+```cpp
+#include <iostream>
+#include <numeric>
+#include <utility>
+#include <vector>
+
+struct DSU {
+    std::vector<int> p, r;
+    explicit DSU(int n) : p(n), r(n, 0) { std::iota(p.begin(), p.end(), 0); }
+    int find(int x) { return p[x] == x ? x : p[x] = find(p[x]); }
+    bool unisci(int a, int b) {
+        a = find(a); b = find(b);
+        if (a == b) return false;
+        if (r[a] < r[b]) std::swap(a, b);
+        p[b] = a;
+        if (r[a] == r[b]) ++r[a];
+        return true;
+    }
+};
+
+int province(const std::vector<std::vector<int>>& m) {
+    int n = m.size(), componenti = n;
+    DSU d(n);
+    for (int i = 0; i < n; ++i)
+        for (int j = i + 1; j < n; ++j)
+            if (m[i][j] && d.unisci(i, j)) --componenti;   // ogni unione riuscita ne toglie una
+    return componenti;
+}
+
+int main() {
+    std::cout << province({{1, 1, 0}, {1, 1, 0}, {0, 0, 1}}) << ' '
+              << province({{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}) << '\n';
+}
+```
+
+```text
+2 3
+```
+
+#### Soluzione 10.4
+
+La pila contiene gli indici dei giorni che aspettano ancora una temperatura piu' alta, con temperature decrescenti dal fondo alla cima. Quando arriva un giorno piu' caldo, risolve tutti quelli in cima piu' freddi. Ogni indice entra ed esce una volta: O(n).
+
+```cpp
+#include <iostream>
+#include <stack>
+#include <vector>
+
+std::vector<int> attese(const std::vector<int>& t) {
+    std::vector<int> out(t.size(), 0);
+    std::stack<int> s;
+    for (int i = 0; i < (int)t.size(); ++i) {
+        while (!s.empty() && t[s.top()] < t[i]) { out[s.top()] = i - s.top(); s.pop(); }
+        s.push(i);
+    }
+    return out;
+}
+
+int main() {
+    for (int x : attese({73, 74, 75, 71, 69, 72, 76, 73})) std::cout << x << ' ';
+    std::cout << '\n';
+}
+```
+
+```text
+1 1 4 2 1 1 0 0
+```
+
+#### Soluzione 10.5
+
+Il vincolo del BST riguarda **tutto** il sottoalbero: nell'albero `5 -> (sx 4, dx 6 -> (sx 3))` ogni nodo rispetta i propri figli, ma 3 sta nel sottoalbero destro di 5. Si passa quindi lungo la ricorsione l'intervallo `(min, max)` ammesso.
+
+```cpp
+#include <iostream>
+#include <optional>
+
+struct Nodo { int val; Nodo *sx = nullptr, *dx = nullptr; };
+
+bool valido(const Nodo* n, std::optional<int> lo = {}, std::optional<int> hi = {}) {
+    if (!n) return true;
+    if ((lo && n->val <= *lo) || (hi && n->val >= *hi)) return false;
+    return valido(n->sx, lo, n->val) && valido(n->dx, n->val, hi);
+}
+
+int main() {
+    Nodo tre{3}, sei{6, &tre}, quattro{4}, cinque{5, &quattro, &sei};
+    std::cout << valido(&cinque) << ' ';
+    sei.sx = nullptr;
+    std::cout << valido(&cinque) << '\n';
+}
+```
+
+```text
+0 1
+```
+
+Usare `std::optional` invece di `INT_MIN`/`INT_MAX` evita errori quando l'albero contiene proprio quei valori.
+
+#### Soluzione 10.6
+
+```cpp
+#include <iostream>
+#include <queue>
+#include <string>
+#include <utility>
+#include <vector>
+
+int isole(std::vector<std::string> g) {
+    int righe = g.size(), col = g[0].size(), n = 0;
+    const int dr[] = {1, -1, 0, 0}, dc[] = {0, 0, 1, -1};
+    for (int r = 0; r < righe; ++r)
+        for (int c = 0; c < col; ++c) {
+            if (g[r][c] != '1') continue;
+            ++n;
+            std::queue<std::pair<int, int>> q;
+            q.push({r, c}); g[r][c] = '0';             // marca subito come visitata
+            while (!q.empty()) {
+                auto [x, y] = q.front(); q.pop();
+                for (int d = 0; d < 4; ++d) {
+                    int nx = x + dr[d], ny = y + dc[d];
+                    if (nx >= 0 && ny >= 0 && nx < righe && ny < col && g[nx][ny] == '1') {
+                        g[nx][ny] = '0';
+                        q.push({nx, ny});
+                    }
+                }
+            }
+        }
+    return n;
+}
+
+int main() {
+    std::cout << isole({"11000", "11000", "00100", "00011"}) << '\n';
+}
+```
+
+```text
+3
+```
+
+## Soluzioni - Parte 4
+
+### Capitolo 11 - Analisi e tecniche di base
+
+#### Soluzione 11.1
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <random>
+#include <vector>
+
+std::size_t lowerBound(const std::vector<int>& a, int x) {
+    std::size_t lo = 0, hi = a.size();            // risposta in [lo, hi]
+    while (lo < hi) {
+        std::size_t mid = lo + (hi - lo) / 2;
+        if (a[mid] < x) lo = mid + 1; else hi = mid;
+    }
+    return lo;
+}
+
+int main() {
+    std::mt19937 rng(1);
+    std::uniform_int_distribution<int> val(0, 20), len(0, 30);
+    int errori = 0;
+    for (int t = 0; t < 10000; ++t) {
+        std::vector<int> a(len(rng));
+        for (int& x : a) x = val(rng);
+        std::sort(a.begin(), a.end());
+        int x = val(rng);
+        if (lowerBound(a, x) != std::size_t(std::lower_bound(a.begin(), a.end(), x) - a.begin()))
+            ++errori;
+    }
+    std::cout << "errori: " << errori << '\n';
+}
+```
+
+```text
+errori: 0
+```
+
+#### Soluzione 11.2
+
+Se `a[i] + a[j] < target`, nessuna coppia `(i, k)` con `k <= j` puo' funzionare (gli `a[k]` sono ancora piu' piccoli): l'indice `i` si puo' scartare per sempre. Il ragionamento simmetrico vale per `j`. Ogni passo elimina un candidato: O(n).
+
+```cpp
+#include <iostream>
+#include <utility>
+#include <vector>
+
+std::pair<int, int> twoSumOrdinato(const std::vector<int>& a, int target) {
+    int i = 0, j = (int)a.size() - 1;
+    while (i < j) {
+        int s = a[i] + a[j];
+        if (s == target) return {i + 1, j + 1};        // LeetCode usa indici da 1
+        if (s < target) ++i; else --j;
+    }
+    return {-1, -1};
+}
+
+int main() {
+    auto [i, j] = twoSumOrdinato({2, 7, 11, 15}, 9);
+    auto [p, q] = twoSumOrdinato({-1, 0, 3, 5, 8}, 8);
+    std::cout << i << ' ' << j << " | " << p << ' ' << q << '\n';
+}
+```
+
+```text
+1 2 | 2 5
+```
+
+#### Soluzione 11.3
+
+L'area e' limitata dalla parete piu' bassa. Spostare quella piu' alta non puo' migliorare (la larghezza cala e l'altezza resta limitata dalla bassa), quindi si sposta sempre la piu' bassa.
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <vector>
+
+int massimaAcqua(const std::vector<int>& h) {
+    int i = 0, j = (int)h.size() - 1, best = 0;
+    while (i < j) {
+        best = std::max(best, (j - i) * std::min(h[i], h[j]));
+        if (h[i] < h[j]) ++i; else --j;
+    }
+    return best;
+}
+
+int main() { std::cout << massimaAcqua({1, 8, 6, 2, 5, 4, 8, 3, 7}) << '\n'; }
+```
+
+```text
+49
+```
+
+#### Soluzione 11.4
+
+```cpp
+#include <iostream>
+#include <numeric>
+#include <vector>
+
+int pivot(const std::vector<int>& a) {
+    long long totale = std::accumulate(a.begin(), a.end(), 0LL), sinistra = 0;
+    for (int i = 0; i < (int)a.size(); ++i) {
+        if (sinistra == totale - sinistra - a[i]) return i;
+        sinistra += a[i];
+    }
+    return -1;
+}
+
+int main() { std::cout << pivot({1, 7, 3, 6, 5, 6}) << ' ' << pivot({1, 2, 3}) << '\n'; }
+```
+
+```text
+3 -1
+```
+
+#### Soluzione 11.5
+
+- (a) Il corpo viene eseguito 0 + 1 + ... + (n-1) = n(n-1)/2 volte: **O(n^2)**.
+- (b) `i` raddoppia: 1, 2, 4, ... fino a n, cioe' circa log2(n) iterazioni: **O(log n)**.
+- (c) n iterazioni da O(log n) ciascuna: **O(n log n)**.
+- (d) i sottoinsiemi sono 2^n e scriverne uno costa fino a O(n): **O(n 2^n)**. Con n = 20 sono circa 20 milioni di operazioni (ok), con n = 40 mille miliardi (troppe).
+
+#### Soluzione 11.6
+
+```cpp
+#include <array>
+#include <iostream>
+#include <string>
+#include <vector>
+
+std::vector<int> anagrammi(const std::string& s, const std::string& p) {
+    std::vector<int> out;
+    if (s.size() < p.size()) return out;
+    std::array<int, 26> cp{}, cw{};
+    for (char c : p) ++cp[c - 'a'];
+    for (std::size_t i = 0; i < s.size(); ++i) {
+        ++cw[s[i] - 'a'];                                   // entra a destra
+        if (i >= p.size()) --cw[s[i - p.size()] - 'a'];     // esce a sinistra
+        if (i + 1 >= p.size() && cw == cp) out.push_back(i + 1 - p.size());
+    }
+    return out;
+}
+
+int main() {
+    for (int i : anagrammi("cbaebabacd", "abc")) std::cout << i << ' ';
+    std::cout << "| ";
+    for (int i : anagrammi("abab", "ab")) std::cout << i << ' ';
+    std::cout << '\n';
+}
+```
+
+```text
+0 6 | 0 1 2
+```
+
+Il confronto `cw == cp` costa 26 operazioni, una costante: il totale resta O(|s|).
+
+### Capitolo 12 - Ordinamento
+
+#### Soluzione 12.1
+
+Insertion sort fa zero spostamenti su un vettore ordinato (O(n)), circa n^2/4 su uno casuale e n(n-1)/2 su uno al contrario (O(n^2)). Per questo e' ottimo su dati quasi ordinati ed e' usato da introsort per i sottovettori piccoli.
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <numeric>
+#include <random>
+#include <vector>
+
+long long insertionSort(std::vector<int>& a) {
+    long long spostamenti = 0;
+    for (std::size_t i = 1; i < a.size(); ++i) {
+        int x = a[i];
+        std::size_t j = i;
+        while (j > 0 && a[j - 1] > x) { a[j] = a[j - 1]; --j; ++spostamenti; }
+        a[j] = x;
+    }
+    return spostamenti;
+}
+
+int main() {
+    std::vector<int> ord(1000);
+    std::iota(ord.begin(), ord.end(), 0);
+    auto inv = ord;  std::reverse(inv.begin(), inv.end());
+    auto cas = ord;  std::shuffle(cas.begin(), cas.end(), std::mt19937(7));
+    std::cout << insertionSort(ord) << ' ' << insertionSort(inv) << ' '
+              << (insertionSort(cas) > 200000 ? "~n^2/4" : "?") << '\n';
+}
+```
+
+```text
+0 499500 ~n^2/4
+```
+
+#### Soluzione 12.2
+
+Durante la fusione, quando si prende un elemento dalla meta' destra, esso e' minore di tutti quelli rimasti nella meta' sinistra: ciascuno forma con lui un'inversione.
+
+```cpp
+#include <iostream>
+#include <vector>
+
+long long ordinaEConta(std::vector<int>& a, std::vector<int>& tmp, int l, int r) {   // [l, r)
+    if (r - l < 2) return 0;
+    int m = (l + r) / 2;
+    long long inv = ordinaEConta(a, tmp, l, m) + ordinaEConta(a, tmp, m, r);
+    int i = l, j = m, k = l;
+    while (i < m || j < r) {
+        if (j == r || (i < m && a[i] <= a[j])) tmp[k++] = a[i++];
+        else { inv += m - i; tmp[k++] = a[j++]; }
+    }
+    for (int x = l; x < r; ++x) a[x] = tmp[x];
+    return inv;
+}
+
+int main() {
+    std::vector<int> a{8, 4, 2, 1}, b{3, 1, 2}, t(4);
+    std::cout << ordinaEConta(a, t, 0, 4) << ' ' << ordinaEConta(b, t, 0, 3) << '\n';
+}
+```
+
+```text
+6 2
+```
+
+#### Soluzione 12.3
+
+Tre zone: `[0, basso)` contiene 0, `[basso, i)` contiene 1, `(alto, fine]` contiene 2; `[i, alto]` e' ancora da esaminare. Quando si scambia con `alto` non si avanza `i`, perche' l'elemento arrivato non e' ancora stato esaminato.
+
+```cpp
+#include <iostream>
+#include <utility>
+#include <vector>
+
+void ordinaColori(std::vector<int>& a) {
+    int basso = 0, i = 0, alto = (int)a.size() - 1;
+    while (i <= alto) {
+        if (a[i] == 0) std::swap(a[i++], a[basso++]);
+        else if (a[i] == 2) std::swap(a[i], a[alto--]);
+        else ++i;
+    }
+}
+
+int main() {
+    std::vector<int> a{2, 0, 2, 1, 1, 0};
+    ordinaColori(a);
+    for (int x : a) std::cout << x;
+    std::cout << '\n';
+}
+```
+
+```text
+001122
+```
+
+#### Soluzione 12.4
+
+Il candidato guadagna un voto quando ritorna e ne perde uno per ogni elemento diverso; se arriva a zero si cambia candidato. L'elemento di maggioranza (piu' di n/2 occorrenze) non puo' essere "annullato" del tutto, quindi resta come candidato finale.
+
+```cpp
+#include <iostream>
+#include <vector>
+
+int maggioranza(const std::vector<int>& a) {
+    int candidato = 0, voti = 0;
+    for (int x : a) {
+        if (voti == 0) candidato = x;
+        voti += x == candidato ? 1 : -1;
+    }
+    return candidato;   // se la maggioranza non e' garantita va verificato con un conteggio
+}
+
+int main() { std::cout << maggioranza({2, 2, 1, 1, 1, 2, 2}) << maggioranza({3, 3, 4}) << '\n'; }
+```
+
+```text
+23
+```
+
+#### Soluzione 12.5
+
+```cpp
+#include <algorithm>
+#include <cstdint>
+#include <iostream>
+#include <random>
+#include <vector>
+
+void radixSort(std::vector<std::uint32_t>& a) {
+    std::vector<std::uint32_t> tmp(a.size());
+    for (int shift = 0; shift < 32; shift += 8) {        // 4 passate, un byte alla volta
+        std::size_t conta[257] = {};
+        for (auto x : a) ++conta[((x >> shift) & 0xFF) + 1];
+        for (int i = 0; i < 256; ++i) conta[i + 1] += conta[i];   // posizioni di partenza
+        for (auto x : a) tmp[conta[(x >> shift) & 0xFF]++] = x;   // stabile
+        a.swap(tmp);
+    }
+}
+
+int main() {
+    std::mt19937 rng(3);
+    std::vector<std::uint32_t> a(1'000'000);
+    for (auto& x : a) x = rng();
+    auto b = a;
+    radixSort(a);
+    std::sort(b.begin(), b.end());
+    std::cout << (a == b ? "ordinamento corretto" : "ERRORE") << '\n';
+}
+```
+
+```text
+ordinamento corretto
+```
+
+Misurando con `std::chrono` (compilato con `-O2`, senza sanitizer) su 10 milioni di elementi il radix sort e' tipicamente 3-5 volte piu' veloce di `std::sort`: fa 4 passate lineari invece di circa n log n confronti, al prezzo di un vettore temporaneo grande quanto l'input.
+
+### Capitolo 13 - Ricorsione, backtracking, greedy
+
+#### Soluzione 13.1
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <vector>
+
+void permuta(std::vector<int>& a, std::size_t k, std::vector<std::vector<int>>& out) {
+    if (k == a.size()) { out.push_back(a); return; }
+    for (std::size_t i = k; i < a.size(); ++i) {
+        std::swap(a[k], a[i]);          // fissa a[i] in posizione k
+        permuta(a, k + 1, out);
+        std::swap(a[k], a[i]);          // ripristina
+    }
+}
+
+int main() {
+    std::vector<int> a{1, 2, 3};
+    std::vector<std::vector<int>> out, attese;
+    permuta(a, 0, out);
+    do attese.push_back(a); while (std::next_permutation(a.begin(), a.end()));
+    std::sort(out.begin(), out.end());
+    std::cout << out.size() << ' ' << (out == attese ? "uguali" : "diverse") << '\n';
+}
+```
+
+```text
+6 uguali
+```
+
+#### Soluzione 13.2
+
+Per non generare `[2,3]` e `[3,2]` si impone un ordine: ogni chiamata puo' usare solo candidati dall'indice corrente in poi. Ordinare i candidati permette anche di interrompere il ciclo appena si supera il target.
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <vector>
+
+void combina(const std::vector<int>& c, std::size_t da, int resto, std::vector<int>& cur,
+             std::vector<std::vector<int>>& out) {
+    if (resto == 0) { out.push_back(cur); return; }
+    for (std::size_t i = da; i < c.size() && c[i] <= resto; ++i) {
+        cur.push_back(c[i]);
+        combina(c, i, resto - c[i], cur, out);    // i, non i+1: riuso consentito
+        cur.pop_back();
+    }
+}
+
+int main() {
+    std::vector<int> c{2, 3, 6, 7}, cur;
+    std::sort(c.begin(), c.end());
+    std::vector<std::vector<int>> out;
+    combina(c, 0, 7, cur, out);
+    for (auto& v : out) { for (int x : v) std::cout << x; std::cout << ' '; }
+    std::cout << '\n';
+}
+```
+
+```text
+223 7
+```
+
+#### Soluzione 13.3
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <vector>
+
+bool raggiungibile(const std::vector<int>& a) {
+    int lontano = 0;
+    for (int i = 0; i < (int)a.size(); ++i) {
+        if (i > lontano) return false;              // non si arriva nemmeno qui
+        lontano = std::max(lontano, i + a[i]);
+    }
+    return true;
+}
+
+int main() {
+    std::cout << raggiungibile({2, 3, 1, 1, 4}) << raggiungibile({3, 2, 1, 0, 4}) << '\n';
+}
+```
+
+```text
+10
+```
+
+#### Soluzione 13.4
+
+Con {1, 3, 4} e importo 6 il greedy prende 4, poi 1 e 1: tre monete, mentre 3 + 3 ne usa due. Il greedy e' ottimo per i sistemi detti **canonici**, come quello dell'euro (1, 2, 5, 10, 20, 50 centesimi...) o {1, 5, 10, 25}: si verifica che per ogni importo il greedy coincide con la DP dell'Esempio 14.1. In generale, per un sistema arbitrario serve la programmazione dinamica.
+
+#### Soluzione 13.5
+
+Le bitmask permettono di calcolare i candidati di una casella con due OR e un NOT. Scegliere la casella con meno candidati (euristica MRV) riduce drasticamente l'albero di ricerca.
+
+```cpp
+#include <bit>
+#include <iostream>
+#include <string>
+#include <vector>
+
+struct Sudoku {
+    std::vector<std::string> g;
+    int riga[9] = {}, col[9] = {}, box[9] = {};
+
+    explicit Sudoku(std::vector<std::string> s) : g(std::move(s)) {
+        for (int r = 0; r < 9; ++r)
+            for (int c = 0; c < 9; ++c)
+                if (g[r][c] != '.') segna(r, c, g[r][c] - '1');
+    }
+    void segna(int r, int c, int d) {
+        int b = 1 << d;
+        riga[r] ^= b; col[c] ^= b; box[r / 3 * 3 + c / 3] ^= b;
+    }
+    bool risolvi() {
+        int br = -1, bc = -1, bmask = 0, bmin = 10;
+        for (int r = 0; r < 9; ++r)
+            for (int c = 0; c < 9; ++c) {
+                if (g[r][c] != '.') continue;
+                int m = ~(riga[r] | col[c] | box[r / 3 * 3 + c / 3]) & 0x1FF;
+                if (std::popcount(unsigned(m)) < bmin) {
+                    bmin = std::popcount(unsigned(m)); br = r; bc = c; bmask = m;
+                }
+            }
+        if (br < 0) return true;                       // nessuna casella vuota
+        for (int m = bmask; m; m &= m - 1) {
+            int d = std::countr_zero(unsigned(m));
+            g[br][bc] = char('1' + d); segna(br, bc, d);
+            if (risolvi()) return true;
+            segna(br, bc, d); g[br][bc] = '.';         // XOR annulla la scelta
+        }
+        return false;
+    }
+};
+
+int main() {
+    Sudoku s({"53..7....", "6..195...", ".98....6.", "8...6...3", "4..8.3..1",
+              "7...2...6", ".6....28.", "...419..5", "....8..79"});
+    if (s.risolvi()) for (auto& r : s.g) std::cout << r << '\n';
+}
+```
+
+```text
+534678912
+672195348
+198342567
+859761423
+426853791
+713924856
+961537284
+287419635
+345286179
+```
+
+### Capitolo 14 - Programmazione dinamica
+
+#### Soluzione 14.1
+
+`dp[i]` = costo minimo per arrivare al gradino i = `min(dp[i-1] + c[i-1], dp[i-2] + c[i-2])`. Servono solo gli ultimi due valori.
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <vector>
+
+int costoMinimo(const std::vector<int>& c) {
+    int a = 0, b = 0;                                // dp[i-2], dp[i-1]
+    for (std::size_t i = 2; i <= c.size(); ++i) {
+        int nuovo = std::min(b + c[i - 1], a + c[i - 2]);
+        a = b; b = nuovo;
+    }
+    return b;
+}
+
+int main() {
+    std::cout << costoMinimo({10, 15, 20}) << ' '
+              << costoMinimo({1, 100, 1, 1, 1, 100, 1, 1, 100, 1}) << '\n';
+}
+```
+
+```text
+15 6
+```
+
+#### Soluzione 14.2
+
+Ricorrenza: `dp[i] = max(dp[i-1], dp[i-2] + a[i])` (o salto la casa i, o la svaligio e non ho toccato la i-1).
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <vector>
+
+int bottino(const std::vector<int>& a) {
+    int prec2 = 0, prec1 = 0;
+    for (int x : a) {
+        int cur = std::max(prec1, prec2 + x);
+        prec2 = prec1; prec1 = cur;
+    }
+    return prec1;
+}
+
+int main() { std::cout << bottino({1, 2, 3, 1}) << ' ' << bottino({2, 7, 9, 3, 1}) << '\n'; }
+```
+
+```text
+4 12
+```
+
+#### Soluzione 14.3
+
+`dp[i][j]` = operazioni per trasformare i primi i caratteri di `a` nei primi j di `b`. Se i caratteri finali coincidono costa `dp[i-1][j-1]`, altrimenti `1 + min(sostituzione dp[i-1][j-1], cancellazione dp[i-1][j], inserimento dp[i][j-1])`.
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <string>
+#include <vector>
+
+int editDistance(const std::string& a, const std::string& b) {
+    std::size_t n = a.size(), m = b.size();
+    std::vector<std::vector<int>> dp(n + 1, std::vector<int>(m + 1));
+    for (std::size_t i = 0; i <= n; ++i) dp[i][0] = i;     // cancellare tutto
+    for (std::size_t j = 0; j <= m; ++j) dp[0][j] = j;     // inserire tutto
+    for (std::size_t i = 1; i <= n; ++i)
+        for (std::size_t j = 1; j <= m; ++j)
+            dp[i][j] = a[i - 1] == b[j - 1]
+                ? dp[i - 1][j - 1]
+                : 1 + std::min({dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]});
+    return dp[n][m];
+}
+
+int main() {
+    std::cout << editDistance("horse", "ros") << ' ' << editDistance("intention", "execution")
+              << ' ' << editDistance("gatto", "gatti") << '\n';
+}
+```
+
+```text
+3 5 1
+```
+
+#### Soluzione 14.4
+
+`dp[j]` contiene i percorsi fino alla cella `(i, j)` della riga corrente: prima dell'aggiornamento vale il valore della riga sopra, `dp[j-1]` quello della cella a sinistra.
+
+```cpp
+#include <iostream>
+#include <vector>
+
+long long percorsi(const std::vector<std::vector<int>>& g) {
+    std::vector<long long> dp(g[0].size(), 0);
+    dp[0] = 1;
+    for (const auto& riga : g)
+        for (std::size_t j = 0; j < riga.size(); ++j) {
+            if (riga[j] == 1) dp[j] = 0;            // ostacolo
+            else if (j > 0) dp[j] += dp[j - 1];     // sopra + sinistra
+        }
+    return dp.back();
+}
+
+int main() {
+    std::cout << percorsi({{0, 0, 0}, {0, 1, 0}, {0, 0, 0}}) << ' '
+              << percorsi({{0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}}) << '\n';
+}
+```
+
+```text
+2 10
+```
+
+#### Soluzione 14.5
+
+`code[k]` e' il piu' piccolo elemento finale possibile di una sottosequenza crescente di lunghezza k+1. Il vettore resta ordinato, quindi per ogni nuovo elemento basta una ricerca binaria: o estende la sequenza piu' lunga, o migliora (abbassa) una coda esistente.
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <vector>
+
+int lis(const std::vector<int>& a) {
+    std::vector<int> code;
+    for (int x : a) {
+        auto it = std::lower_bound(code.begin(), code.end(), x);   // strettamente crescente
+        if (it == code.end()) code.push_back(x); else *it = x;
+    }
+    return code.size();
+}
+
+int main() {
+    std::cout << lis({10, 9, 2, 5, 3, 7, 101, 18}) << ' ' << lis({7, 7, 7}) << ' '
+              << lis({0, 1, 0, 3, 2, 3}) << '\n';
+}
+```
+
+```text
+4 1 4
+```
+
+#### Soluzione 14.6
+
+Serve un sottoinsieme di somma `totale / 2`. `possibile[s]` dice se la somma s e' formabile; come nello zaino 0/1 si scorre all'indietro per non usare due volte lo stesso elemento. Con `std::bitset` tutta la riga si aggiorna con un'unica istruzione `bits |= bits << x`, che elabora 64 somme per operazione macchina.
+
+```cpp
+#include <bitset>
+#include <iostream>
+#include <numeric>
+#include <vector>
+
+bool partizionabile(const std::vector<int>& a) {
+    int tot = std::accumulate(a.begin(), a.end(), 0);
+    if (tot % 2) return false;
+    std::vector<bool> possibile(tot / 2 + 1, false);
+    possibile[0] = true;
+    for (int x : a)
+        for (int s = tot / 2; s >= x; --s)
+            if (possibile[s - x]) possibile[s] = true;
+    return possibile[tot / 2];
+}
+
+bool partizionabileBitset(const std::vector<int>& a) {
+    std::bitset<20001> bits(1);                    // bit s acceso = somma s formabile
+    int tot = 0;
+    for (int x : a) { bits |= bits << x; tot += x; }
+    return tot % 2 == 0 && bits[tot / 2];
+}
+
+int main() {
+    std::cout << partizionabile({1, 5, 11, 5}) << partizionabile({1, 2, 3, 5}) << ' '
+              << partizionabileBitset({1, 5, 11, 5}) << partizionabileBitset({1, 2, 3, 5}) << '\n';
+}
+```
+
+```text
+10 10
+```
+
+### Capitolo 15 - Algoritmi su grafi
+
+#### Soluzione 15.1
+
+```cpp
+#include <algorithm>
+#include <climits>
+#include <iostream>
+#include <queue>
+#include <vector>
+
+int ritardo(const std::vector<std::vector<int>>& tempi, int n, int k) {
+    std::vector<std::vector<std::pair<int, int>>> g(n + 1);
+    for (const auto& t : tempi) g[t[0]].push_back({t[1], t[2]});
+    std::vector<int> d(n + 1, INT_MAX);
+    using P = std::pair<int, int>;
+    std::priority_queue<P, std::vector<P>, std::greater<>> pq;
+    d[k] = 0; pq.push({0, k});
+    while (!pq.empty()) {
+        auto [du, u] = pq.top(); pq.pop();
+        if (du > d[u]) continue;
+        for (auto [v, w] : g[u]) if (du + w < d[v]) { d[v] = du + w; pq.push({d[v], v}); }
+    }
+    int m = *std::max_element(d.begin() + 1, d.end());
+    return m == INT_MAX ? -1 : m;
+}
+
+int main() {
+    std::cout << ritardo({{2, 1, 1}, {2, 3, 1}, {3, 4, 1}}, 4, 2) << ' '
+              << ritardo({{1, 2, 1}}, 2, 2) << '\n';
+}
+```
+
+```text
+2 -1
+```
+
+#### Soluzione 15.2
+
+Floyd-Warshall prova ogni nodo `k` come intermedio: `d[i][j] = min(d[i][j], d[i][k] + d[k][j])`. L'ordine dei cicli e' essenziale: `k` deve essere il ciclo esterno.
+
+```cpp
+#include <algorithm>
+#include <iomanip>
+#include <iostream>
+#include <vector>
+
+int main() {
+    const int INF = 1'000'000, n = 6;
+    std::vector<std::vector<int>> d(n, std::vector<int>(n, INF));
+    struct Arco { int a, b, km; };
+    for (auto [a, b, km] : std::vector<Arco>{{0, 1, 214}, {0, 5, 142}, {1, 2, 106}, {5, 2, 230},
+                                             {2, 3, 273}, {1, 3, 380}, {3, 4, 226}, {5, 3, 501}})
+        d[a][b] = d[b][a] = km;
+    for (int i = 0; i < n; ++i) d[i][i] = 0;
+    for (int k = 0; k < n; ++k)
+        for (int i = 0; i < n; ++i)
+            for (int j = 0; j < n; ++j)
+                d[i][j] = std::min(d[i][j], d[i][k] + d[k][j]);
+    for (const auto& riga : d) {
+        for (int x : riga) std::cout << std::setw(5) << x;
+        std::cout << '\n';
+    }
+}
+```
+
+```text
+    0  214  320  593  819  142
+  214    0  106  379  605  336
+  320  106    0  273  499  230
+  593  379  273    0  226  501
+  819  605  499  226    0  727
+  142  336  230  501  727    0
+```
+
+La matrice rivela un dettaglio che Dijkstra da Milano non mostrava: tra Bologna e Genova conviene passare per Firenze (106 + 230 = 336) invece che per Milano (214 + 142 = 356).
+
+#### Soluzione 15.3
+
+Dopo `n - 1` rilassamenti di tutti gli archi le distanze sono definitive, se non ci sono cicli negativi; se un ulteriore passo migliora ancora qualcosa, un ciclo negativo esiste. Con i cambi valutari: un ciclo con prodotto dei tassi > 1 (arbitraggio) ha somma di `-log(tasso)` negativa.
+
+```cpp
+#include <cmath>
+#include <iostream>
+#include <vector>
+
+struct Arco { int a, b; double w; };
+
+bool cicloNegativo(int n, const std::vector<Arco>& archi) {
+    std::vector<double> d(n, 0.0);          // partenza "virtuale" da tutti i nodi
+    for (int i = 0; i < n - 1; ++i)
+        for (const auto& e : archi)
+            if (d[e.a] + e.w < d[e.b]) d[e.b] = d[e.a] + e.w;
+    for (const auto& e : archi)
+        if (d[e.a] + e.w < d[e.b] - 1e-12) return true;
+    return false;
+}
+
+int main() {
+    // 0 = EUR, 1 = USD, 2 = GBP; tassi di cambio
+    auto archiDa = [](double eurUsd, double usdGbp, double gbpEur) {
+        return std::vector<Arco>{{0, 1, -std::log(eurUsd)}, {1, 2, -std::log(usdGbp)},
+                                 {2, 0, -std::log(gbpEur)}};
+    };
+    std::cout << cicloNegativo(3, archiDa(1.10, 0.80, 1.12)) << ' '      // 1.10*0.80*1.12 < 1
+              << cicloNegativo(3, archiDa(1.10, 0.80, 1.16)) << '\n';    // 1.0208 > 1
+}
+```
+
+```text
+0 1
+```
+
+#### Soluzione 15.4
+
+```cpp
+#include <iostream>
+#include <queue>
+#include <tuple>
+#include <vector>
+
+int main() {
+    int n = 5;
+    std::vector<std::vector<std::pair<int, int>>> g(n);        // (vicino, costo)
+    for (auto [c, a, b] : std::vector<std::tuple<int, int, int>>{
+             {4, 0, 1}, {8, 0, 2}, {2, 1, 2}, {6, 1, 3}, {3, 2, 3}, {9, 3, 4}, {5, 2, 4}}) {
+        g[a].push_back({b, c});
+        g[b].push_back({a, c});
+    }
+    std::vector<bool> inAlbero(n, false);
+    using P = std::pair<int, int>;                              // (costo, nodo)
+    std::priority_queue<P, std::vector<P>, std::greater<>> pq;
+    pq.push({0, 0});
+    int totale = 0;
+    while (!pq.empty()) {
+        auto [c, u] = pq.top(); pq.pop();
+        if (inAlbero[u]) continue;
+        inAlbero[u] = true;
+        totale += c;
+        for (auto [v, w] : g[u]) if (!inAlbero[v]) pq.push({w, v});
+    }
+    std::cout << "costo totale: " << totale << '\n';
+}
+```
+
+```text
+costo totale: 14
+```
+
+#### Soluzione 15.5
+
+Dijkstra fissa per ogni nodo **una** distanza, ma qui un percorso piu' caro con meno scali puo' essere l'unico che rispetta il vincolo. Bellman-Ford alla iterazione i trova i costi minimi usando al massimo i archi; ci fermiamo a k+1 archi. Ogni iterazione deve leggere i valori della precedente (copia `prec`), altrimenti un'iterazione potrebbe usare piu' archi.
+
+```cpp
+#include <climits>
+#include <iostream>
+#include <vector>
+
+int voloEconomico(int n, const std::vector<std::vector<int>>& voli, int src, int dst, int k) {
+    std::vector<int> d(n, INT_MAX);
+    d[src] = 0;
+    for (int i = 0; i <= k; ++i) {
+        auto prec = d;
+        for (const auto& f : voli)
+            if (prec[f[0]] != INT_MAX && prec[f[0]] + f[2] < d[f[1]]) d[f[1]] = prec[f[0]] + f[2];
+    }
+    return d[dst] == INT_MAX ? -1 : d[dst];
+}
+
+int main() {
+    std::vector<std::vector<int>> voli{{0, 1, 100}, {1, 2, 100}, {2, 3, 100}, {0, 2, 500},
+                                       {1, 3, 600}};
+    std::cout << voloEconomico(4, voli, 0, 3, 1) << ' ' << voloEconomico(4, voli, 0, 3, 2) << ' '
+              << voloEconomico(4, voli, 0, 3, 0) << '\n';
+}
+```
+
+```text
+600 300 -1
+```
+
+### Capitolo 16 - Stringhe, matematica e bit manipulation
+
+#### Soluzione 16.1
+
+`x ^ x = 0` e `x ^ 0 = x`: facendo lo XOR di tutti gli indici 0..n e di tutti gli elementi, ogni numero presente si annulla con se stesso e resta solo il mancante. Nessuna somma, quindi nessun overflow.
+
+```cpp
+#include <iostream>
+#include <vector>
+
+int mancante(const std::vector<int>& a) {
+    int x = a.size();
+    for (int i = 0; i < (int)a.size(); ++i) x ^= i ^ a[i];
+    return x;
+}
+
+int main() {
+    std::cout << mancante({3, 0, 1}) << ' ' << mancante({9, 6, 4, 2, 3, 5, 7, 0, 1}) << '\n';
+}
+```
+
+```text
+2 8
+```
+
+#### Soluzione 16.2
+
+```cpp
+#include <climits>
+#include <iostream>
+#include <string_view>
+
+int convertiIntero(std::string_view s) {
+    std::size_t i = 0;
+    while (i < s.size() && s[i] == ' ') ++i;
+    int segno = 1;
+    if (i < s.size() && (s[i] == '+' || s[i] == '-')) segno = s[i++] == '-' ? -1 : 1;
+    long long r = 0;
+    for (; i < s.size() && s[i] >= '0' && s[i] <= '9'; ++i) {
+        r = r * 10 + (s[i] - '0');
+        if (segno * r > INT_MAX) return INT_MAX;       // satura prima di superare long long
+        if (segno * r < INT_MIN) return INT_MIN;
+    }
+    return static_cast<int>(segno * r);
+}
+
+int main() {
+    for (auto s : {"42", "   -042", "1337c0d3", "words 1", "-91283472332", "+"})
+        std::cout << convertiIntero(s) << ' ';
+    std::cout << '\n';
+}
+```
+
+```text
+42 -42 1337 0 -2147483648 0
+```
+
+NOTA: Chiamare la funzione `atoi` sarebbe un errore insidioso: con un argomento `const char*` il compilatore preferirebbe `::atoi` della libreria C (corrispondenza esatta) alla nostra versione con `std::string_view` (che richiede una conversione), senza alcun avviso.
+
+#### Soluzione 16.3
+
+La cifra `i` del primo numero per la cifra `j` del secondo contribuisce alla posizione `i + j + 1` del risultato (che ha al massimo n + m cifre); i riporti si propagano verso sinistra.
+
+```cpp
+#include <iostream>
+#include <string>
+#include <vector>
+
+std::string moltiplica(const std::string& a, const std::string& b) {
+    std::vector<int> r(a.size() + b.size(), 0);
+    for (int i = (int)a.size() - 1; i >= 0; --i)
+        for (int j = (int)b.size() - 1; j >= 0; --j) {
+            int somma = (a[i] - '0') * (b[j] - '0') + r[i + j + 1];
+            r[i + j + 1] = somma % 10;
+            r[i + j] += somma / 10;
+        }
+    std::string out;
+    for (int d : r) if (!(out.empty() && d == 0)) out += char('0' + d);   // salta zeri iniziali
+    return out.empty() ? "0" : out;
+}
+
+int main() {
+    std::cout << moltiplica("123", "456") << ' ' << moltiplica("99", "0") << ' '
+              << moltiplica("123456789", "987654321") << '\n';
+}
+```
+
+```text
+56088 0 121932631112635269
+```
+
+#### Soluzione 16.4
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <vector>
+
+void ruota(std::vector<std::vector<int>>& m) {
+    std::size_t n = m.size();
+    for (std::size_t i = 0; i < n; ++i)
+        for (std::size_t j = i + 1; j < n; ++j) std::swap(m[i][j], m[j][i]);   // trasposta
+    for (auto& riga : m) std::reverse(riga.begin(), riga.end());               // specchio
+}
+
+int main() {
+    std::vector<std::vector<int>> m{{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+    ruota(m);
+    for (auto& r : m) { for (int x : r) std::cout << x << ' '; std::cout << '\n'; }
+}
+```
+
+```text
+7 4 1
+8 5 2
+9 6 3
+```
+
+#### Soluzione 16.5
+
+L'hash di una finestra di lunghezza m si aggiorna in O(1): si toglie il contributo del carattere uscente (moltiplicato per `B^(m-1)`), si moltiplica per la base e si aggiunge il carattere entrante. Uguaglianza di hash non implica uguaglianza di stringhe, quindi i candidati si verificano.
+
+```cpp
+#include <iostream>
+#include <string>
+#include <vector>
+
+std::vector<int> rabinKarp(const std::string& t, const std::string& p) {
+    const unsigned long long MOD = 1'000'000'007, B = 131;
+    std::size_t m = p.size();
+    std::vector<int> out;
+    if (m == 0 || m > t.size()) return out;
+    unsigned long long hp = 0, ht = 0, potenza = 1;
+    for (std::size_t i = 0; i < m; ++i) {
+        hp = (hp * B + (unsigned char)p[i]) % MOD;
+        ht = (ht * B + (unsigned char)t[i]) % MOD;
+        if (i) potenza = potenza * B % MOD;                  // B^(m-1)
+    }
+    for (std::size_t i = 0;; ++i) {
+        if (hp == ht && t.compare(i, m, p) == 0) out.push_back(i);
+        if (i + m == t.size()) break;
+        ht = (ht + MOD - (unsigned char)t[i] * potenza % MOD) % MOD;   // esce t[i]
+        ht = (ht * B + (unsigned char)t[i + m]) % MOD;                 // entra t[i+m]
+    }
+    return out;
+}
+
+int main() {
+    for (int i : rabinKarp("abababcabababab", "abab")) std::cout << i << ' ';
+    std::cout << '\n';
+}
+```
+
+```text
+0 2 7 9 11
+```
+
+## Soluzioni - Parte 5
+
+### Capitolo 17 - Concorrenza e parallelismo
+
+#### Soluzione 17.1
+
+Ogni `promise` e' un segnale "una tantum": `secondo` attende che `primo` abbia finito, `terzo` attende `secondo`. I thread vengono avviati apposta in ordine inverso.
+
+```cpp
+#include <future>
+#include <iostream>
+#include <thread>
+
+class Ordinato {
+    std::promise<void> p1_, p2_;
+    std::shared_future<void> f1_ = p1_.get_future().share(), f2_ = p2_.get_future().share();
+public:
+    void primo()   { std::cout << "primo ";   p1_.set_value(); }
+    void secondo() { f1_.wait(); std::cout << "secondo "; p2_.set_value(); }
+    void terzo()   { f2_.wait(); std::cout << "terzo\n"; }
+};
+
+int main() {
+    Ordinato o;
+    std::jthread c([&] { o.terzo(); }), b([&] { o.secondo(); }), a([&] { o.primo(); });
+}
+```
+
+```text
+primo secondo terzo
+```
+
+#### Soluzione 17.2
+
+Con `std::atomic<long>` il risultato e' sempre 400000 e il codice e' piu' veloce del mutex (un'istruzione atomica `lock xadd` invece di lock/unlock). Senza sincronizzazione `++contatore` e' una sequenza leggi-modifica-scrivi non atomica: due thread leggono lo stesso valore e un incremento si perde, quindi il risultato e' quasi sempre minore di 400000 e cambia a ogni esecuzione. ThreadSanitizer segnala `WARNING: ThreadSanitizer: data race` indicando le due righe in conflitto; formalmente il programma ha comportamento indefinito, non semplicemente "un risultato sbagliato".
+
+```cpp
+#include <atomic>
+#include <iostream>
+#include <thread>
+#include <vector>
+
+int main() {
+    std::atomic<long> contatore{0};
+    {
+        std::vector<std::jthread> ts;
+        for (int i = 0; i < 4; ++i)
+            ts.emplace_back([&] {
+                for (int k = 0; k < 100000; ++k) contatore.fetch_add(1, std::memory_order_relaxed);
+            });
+    }
+    std::cout << contatore << '\n';
+}
+```
+
+```text
+400000
+```
+
+`memory_order_relaxed` basta perche' il contatore non viene usato per sincronizzare altri dati: interessa solo il valore finale, letto dopo il join.
+
+#### Soluzione 17.3
+
+```cpp
+#include <iostream>
+#include <semaphore>
+#include <thread>
+
+int main() {
+    const int n = 3;
+    std::binary_semaphore turnoFoo{1}, turnoBar{0};     // inizia foo
+    std::jthread foo([&] {
+        for (int i = 0; i < n; ++i) { turnoFoo.acquire(); std::cout << "foo"; turnoBar.release(); }
+    });
+    std::jthread bar([&] {
+        for (int i = 0; i < n; ++i) { turnoBar.acquire(); std::cout << "bar"; turnoFoo.release(); }
+    });
+    bar.join(); foo.join();
+    std::cout << '\n';
+}
+```
+
+```text
+foobarfoobarfoobar
+```
+
+#### Soluzione 17.4
+
+`std::packaged_task` avvolge una funzione e ne espone il risultato tramite un `future`. Poiche' `packaged_task` non e' copiabile, la coda contiene `std::function<void()>` che possiedono il task tramite `shared_ptr`.
+
+```cpp
+#include <condition_variable>
+#include <functional>
+#include <future>
+#include <iostream>
+#include <memory>
+#include <mutex>
+#include <queue>
+#include <thread>
+#include <vector>
+
+class ThreadPool {
+    std::mutex m_;
+    std::condition_variable cv_;
+    std::queue<std::function<void()>> lavori_;
+    bool stop_ = false;
+    std::vector<std::jthread> thread_;
+public:
+    explicit ThreadPool(unsigned n) {
+        for (unsigned i = 0; i < n; ++i)
+            thread_.emplace_back([this] {
+                for (;;) {
+                    std::function<void()> lavoro;
+                    {
+                        std::unique_lock lk(m_);
+                        cv_.wait(lk, [this] { return stop_ || !lavori_.empty(); });
+                        if (stop_ && lavori_.empty()) return;
+                        lavoro = std::move(lavori_.front());
+                        lavori_.pop();
+                    }
+                    lavoro();                          // eseguito fuori dal lock
+                }
+            });
+    }
+    template <typename F>
+    auto invia(F f) -> std::future<decltype(f())> {
+        auto task = std::make_shared<std::packaged_task<decltype(f())()>>(std::move(f));
+        auto fut = task->get_future();
+        { std::lock_guard lk(m_); lavori_.push([task] { (*task)(); }); }
+        cv_.notify_one();
+        return fut;
+    }
+    ~ThreadPool() {
+        { std::lock_guard lk(m_); stop_ = true; }
+        cv_.notify_all();                              // i jthread fanno join dopo
+    }
+};
+
+int main() {
+    ThreadPool pool(4);
+    std::vector<std::future<long long>> risultati;
+    for (int i = 1; i <= 8; ++i)
+        risultati.push_back(pool.invia([i] {
+            long long s = 0;
+            for (int k = 1; k <= i * 1000; ++k) s += k;
+            return s;
+        }));
+    for (auto& r : risultati) std::cout << r.get() << ' ';
+    std::cout << '\n';
+}
+```
+
+```text
+500500 2001000 4501500 8002000 12502500 18003000 24503500 32004000
+```
+
+### Capitolo 18 - Prestazioni e ottimizzazione
+
+#### Soluzione 18.1
+
+```cpp
+#include <iostream>
+#include <vector>
+
+int main() {
+    std::vector<int> v;
+    std::size_t cap = v.capacity(), cambi = 0;
+    for (int i = 0; i < 1000; ++i) {
+        v.push_back(i);
+        if (v.capacity() != cap) { ++cambi; cap = v.capacity(); std::cout << cap << ' '; }
+    }
+    std::cout << "\nriallocazioni: " << cambi << '\n';
+    std::vector<int> w;
+    w.reserve(1000);
+    cap = w.capacity(); cambi = 0;
+    for (int i = 0; i < 1000; ++i) { w.push_back(i); if (w.capacity() != cap) ++cambi; }
+    std::cout << "con reserve: " << cambi << '\n';
+}
+```
+
+```text
+1 2 4 8 16 32 64 128 256 512 1024
+riallocazioni: 11
+con reserve: 0
+```
+
+libstdc++ (GCC) e libc++ (Clang) raddoppiano la capacita'; MSVC la moltiplica per 1,5. La crescita geometrica e' cio' che rende `push_back` O(1) ammortizzato: il costo totale delle copie e' al massimo circa 2n.
+
+#### Soluzione 18.2
+
+Ogni particella in formato AoS occupa 64 byte (6 float + 40 char): per aggiornare le posizioni si caricano in cache anche i nomi, che non servono, e ogni linea di cache contiene una sola particella. In formato SoA i sei vettori di `float` sono contigui: ogni linea contiene 16 valori utili e il compilatore puo' vettorizzare il ciclo con istruzioni SIMD. Con `-O2` la versione SoA e' tipicamente 2-4 volte piu' veloce.
+
+```cpp
+#include <iostream>
+#include <vector>
+
+struct P { float x, y, z, vx, vy, vz; char nome[40]; };          // array of structs
+
+struct Particelle {                                              // struct of arrays
+    std::vector<float> x, y, z, vx, vy, vz;
+    explicit Particelle(std::size_t n) : x(n), y(n), z(n), vx(n, 1), vy(n, 2), vz(n, 3) {}
+};
+
+int main() {
+    const std::size_t n = 1'000'000;
+    const float dt = 0.5f;
+    std::vector<P> aos(n, P{0, 0, 0, 1, 2, 3, {}});
+    for (auto& p : aos) { p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; }
+
+    Particelle soa(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        soa.x[i] += soa.vx[i] * dt; soa.y[i] += soa.vy[i] * dt; soa.z[i] += soa.vz[i] * dt;
+    }
+    std::cout << sizeof(P) << ' ' << aos[7].z << ' ' << soa.z[7] << '\n';
+}
+```
+
+```text
+64 1.5 1.5
+```
+
+Per misurare i tempi si avvolgono i due cicli nella funzione `millisecondi` dell'Esempio 18.1.
+
+#### Soluzione 18.3
+
+La versione originale copia `s` e `p` (due allocazioni per il passaggio per valore) e crea una terza stringa con `substr`. Con `std::string_view` non si alloca nulla; dal C++20 esiste anche `starts_with`.
+
+```cpp
+#include <iostream>
+#include <string_view>
+
+bool inizia(std::string_view s, std::string_view p) {
+    return s.size() >= p.size() && s.compare(0, p.size(), p) == 0;   // o s.starts_with(p)
+}
+
+int main() {
+    std::cout << inizia("programmazione", "progr") << inizia("ciao", "ciaone") << '\n';
+}
+```
+
+```text
+10
+```
+
+#### Soluzione 18.4
+
+`i` e' `unsigned`, quindi `i >= 0` e' sempre vero: dopo 0, `--i` produce 4294967295 e il ciclo prosegue (accedendo fuori dai limiti). Nel secondo caso l'overflow di `x + 1` e' UB: il compilatore ragiona come se non potesse accadere, deduce che `x + 1 < x` e' sempre falso e rimuove il ramo. Versioni corrette:
+
+```cpp
+#include <climits>
+#include <cstddef>
+#include <iostream>
+#include <vector>
+
+int main() {
+    std::vector<int> v{1, 2, 3};
+    for (std::size_t i = v.size(); i-- > 0;) std::cout << v[i];   // decrementa dopo il test
+    std::cout << ' ';
+    int x = INT_MAX;
+    bool overflow = x > INT_MAX - 1;                               // controllo prima della somma
+    int r;
+    bool overflow2 = __builtin_add_overflow(x, 1, &r);             // GCC/Clang
+    std::cout << overflow << overflow2 << '\n';
+}
+```
+
+```text
+321 11
+```
+
+### Capitolo 19 - Le principali librerie del C++
+
+#### Soluzione 19.1
+
+```json
+{
+  "version": 6,
+  "configurePresets": [
+    { "name": "debug", "binaryDir": "build/debug",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer" } },
+    { "name": "release", "binaryDir": "build/release",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "CMAKE_CXX_FLAGS": "-O2" } }
+  ],
+  "buildPresets": [
+    { "name": "debug", "configurePreset": "debug" },
+    { "name": "release", "configurePreset": "release" }
+  ]
+}
+```
+
+```bash
+cmake --preset debug && cmake --build --preset debug && ctest --test-dir build/debug
+```
+
+#### Soluzione 19.2
+
+Casi limite spesso dimenticati: stringa vuota, solo segno (`"-"`), `"+0"`, il valore esatto `INT_MIN` (il cui opposto non e' rappresentabile), spazi finali e caratteri dopo le cifre.
+
+```cpp
+#include <charconv>
+#include <iostream>
+#include <optional>
+#include <string_view>
+
+std::optional<int> parseInt(std::string_view s) {
+    if (!s.empty() && s[0] == '+') {                            // from_chars non accetta '+'
+        s.remove_prefix(1);
+        if (!s.empty() && s[0] == '-') return std::nullopt;     // "+-3" non e' valido
+    }
+    int v;
+    auto [p, e] = std::from_chars(s.data(), s.data() + s.size(), v);
+    if (e != std::errc{} || p != s.data() + s.size() || s.empty()) return std::nullopt;
+    return v;
+}
+
+int falliti = 0;
+#define CHECK(expr) \
+    do { if (!(expr)) { ++falliti; std::cout << "FALLITO: " #expr "\n"; } } while (0)
+
+int main() {
+    CHECK(parseInt("42") == 42);
+    CHECK(parseInt("-17") == -17);
+    CHECK(parseInt("+5") == 5);
+    CHECK(parseInt("-2147483648") == -2147483648LL);
+    CHECK(!parseInt("2147483648"));          // overflow
+    CHECK(!parseInt(""));
+    CHECK(!parseInt("-"));
+    CHECK(!parseInt(" 42"));                 // spazi: scelta di progetto, qui rifiutati
+    CHECK(!parseInt("42 "));
+    CHECK(!parseInt("12abc"));
+    CHECK(!parseInt("+-3"));
+    std::cout << (falliti ? "ci sono errori" : "tutti i test superati") << '\n';
+}
+```
+
+```text
+tutti i test superati
+```
+
+Il caso `"+-3"` merita attenzione: nella prima stesura della soluzione il `+` veniva rimosso e `from_chars` accettava poi `-3`, restituendo -3. E' stato proprio questo test a scoprirlo: i casi limite vanno scritti **prima** di convincersi che il codice sia corretto.
+
+#### Soluzione 19.3
+
+```yaml
+# .clang-tidy
+Checks: >
+  -*,
+  modernize-*,
+  bugprone-*,
+  performance-*,
+  -modernize-use-trailing-return-type
+WarningsAsErrors: 'bugprone-use-after-move'
+HeaderFilterRegex: 'include/.*'
+```
+
+```cpp
+// non eseguire: file di prova per clang-tidy
+#include <string>
+#include <utility>
+#include <vector>
+int main() {
+    std::string s = "ciao";
+    std::vector<std::string> v;
+    v.push_back(std::move(s));
+    return static_cast<int>(s.size());     // clang-tidy: 's' used after it was moved
+}
+```
+
+```bash
+clang-tidy uso.cpp -- -std=c++20
+# error: 's' used after it was moved [bugprone-use-after-move,-warnings-as-errors]
+```
+
+#### Soluzione 19.4
+
+```yaml
+# .github/workflows/ci.yml
+name: CI
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        compilatore: [g++, clang++]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configura
+        run: >
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_COMPILER=${{ matrix.compilatore }}
+          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined"
+      - name: Compila
+        run: cmake --build build -j
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+  formato:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: find src include test -name '*.[ch]pp' | xargs clang-format --dry-run --Werror
+```
+
+## Soluzioni - Parte 6
+
+### Capitolo 20 - Programmazione web con C++
+
+#### Soluzione 20.1
+
+```cpp
+#include <cctype>
+#include <iostream>
+#include <string>
+#include <string_view>
+
+int esadecimale(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return c >= 'a' && c <= 'f' ? c - 'a' + 10 : -1;
+}
+
+std::string decodificaURL(std::string_view s) {
+    std::string out;
+    for (std::size_t i = 0; i < s.size(); ++i) {
+        if (s[i] == '+') out += ' ';
+        else if (s[i] == '%' && i + 2 < s.size() && esadecimale(s[i + 1]) >= 0 &&
+                 esadecimale(s[i + 2]) >= 0) {
+            out += static_cast<char>(esadecimale(s[i + 1]) * 16 + esadecimale(s[i + 2]));
+            i += 2;
+        } else out += s[i];                       // '%' malformato: lasciato com'e'
+    }
+    return out;
+}
+
+int main() {
+    std::cout << decodificaURL("Anna%20Maria") << " | " << decodificaURL("a+b%3Dc") << " | "
+              << decodificaURL("100%") << '\n';
+}
+```
+
+```text
+Anna Maria | a b=c | 100%
+```
+
+Nota: la decodifica va fatta **dopo** aver diviso la query su `&` e `=`, altrimenti un `%26` (che e' `&`) codificato dentro un valore verrebbe scambiato per un separatore.
+
+#### Soluzione 20.2
+
+Un contatore crescente convertito in base 62 produce codici brevi e unici senza collisioni (a differenza di un hash troncato). In un sistema reale i codici sequenziali sono prevedibili: si puo' mescolare il contatore con una permutazione invertibile.
+
+```cpp
+#include <iostream>
+#include <string>
+#include <unordered_map>
+
+class TinyURL {
+    static constexpr const char* ALFABETO =
+        "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    unsigned long long prossimo_ = 100000;      // evita codici troppo corti
+    std::unordered_map<std::string, std::string> daCodice_, daUrl_;
+    static std::string base62(unsigned long long n) {
+        std::string s;
+        do { s.insert(s.begin(), ALFABETO[n % 62]); n /= 62; } while (n);
+        return s;
+    }
+public:
+    std::string codifica(const std::string& url) {
+        if (auto it = daUrl_.find(url); it != daUrl_.end()) return it->second;
+        std::string corto = "http://tiny.url/" + base62(prossimo_++);
+        daUrl_[url] = corto;
+        daCodice_[corto] = url;
+        return corto;
+    }
+    std::string decodifica(const std::string& corto) const { return daCodice_.at(corto); }
+};
+
+int main() {
+    TinyURL t;
+    auto a = t.codifica("https://isocpp.org/std/the-standard");
+    auto b = t.codifica("https://en.cppreference.com");
+    std::cout << a << ' ' << b << ' ' << (t.codifica("https://en.cppreference.com") == b) << '\n'
+              << t.decodifica(a) << '\n';
+}
+```
+
+```text
+http://tiny.url/q0U http://tiny.url/q0V 1
+https://isocpp.org/std/the-standard
+```
+
+#### Soluzione 20.3
+
+Poiche' i `set` arrivano con timestamp crescenti, il vettore di ogni chiave e' gia' ordinato: `get` fa una ricerca binaria con `upper_bound` e prende l'elemento precedente.
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
+class TimeMap {
+    std::unordered_map<std::string, std::vector<std::pair<int, std::string>>> m_;
+public:
+    void set(const std::string& k, std::string v, int t) { m_[k].emplace_back(t, std::move(v)); }
+    std::string get(const std::string& k, int t) const {
+        auto it = m_.find(k);
+        if (it == m_.end()) return "";
+        const auto& v = it->second;
+        auto p = std::upper_bound(v.begin(), v.end(), t,
+                                  [](int x, const auto& e) { return x < e.first; });
+        return p == v.begin() ? "" : std::prev(p)->second;
+    }
+};
+
+int main() {
+    TimeMap tm;
+    tm.set("prezzo", "10", 1);
+    tm.set("prezzo", "12", 4);
+    std::cout << '[' << tm.get("prezzo", 0) << "] [" << tm.get("prezzo", 1) << "] ["
+              << tm.get("prezzo", 3) << "] [" << tm.get("prezzo", 5) << "]\n";
+}
+```
+
+```text
+[] [10] [10] [12]
+```
+
+#### Soluzione 20.4
+
+```cpp
+#include <iostream>
+#include <string>
+#include <unordered_map>
+
+class Logger {
+    std::unordered_map<std::string, int> prossimoConsentito_;
+public:
+    bool stampa(int t, const std::string& msg) {
+        auto [it, nuovo] = prossimoConsentito_.try_emplace(msg, 0);
+        if (t < it->second) return false;
+        it->second = t + 10;
+        return true;
+    }
+};
+
+int main() {
+    Logger l;
+    std::cout << l.stampa(1, "foo") << l.stampa(2, "bar") << l.stampa(3, "foo")
+              << l.stampa(8, "bar") << l.stampa(10, "foo") << l.stampa(11, "foo") << '\n';
+}
+```
+
+```text
+110001
+```
+
+In un servizio di lunga durata la mappa crescerebbe senza limiti: si eliminano periodicamente le voci scadute, oppure si usa una coda dei messaggi recenti come in un hit counter.
+
+#### Soluzione 20.5
+
+```cpp
+// non compilare qui: richiede cpp-httplib e nlohmann/json (header-only)
+#include <map>
+#include <mutex>
+#include <string>
+#include "httplib.h"
+#include <nlohmann/json.hpp>
+using json = nlohmann::json;
+
+int main() {
+    std::mutex m;                                   // httplib usa piu' thread
+    std::map<int, std::string> todo;
+    int prossimoId = 1;
+    RateLimiter limiter;                            // classe dell'Esempio 20.2
+    httplib::Server svr;
+
+    svr.set_pre_routing_handler([&](const httplib::Request& req, httplib::Response& res) {
+        std::lock_guard lk(m);
+        if (limiter.stato(req.remote_addr, secondiDaAvvio()) == 429) {
+            res.status = 429;
+            return httplib::Server::HandlerResponse::Handled;
+        }
+        return httplib::Server::HandlerResponse::Unhandled;
+    });
+    svr.Get("/todo", [&](const httplib::Request&, httplib::Response& res) {
+        std::lock_guard lk(m);
+        json j = json::array();
+        for (auto& [id, testo] : todo) j.push_back({{"id", id}, {"testo", testo}});
+        res.set_content(j.dump(), "application/json");
+    });
+    svr.Post("/todo", [&](const httplib::Request& req, httplib::Response& res) {
+        auto j = json::parse(req.body, nullptr, false);       // false: niente eccezioni
+        if (j.is_discarded() || !j.contains("testo") || !j["testo"].is_string()) {
+            res.status = 400;
+            return;
+        }
+        std::lock_guard lk(m);
+        todo[prossimoId] = j["testo"];
+        res.status = 201;
+        res.set_content(json{{"id", prossimoId++}}.dump(), "application/json");
+    });
+    svr.Delete(R"(/todo/(\d+))", [&](const httplib::Request& req, httplib::Response& res) {
+        std::lock_guard lk(m);
+        res.status = todo.erase(std::stoi(req.matches[1])) ? 204 : 404;
+    });
+    svr.listen("0.0.0.0", 8080);
+}
+```
+
+```bash
+curl -X POST localhost:8080/todo -d '{"testo":"studiare C++"}'   # {"id":1}
+curl localhost:8080/todo                                         # [{"id":1,"testo":"studiare C++"}]
+curl -X DELETE -i localhost:8080/todo/1                          # HTTP/1.1 204 No Content
+```
+
+`secondiDaAvvio()` e' una funzione che restituisce i secondi trascorsi da uno `steady_clock::time_point` salvato all'avvio.
+
+### Capitolo 21 - Programmazione mobile
+
+#### Soluzione 21.1
+
+Una stringa letterale ha durata statica: esiste per tutta l'esecuzione del programma, quindi il chiamante puo' leggerla senza liberarla e senza rischio di puntatori pendenti. Va documentato che **non** deve chiamare `free`.
+
+```cpp
+#include <iostream>
+#include <vector>
+
+struct StatHandle { std::vector<double> v; };
+enum { STAT_OK = 0, STAT_ERRORE = 1 };
+
+extern "C" int stat_conta(const StatHandle* h, unsigned* out) {
+    if (!h || !out) return STAT_ERRORE;            // al confine C si validano i puntatori
+    *out = static_cast<unsigned>(h->v.size());
+    return STAT_OK;
+}
+extern "C" const char* stat_versione() { return "stat 1.2.0"; }
+
+int main() {
+    StatHandle h{{1, 2, 3}};
+    unsigned n = 0;
+    std::cout << stat_conta(&h, &n) << ' ' << n << ' ' << stat_conta(nullptr, &n) << ' '
+              << stat_versione() << '\n';
+}
+```
+
+```text
+0 3 1 stat 1.2.0
+```
+
+#### Soluzione 21.2
+
+Per rimuovere in O(1) da un vettore si sposta l'ultimo elemento nella posizione da eliminare e si aggiorna il suo indice nella mappa.
+
+```cpp
+#include <iostream>
+#include <random>
+#include <unordered_map>
+#include <vector>
+
+class InsiemeCasuale {
+    std::vector<int> v_;
+    std::unordered_map<int, std::size_t> idx_;
+    std::mt19937 rng_{12345};
+public:
+    bool inserisci(int x) {
+        if (idx_.count(x)) return false;
+        idx_[x] = v_.size();
+        v_.push_back(x);
+        return true;
+    }
+    bool rimuovi(int x) {
+        auto it = idx_.find(x);
+        if (it == idx_.end()) return false;
+        std::size_t i = it->second;
+        v_[i] = v_.back();               // l'ultimo prende il posto di x
+        idx_[v_[i]] = i;
+        v_.pop_back();
+        idx_.erase(x);
+        return true;
+    }
+    int casuale() {
+        return v_[std::uniform_int_distribution<std::size_t>(0, v_.size() - 1)(rng_)];
+    }
+    std::size_t size() const { return v_.size(); }
+};
+
+int main() {
+    InsiemeCasuale s;
+    std::cout << s.inserisci(1) << s.rimuovi(2) << s.inserisci(2) << s.inserisci(2) << s.rimuovi(1)
+              << ' ' << s.casuale() << ' ' << s.size() << '\n';
+}
+```
+
+```text
+10101 2 1
+```
+
+#### Soluzione 21.3
+
+```cpp
+#include <fstream>
+#include <iostream>
+#include <map>
+#include <optional>
+#include <string>
+
+struct Archivio {                            // astrazione senza dettagli di piattaforma
+    virtual ~Archivio() = default;
+    virtual void salva(const std::string& k, const std::string& v) = 0;
+    virtual std::optional<std::string> leggi(const std::string& k) const = 0;
+};
+
+class ArchivioMemoria : public Archivio {                // per i test
+    std::map<std::string, std::string> m_;
+public:
+    void salva(const std::string& k, const std::string& v) override { m_[k] = v; }
+    std::optional<std::string> leggi(const std::string& k) const override {
+        auto it = m_.find(k);
+        return it == m_.end() ? std::nullopt : std::optional{it->second};
+    }
+};
+
+class ArchivioFile : public Archivio {                   // desktop (su mobile: SharedPreferences,
+    std::string percorso_;                               // UserDefaults, ecc. via binding)
+public:
+    explicit ArchivioFile(std::string p) : percorso_(std::move(p)) {}
+    void salva(const std::string& k, const std::string& v) override {
+        std::ofstream(percorso_ + "." + k) << v;
+    }
+    std::optional<std::string> leggi(const std::string& k) const override {
+        std::ifstream in(percorso_ + "." + k);
+        std::string v;
+        if (!std::getline(in, v)) return std::nullopt;
+        return v;
+    }
+};
+
+class Contatore {                                        // logica dell'app
+    Archivio& a_;
+public:
+    explicit Contatore(Archivio& a) : a_(a) {}
+    int incrementa() {
+        int n = std::stoi(a_.leggi("avvii").value_or("0")) + 1;
+        a_.salva("avvii", std::to_string(n));
+        return n;
+    }
+};
+
+int main() {
+    ArchivioMemoria finto;                               // il test non tocca il disco
+    Contatore c(finto);
+    c.incrementa(); c.incrementa();
+    std::cout << "avvii: " << c.incrementa() << " | salvato: " << *finto.leggi("avvii") << '\n';
+}
+```
+
+```text
+avvii: 3 | salvato: 3
+```
+
+#### Soluzione 21.4
+
+```cmake
+cmake_minimum_required(VERSION 3.22)
+project(statcore LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 20)
+
+add_library(statcore src/core.cpp src/api.cpp)
+target_include_directories(statcore PUBLIC include)          # contiene api.h
+set_target_properties(statcore PROPERTIES CXX_VISIBILITY_PRESET hidden)  # esporta solo l'API C
+
+if(ANDROID)
+    set_target_properties(statcore PROPERTIES POSITION_INDEPENDENT_CODE ON)
+elseif(IOS)
+    set_target_properties(statcore PROPERTIES FRAMEWORK TRUE
+                          PUBLIC_HEADER include/api.h MACOSX_FRAMEWORK_IDENTIFIER com.esempio.stat)
+endif()
+```
+
+```bash
+# Android: libreria condivisa per arm64-v8a
+cmake -S . -B build-android -DBUILD_SHARED_LIBS=ON \
+  -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake \
+  -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-24
+cmake --build build-android
+# iOS: framework statico
+cmake -S . -B build-ios -G Xcode -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_ARCHITECTURES=arm64
+cmake --build build-ios --config Release
+```
+
+Da consegnare: al team Android `libstatcore.so` per ogni ABI (in `jniLibs/<abi>/`) piu' lo strato JNI e la classe Kotlin; al team iOS `statcore.framework` (o un `.xcframework` che riunisce dispositivo e simulatore) con `api.h`. Le intestazioni C++ interne non vanno distribuite: l'API C e' l'unico contratto, e la visibilita' `hidden` impedisce di dipendere per errore da simboli interni.
+
+## Soluzioni - Parte 7
+
+### Capitolo 22 - Fondamenti di game programming
+
+#### Soluzione 22.1
+
+Il bit 0 contiene lo stato attuale, il bit 1 quello futuro: contando i vicini si legge solo il bit 0, quindi le celle gia' aggiornate non disturbano. Alla fine si sposta ogni cella di un bit a destra.
+
+```cpp
+#include <iostream>
+#include <vector>
+
+void prossimaGenerazione(std::vector<std::vector<int>>& g) {
+    int R = g.size(), C = g[0].size();
+    for (int r = 0; r < R; ++r)
+        for (int c = 0; c < C; ++c) {
+            int vicini = 0;
+            for (int dr = -1; dr <= 1; ++dr)
+                for (int dc = -1; dc <= 1; ++dc) {
+                    int nr = r + dr, nc = c + dc;
+                    bool dentro = nr >= 0 && nc >= 0 && nr < R && nc < C;
+                    if ((dr || dc) && dentro) vicini += g[nr][nc] & 1;
+                }
+            bool viva = g[r][c] & 1;
+            if ((viva && (vicini == 2 || vicini == 3)) || (!viva && vicini == 3)) g[r][c] |= 2;
+        }
+    for (auto& riga : g) for (int& x : riga) x >>= 1;
+}
+
+int main() {
+    std::vector<std::vector<int>> g{{0, 1, 0}, {0, 0, 1}, {1, 1, 1}, {0, 0, 0}};
+    prossimaGenerazione(g);
+    for (auto& r : g) { for (int x : r) std::cout << x; std::cout << '\n'; }
+}
+```
+
+```text
+000
+101
+011
+010
+```
+
+#### Soluzione 22.2
+
+```cpp
+#include <iostream>
+
+struct Vec3 {
+    float x, y, z;
+    float dot(const Vec3& o) const { return x * o.x + y * o.y + z * o.z; }
+    Vec3 cross(const Vec3& o) const {
+        return {y * o.z - z * o.y, z * o.x - x * o.z, x * o.y - y * o.x};
+    }
+};
+
+int main() {
+    Vec3 a{1, 0, 0}, b{0, 1, 0}, c = a.cross(b);
+    Vec3 p{1, 2, 3}, q{4, 5, 6}, n = p.cross(q);
+    std::cout << c.x << c.y << c.z << ' ' << n.x << ',' << n.y << ',' << n.z << ' '
+              << n.dot(p) << n.dot(q) << '\n';
+}
+```
+
+```text
+001 -3,6,-3 00
+```
+
+Il prodotto vettoriale e' la base per calcolare le normali dei triangoli (illuminazione) e per capire se un punto sta a sinistra o a destra di una direzione.
+
+#### Soluzione 22.3
+
+La free list riusa la memoria degli oggetti liberi: ogni slot libero memorizza l'indice del prossimo slot libero. Acquisire e rilasciare sono O(1) e non allocano.
+
+```cpp
+#include <array>
+#include <cstddef>
+#include <iostream>
+
+struct Proiettile { float x = 0, y = 0, vx = 0, vy = 0; };
+
+template <typename T, std::size_t N>
+class ObjectPool {
+    std::array<T, N> oggetti_{};
+    std::array<int, N> prossimo_{};             // free list di indici
+    std::array<bool, N> inUso_{};
+    int libero_ = 0;
+public:
+    ObjectPool() {
+        for (std::size_t i = 0; i < N; ++i) prossimo_[i] = i + 1 < N ? int(i + 1) : -1;
+    }
+    T* acquisisci() {
+        if (libero_ < 0) return nullptr;
+        int i = libero_;
+        libero_ = prossimo_[i];
+        inUso_[i] = true;
+        oggetti_[i] = T{};
+        return &oggetti_[i];
+    }
+    void rilascia(T* p) {
+        int i = int(p - oggetti_.data());
+        if (!inUso_[i]) return;                   // doppio rilascio ignorato
+        inUso_[i] = false;
+        prossimo_[i] = libero_;
+        libero_ = i;
+    }
+};
+
+int main() {
+    ObjectPool<Proiettile, 2> pool;
+    Proiettile* a = pool.acquisisci();
+    Proiettile* b = pool.acquisisci();
+    std::cout << (pool.acquisisci() == nullptr) << ' ';   // pool esaurito
+    pool.rilascia(a);
+    Proiettile* c = pool.acquisisci();
+    std::cout << (c == a) << ' ' << (b != nullptr) << '\n';     // riusa lo stesso slot
+}
+```
+
+```text
+1 1 1
+```
+
+#### Soluzione 22.4
+
+Per simmetria ci si riduce al primo quadrante; si consente di scendere fino a -2 perche' alcuni percorsi ottimi passano brevemente per coordinate negative (per esempio per raggiungere (1,1)).
+
+```cpp
+#include <cstdlib>
+#include <iostream>
+#include <queue>
+#include <set>
+#include <utility>
+
+int mosseCavallo(int x, int y) {
+    x = std::abs(x); y = std::abs(y);
+    const int dx[] = {1, 2, 2, 1, -1, -2, -2, -1}, dy[] = {2, 1, -1, -2, -2, -1, 1, 2};
+    std::queue<std::pair<int, int>> q;
+    std::set<std::pair<int, int>> visti{{0, 0}};
+    q.push({0, 0});
+    for (int passi = 0;; ++passi)
+        for (auto n = q.size(); n > 0; --n) {
+            auto [cx, cy] = q.front(); q.pop();
+            if (cx == x && cy == y) return passi;
+            for (int d = 0; d < 8; ++d) {
+                int nx = cx + dx[d], ny = cy + dy[d];
+                if (nx >= -2 && ny >= -2 && visti.insert({nx, ny}).second) q.push({nx, ny});
+            }
+        }
+}
+
+int main() {
+    std::cout << mosseCavallo(2, 1) << ' ' << mosseCavallo(5, 5) << ' '
+              << mosseCavallo(1, 1) << '\n';
+}
+```
+
+```text
+1 4 2
+```
+
+#### Soluzione 22.5
+
+Ogni oggetto viene inserito nelle celle che il suo AABB tocca; si testano solo le coppie che condividono una cella. Una coppia puo' condividere piu' celle, quindi si deduplicano le coppie con un insieme. Con oggetti piccoli rispetto alla cella il costo passa da circa n^2/2 = 50 milioni di test a qualche decina di migliaia.
+
+```cpp
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <iostream>
+#include <random>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
+struct AABB { float x0, y0, x1, y1; };
+bool sovrapposti(const AABB& a, const AABB& b) {
+    return a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+}
+
+int main() {
+    std::mt19937 rng(5);
+    std::uniform_real_distribution<float> pos(0, 1000), dim(1, 4);
+    std::vector<AABB> ogg(10000);
+    for (auto& o : ogg) {
+        o.x0 = pos(rng); o.y0 = pos(rng);
+        o.x1 = o.x0 + dim(rng); o.y1 = o.y0 + dim(rng);
+    }
+
+    const float LATO = 10;
+    auto chiave = [](int cx, int cy) {                      // due int in un intero a 64 bit
+        return (std::uint64_t(std::uint32_t(cx)) << 32) | std::uint32_t(cy);
+    };
+    std::unordered_map<std::uint64_t, std::vector<int>> griglia;
+    for (int i = 0; i < (int)ogg.size(); ++i)
+        for (int cx = int(ogg[i].x0 / LATO); cx <= int(ogg[i].x1 / LATO); ++cx)
+            for (int cy = int(ogg[i].y0 / LATO); cy <= int(ogg[i].y1 / LATO); ++cy)
+                griglia[chiave(cx, cy)].push_back(i);
+
+    std::unordered_set<std::uint64_t> coppie;
+    long test = 0;
+    for (auto& [k, v] : griglia)
+        for (std::size_t a = 0; a < v.size(); ++a)
+            for (std::size_t b = a + 1; b < v.size(); ++b) {
+                ++test;
+                if (sovrapposti(ogg[v[a]], ogg[v[b]]))
+                    coppie.insert(chiave(std::min(v[a], v[b]), std::max(v[a], v[b])));
+            }
+
+    long forzaBruta = 0;
+    for (std::size_t a = 0; a < ogg.size(); ++a)
+        for (std::size_t b = a + 1; b < ogg.size(); ++b) forzaBruta += sovrapposti(ogg[a], ogg[b]);
+    std::cout << "collisioni: " << coppie.size() << " (forza bruta " << forzaBruta << ")\n"
+              << "test: " << (test < 100000 ? "meno di 100000" : "troppi") << " contro "
+              << ogg.size() * (ogg.size() - 1) / 2 << '\n';
+}
+```
+
+```text
+collisioni: 1232 (forza bruta 1232)
+test: meno di 100000 contro 49995000
+```
+
+### Capitolo 23 - Librerie e motori
+
+#### Soluzione 23.1
+
+Il punto d'impatto relativo `t` va da -1 (bordo alto) a +1 (bordo basso); l'angolo e' `t * 60 gradi`. La velocita' si scompone con seno e coseno, quindi il modulo resta costante.
+
+```cpp
+#include <cmath>
+#include <iostream>
+#include <numbers>
+
+struct Vel { float vx, vy; };
+
+Vel rimbalzo(float yPalla, float yRacchetta, float altezzaRacchetta, float velocita,
+             bool versoDestra) {
+    float t = (yPalla - yRacchetta) / (altezzaRacchetta / 2);    // -1 .. +1
+    t = std::fmax(-1.f, std::fmin(1.f, t));
+    float angolo = t * 60.f * std::numbers::pi_v<float> / 180.f;
+    return {velocita * std::cos(angolo) * (versoDestra ? 1 : -1), velocita * std::sin(angolo)};
+}
+
+int main() {
+    for (float y : {100.f, 140.f, 60.f}) {
+        Vel v = rimbalzo(y, 100, 80, 10, true);
+        std::cout << v.vx << ',' << v.vy << " |v|=" << std::hypot(v.vx, v.vy) << "  ";
+    }
+    std::cout << '\n';
+}
+```
+
+```text
+10,0 |v|=10  5,8.66025 |v|=10  5,-8.66025 |v|=10
+```
+
+#### Soluzione 23.2
+
+```cpp
+#include <algorithm>
+#include <array>
+#include <iostream>
+#include <vector>
+
+using Pezzo = std::array<std::array<bool, 4>, 4>;
+using Griglia = std::vector<std::vector<int>>;
+
+Pezzo ruota(const Pezzo& p) {                      // 90 gradi in senso orario
+    Pezzo r{};
+    for (int i = 0; i < 4; ++i)
+        for (int j = 0; j < 4; ++j) r[j][3 - i] = p[i][j];
+    return r;
+}
+
+bool collide(const Griglia& g, const Pezzo& p, int x, int y) {
+    for (int i = 0; i < 4; ++i)
+        for (int j = 0; j < 4; ++j) {
+            if (!p[i][j]) continue;
+            int r = y + i, c = x + j;
+            if (c < 0 || c >= (int)g[0].size() || r >= (int)g.size()) return true;   // bordi
+            if (r >= 0 && g[r][c]) return true;                                     // blocchi
+        }
+    return false;
+}
+
+int rimuoviRighe(Griglia& g) {
+    auto piena = [](const std::vector<int>& r) {
+        return std::all_of(r.begin(), r.end(), [](int x) { return x != 0; });
+    };
+    auto fine = std::remove_if(g.begin(), g.end(), piena);
+    int n = g.end() - fine;
+    g.erase(fine, g.end());
+    g.insert(g.begin(), n, std::vector<int>(g.empty() ? 10 : g[0].size(), 0));  // vuote in cima
+    return n;
+}
+
+int main() {
+    Pezzo L{{{1, 0, 0, 0}, {1, 0, 0, 0}, {1, 1, 0, 0}, {0, 0, 0, 0}}};
+    Pezzo r = ruota(L);
+    for (auto& riga : r) { for (bool b : riga) std::cout << (b ? '#' : '.'); std::cout << '\n'; }
+    Griglia g(4, std::vector<int>(4, 0));
+    g[3] = {1, 1, 1, 1};
+    g[2] = {1, 0, 1, 1};
+    std::cout << collide(g, L, 0, 0) << collide(g, L, 1, -2) << collide(g, L, 3, 0) << ' '
+              << rimuoviRighe(g) << " righe, ora in fondo: " << g[3][0] << g[3][1] << '\n';
+}
+```
+
+```text
+.###
+.#..
+....
+....
+101 1 righe, ora in fondo: 10
+```
+
+#### Soluzione 23.3
+
+```cpp
+// non compilare qui: richiede SFML 3 (collegare con sfml-graphics sfml-window sfml-system)
+#include <SFML/Graphics.hpp>
+#include "snake.hpp"                          // la classe Snake dell'Esempio 23.1
+
+int main() {
+    constexpr int CELLA = 40, W = 16, H = 10;
+    sf::RenderWindow win(sf::VideoMode({W * CELLA, H * CELLA}), "Snake");
+    win.setFramerateLimit(60);
+    Snake gioco(W, H, std::random_device{}());
+    sf::Clock orologio;
+    float accumulatore = 0;
+    const float PASSO = 1.f / 8;              // 8 passi al secondo
+
+    while (win.isOpen()) {
+        while (auto ev = win.pollEvent()) {
+            if (ev->is<sf::Event::Closed>()) win.close();
+            if (auto* k = ev->getIf<sf::Event::KeyPressed>()) {
+                using K = sf::Keyboard::Key;
+                if (k->code == K::Up) gioco.gira(Dir::Su);
+                if (k->code == K::Down) gioco.gira(Dir::Giu);
+                if (k->code == K::Left) gioco.gira(Dir::Sx);
+                if (k->code == K::Right) gioco.gira(Dir::Dx);
+            }
+        }
+        accumulatore += orologio.restart().asSeconds();
+        while (accumulatore >= PASSO) { gioco.passo(); accumulatore -= PASSO; }
+
+        win.clear(sf::Color(20, 20, 30));
+        sf::RectangleShape r({CELLA - 2.f, CELLA - 2.f});
+        for (const auto& c : gioco.celle()) {          // metodo aggiunto: restituisce il corpo
+            r.setPosition({c.x * float(CELLA), c.y * float(CELLA)});
+            r.setFillColor(sf::Color::Green);
+            win.draw(r);
+        }
+        r.setPosition({gioco.cibo().x * float(CELLA), gioco.cibo().y * float(CELLA)});
+        r.setFillColor(sf::Color::Red);
+        win.draw(r);
+        if (!gioco.vivo()) win.setTitle("Game over - punti: " + std::to_string(gioco.punti()));
+        win.display();
+    }
+}
+```
+
+Alla classe `Snake` vanno aggiunti due accessori, `const std::deque<Cella>& celle() const` e `Cella cibo() const`: la logica non cambia, a conferma che separare modello e rendering paga.
+
+#### Soluzione 23.4
+
+```cpp
+#include <cmath>
+#include <iostream>
+#include <vector>
+
+class Animazione {
+    std::vector<float> durate_;          // durata di ciascun frame in secondi
+    float totale_ = 0;
+    bool loop_;
+public:
+    Animazione(std::vector<float> d, bool loop) : durate_(std::move(d)), loop_(loop) {
+        for (float x : durate_) totale_ += x;
+    }
+    int frame(float t) const {
+        if (loop_) t = std::fmod(t, totale_);
+        else if (t >= totale_) return static_cast<int>(durate_.size()) - 1;   // resta sull'ultimo
+        for (int i = 0; i < (int)durate_.size(); ++i) {
+            if (t < durate_[i]) return i;
+            t -= durate_[i];
+        }
+        return static_cast<int>(durate_.size()) - 1;
+    }
+};
+
+int main() {
+    Animazione corsa({0.1f, 0.1f, 0.2f}, true), salto({0.1f, 0.3f}, false);
+    for (float t : {0.0f, 0.15f, 0.25f, 0.45f, 0.95f}) std::cout << corsa.frame(t);
+    std::cout << ' ';
+    for (float t : {0.0f, 0.2f, 5.0f}) std::cout << salto.frame(t);
+    std::cout << '\n';
+}
+```
+
+```text
+01201 011
+```
+
+### Capitolo 24 - IA, rete e ottimizzazione nei giochi
+
+#### Soluzione 24.1
+
+```cpp
+#include <iostream>
+
+enum class Stato { Pattuglia, Insegui, Attacca, Fuga };
+const char* nome(Stato s) {
+    switch (s) {
+        case Stato::Pattuglia: return "Pattuglia";
+        case Stato::Insegui: return "Insegui";
+        case Stato::Attacca: return "Attacca";
+        case Stato::Fuga: return "Fuga";
+    }
+    return "?";
+}
+
+Stato transizione(Stato s, float distanza, int salute) {
+    if (salute < 30) return Stato::Fuga;                 // priorita' massima
+    switch (s) {
+        case Stato::Pattuglia: return distanza < 10 ? Stato::Insegui : s;
+        case Stato::Insegui:
+            if (distanza < 2) return Stato::Attacca;
+            return distanza > 15 ? Stato::Pattuglia : s;
+        case Stato::Attacca: return distanza >= 2 ? Stato::Insegui : s;
+        case Stato::Fuga: return salute > 60 ? Stato::Pattuglia : s;
+    }
+    return s;
+}
+
+int main() {
+    Stato s = Stato::Pattuglia;
+    float distanze[] = {20, 12, 8, 5, 1.5f, 1, 1, 3, 9, 20};
+    int salute[] = {100, 100, 100, 100, 90, 50, 25, 25, 70, 70};
+    for (int t = 0; t < 10; ++t) {
+        s = transizione(s, distanze[t], salute[t]);
+        std::cout << nome(s) << (t < 9 ? " > " : "\n");
+    }
+}
+```
+
+```text
+Pattuglia > Pattuglia > Insegui > Insegui > Attacca > Attacca > Fuga > Fuga > Pattuglia > Pattuglia
+```
+
+#### Soluzione 24.2
+
+Alfa e' il miglior valore gia' garantito al massimizzatore, beta quello garantito al minimizzatore: quando `alfa >= beta` i rami rimanenti non possono influire sulla scelta e vengono tagliati. Il risultato e' identico, i nodi visitati crollano.
+
+```cpp
+#include <algorithm>
+#include <array>
+#include <iostream>
+
+using Tavola = std::array<char, 9>;
+char vincitore(const Tavola& t) {
+    static const int L[8][3] = {{0, 1, 2}, {3, 4, 5}, {6, 7, 8}, {0, 3, 6},
+                                {1, 4, 7}, {2, 5, 8}, {0, 4, 8}, {2, 4, 6}};
+    for (auto& l : L)
+        if (t[l[0]] != ' ' && t[l[0]] == t[l[1]] && t[l[1]] == t[l[2]]) return t[l[0]];
+    return ' ';
+}
+
+long nodi = 0;
+int alfabeta(Tavola& t, char turno, int alfa, int beta) {
+    ++nodi;
+    if (char w = vincitore(t); w != ' ') return w == 'X' ? 1 : -1;
+    if (std::find(t.begin(), t.end(), ' ') == t.end()) return 0;
+    for (int i = 0; i < 9; ++i) {
+        if (t[i] != ' ') continue;
+        t[i] = turno;
+        int v = alfabeta(t, turno == 'X' ? 'O' : 'X', alfa, beta);
+        t[i] = ' ';
+        if (turno == 'X') alfa = std::max(alfa, v); else beta = std::min(beta, v);
+        if (alfa >= beta) break;                       // taglio
+    }
+    return turno == 'X' ? alfa : beta;
+}
+
+int main() {
+    Tavola t;
+    t.fill(' ');
+    std::cout << "valore " << alfabeta(t, 'X', -2, 2) << ", nodi " << nodi << '\n';
+}
+```
+
+```text
+valore 0, nodi 18297
+```
+
+Da 549.946 a 18.297 nodi: un fattore 30. Ordinare le mosse provando prima le piu' promettenti (centro, angoli) aumenta ancora i tagli.
+
+#### Soluzione 24.3
+
+Nel Nim con 1-3 pietre per turno perde chi si trova con un multiplo di 4: qualunque cosa prenda, l'avversario riporta il totale a un multiplo di 4. Per Predict the Winner, `dp[i][j]` = (punti del giocatore di turno) - (punti dell'avversario) sui numeri da i a j: prendendo `a[i]` il vantaggio e' `a[i] - dp[i+1][j]`.
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <vector>
+
+bool vinceNim(int n) { return n % 4 != 0; }
+
+bool vincePrimo(const std::vector<int>& a) {
+    int n = a.size();
+    std::vector<std::vector<int>> dp(n, std::vector<int>(n, 0));
+    for (int i = 0; i < n; ++i) dp[i][i] = a[i];
+    for (int len = 2; len <= n; ++len)
+        for (int i = 0; i + len - 1 < n; ++i) {
+            int j = i + len - 1;
+            dp[i][j] = std::max(a[i] - dp[i + 1][j], a[j] - dp[i][j - 1]);
+        }
+    return dp[0][n - 1] >= 0;                          // il pareggio vale come vittoria
+}
+
+int main() {
+    std::cout << vinceNim(4) << vinceNim(7) << ' '
+              << vincePrimo({1, 5, 2}) << vincePrimo({1, 5, 233, 7}) << '\n';
+}
+```
+
+```text
+01 01
+```
+
+#### Soluzione 24.4
+
+```cpp
+#include <iostream>
+#include <vector>
+
+struct Snapshot { double t; float x, y; };
+
+Snapshot interpola(const std::vector<Snapshot>& s, double ora, double ritardo = 0.1) {
+    double t = ora - ritardo;                          // si disegna leggermente nel passato
+    if (t <= s.front().t) return s.front();
+    for (std::size_t i = 1; i < s.size(); ++i)
+        if (t <= s[i].t) {
+            const auto& a = s[i - 1]; const auto& b = s[i];
+            float k = static_cast<float>((t - a.t) / (b.t - a.t));
+            return {t, a.x + (b.x - a.x) * k, a.y + (b.y - a.y) * k};
+        }
+    return s.back();                                   // niente dati nuovi: si resta all'ultimo
+}
+
+int main() {
+    std::vector<Snapshot> s{{1.00, 0, 0}, {1.05, 1, 0}, {1.10, 2, 1}, {1.15, 4, 1}};
+    for (double ora : {1.12, 1.175, 1.20, 1.40}) {
+        auto p = interpola(s, ora);
+        std::cout << '(' << p.x << ',' << p.y << ") ";
+    }
+    std::cout << '\n';
+}
+```
+
+```text
+(0.4,0) (1.5,0.5) (2,1) (4,1)
+```
+
+Il ritardo di 100 ms (due snapshot) garantisce quasi sempre di avere un pacchetto "dopo" il tempo di rendering anche se uno va perso; quando mancano dati si puo' estrapolare per breve tempo invece di fermarsi.
+
+#### Soluzione 24.5
+
+```cpp
+#include <cmath>
+#include <iostream>
+#include <random>
+#include <vector>
+
+struct Vec2 {
+    float x = 0, y = 0;
+    Vec2 operator+(Vec2 o) const { return {x + o.x, y + o.y}; }
+    Vec2 operator-(Vec2 o) const { return {x - o.x, y - o.y}; }
+    Vec2 operator*(float k) const { return {x * k, y * k}; }
+    float lunghezza() const { return std::hypot(x, y); }
+    Vec2 conModulo(float m) const {
+        float l = lunghezza();
+        return l > 0 ? *this * (m / l) : *this;
+    }
+};
+struct Boid { Vec2 p, v; };
+
+float allineamento(const std::vector<Boid>& b) {   // 1 = tutti nella stessa direzione
+    Vec2 s;
+    for (auto& x : b) s = s + x.v * (1 / x.v.lunghezza());
+    return s.lunghezza() / b.size();
+}
+
+int main() {
+    std::mt19937 rng(11);
+    std::uniform_real_distribution<float> u(-1, 1);
+    std::vector<Boid> b(50);
+    for (auto& x : b) { x.p = {u(rng) * 20, u(rng) * 20}; x.v = {u(rng), u(rng)}; }
+    std::cout << "prima: " << (allineamento(b) < 0.5 ? "disordinati" : "allineati");
+    for (int passo = 0; passo < 500; ++passo) {
+        std::vector<Boid> nuovo = b;
+        for (std::size_t i = 0; i < b.size(); ++i) {
+            Vec2 sep, ali, coe; int n = 0;
+            for (std::size_t j = 0; j < b.size(); ++j) {
+                Vec2 d = b[j].p - b[i].p;
+                float dist = d.lunghezza();
+                if (i == j || dist > 15) continue;
+                ++n;
+                ali = ali + b[j].v;                               // allineamento
+                coe = coe + b[j].p;                               // coesione
+                if (dist < 2) sep = sep - d * (1 / (dist + 0.01f)); // separazione
+            }
+            Vec2 acc = sep * 0.05f;
+            if (n) acc = acc + (ali * (1.f / n) - b[i].v) * 0.05f
+                             + (coe * (1.f / n) - b[i].p) * 0.01f;
+            nuovo[i].v = (b[i].v + acc).conModulo(1.f);     // velocita' costante
+            nuovo[i].p = b[i].p + nuovo[i].v * 0.1f;
+        }
+        b = nuovo;
+    }
+    std::cout << ", dopo 500 passi: " << (allineamento(b) > 0.95 ? "allineati" : "disordinati")
+              << '\n';
+}
+```
+
+```text
+prima: disordinati, dopo 500 passi: allineati
+```
+
+Due dettagli contano: il modulo della velocita' resta costante (altrimenti allineamento e coesione, che tendono a mediare le velocita', fermano lo stormo) e il raggio di vista deve essere abbastanza ampio da collegare tutti i boid, altrimenti si formano piu' stormi indipendenti con direzioni diverse.
+
+## Soluzioni - Parte 8
+
+### Capitolo 25 - Fondamenti dell'embedded con C++
+
+#### Soluzione 25.1
+
+```cpp
+#include <cstdint>
+#include <iostream>
+
+constexpr std::uint32_t impostaBit(std::uint32_t r, unsigned n) { return r | (1u << n); }
+constexpr std::uint32_t azzeraBit(std::uint32_t r, unsigned n) { return r & ~(1u << n); }
+constexpr std::uint32_t invertiBit(std::uint32_t r, unsigned n) { return r ^ (1u << n); }
+constexpr bool leggiBit(std::uint32_t r, unsigned n) { return (r >> n) & 1u; }
+
+static_assert(impostaBit(0b1000, 0) == 0b1001);
+static_assert(azzeraBit(0b1011, 1) == 0b1001);
+static_assert(invertiBit(0b1001, 3) == 0b0001);
+static_assert(leggiBit(0x80000000u, 31) && !leggiBit(0x80000000u, 30));
+
+int main() { std::cout << "tutti i controlli superati a compile time\n"; }
+```
+
+```text
+tutti i controlli superati a compile time
+```
+
+Si usa `1u` e non `1`: `1 << 31` su un `int` a 32 bit e' overflow di un signed (comportamento indefinito prima del C++20).
+
+#### Soluzione 25.2
+
+```cpp
+#include <array>
+#include <cstddef>
+#include <iostream>
+
+template <typename T, std::size_t N>
+class CodaCircolare {
+    std::array<T, N> d_{};
+    std::size_t testa_ = 0, n_ = 0;
+public:
+    bool enQueue(T x) {
+        if (n_ == N) return false;
+        d_[(testa_ + n_++) % N] = x;
+        return true;
+    }
+    bool deQueue() {
+        if (n_ == 0) return false;
+        testa_ = (testa_ + 1) % N; --n_;
+        return true;
+    }
+    int Front() const { return n_ ? d_[testa_] : -1; }
+    int Rear() const { return n_ ? d_[(testa_ + n_ - 1) % N] : -1; }
+    bool isFull() const { return n_ == N; }
+};
+
+int main() {
+    CodaCircolare<int, 3> q;
+    std::cout << q.enQueue(1) << q.enQueue(2) << q.enQueue(3) << q.enQueue(4) << ' ' << q.Rear()
+              << q.isFull() << q.deQueue() << q.enQueue(4) << q.Rear() << q.Front() << '\n';
+}
+```
+
+```text
+1110 311142
+```
+
+Le ultime cifre sono `Rear() = 4` e `Front() = 2`: dopo il `deQueue` la testa e' passata al secondo elemento e il 4 ha occupato la cella liberata.
+
+#### Soluzione 25.3
+
+Con una finestra di 8 = 2^3 la divisione diventa uno shift (`>> 3`), molto piu' economica su microcontrollori senza divisore hardware. La somma di 8 campioni a 12 bit sta comodamente in 16 bit (8 * 4095 = 32760).
+
+```cpp
+#include <array>
+#include <cstdint>
+#include <iostream>
+
+class MediaMobile {
+    static constexpr unsigned LOG2N = 3, N = 1u << LOG2N;
+    std::array<std::uint16_t, N> c_{};
+    std::uint16_t somma_ = 0;
+    unsigned i_ = 0, n_ = 0;
+public:
+    std::uint16_t aggiungi(std::uint16_t campione) {
+        somma_ = somma_ - c_[i_] + campione;      // O(1): esce il vecchio, entra il nuovo
+        c_[i_] = campione;
+        i_ = (i_ + 1) & (N - 1);
+        if (n_ < N) ++n_;
+        return n_ == N ? somma_ >> LOG2N : somma_ / n_;   // finche' non e' piena: divisione vera
+    }
+};
+
+int main() {
+    MediaMobile m;
+    for (std::uint16_t x : {4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000, 0, 0, 0, 0})
+        std::cout << m.aggiungi(x) << ' ';
+    std::cout << '\n';
+}
+```
+
+```text
+4000 4000 4000 4000 4000 4000 4000 4000 3500 3000 2500 2000
+```
+
+#### Soluzione 25.4
+
+In un codice di Gray due valori consecutivi differiscono per **un solo bit**. Negli encoder rotativi assoluti questo evita letture spurie: se i sensori commutano in istanti leggermente diversi, il valore letto durante la transizione e' comunque uno dei due adiacenti.
+
+```cpp
+#include <bitset>
+#include <iostream>
+
+unsigned gray(unsigned i) { return i ^ (i >> 1); }
+unsigned daGray(unsigned g) {
+    unsigned b = 0;
+    for (; g; g >>= 1) b ^= g;          // XOR di tutti gli shift
+    return b;
+}
+
+int main() {
+    for (unsigned i = 0; i < 8; ++i) std::cout << std::bitset<3>(gray(i)) << ' ';
+    bool ok = true;
+    for (unsigned i = 0; i < 1024; ++i) ok = ok && daGray(gray(i)) == i;
+    std::cout << "| inversa ok: " << ok << '\n';
+}
+```
+
+```text
+000 001 011 010 110 111 101 100 | inversa ok: 1
+```
+
+#### Soluzione 25.5
+
+`volatile` obbliga il compilatore a leggere e scrivere davvero la memoria a ogni accesso, ma `contatore++` resta tre operazioni (load, add, store): se l'interrupt arriva tra la load e la store, il suo incremento viene sovrascritto e perso. Due soluzioni corrette:
+
+```cpp
+// non compilare qui: codice per Cortex-M con CMSIS
+#include <atomic>
+#include <cstdint>
+
+// 1) sezione critica: disabilita brevemente gli interrupt
+volatile std::uint32_t contatore1 = 0;
+void incrementa1() {
+    std::uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    ++contatore1;
+    __set_PRIMASK(primask);            // ripristina lo stato precedente (annidabile)
+}
+
+// 2) std::atomic: su Cortex-M3/M4/M7 diventa un ciclo LDREX/STREX, senza bloccare gli IRQ
+std::atomic<std::uint32_t> contatore2{0};
+void incrementa2() { contatore2.fetch_add(1, std::memory_order_relaxed); }
+```
+
+Su Cortex-M0 (senza LDREX/STREX) `std::atomic` di 32 bit puo' non essere lock-free: si verifica con `static_assert(std::atomic<std::uint32_t>::is_always_lock_free)` e, se fallisce, si usa la sezione critica.
+
+### Capitolo 26 - Protocolli, RTOS e sistemi connessi
+
+#### Soluzione 26.1
+
+```cpp
+#include <cstdint>
+#include <iostream>
+#include <string_view>
+
+std::uint16_t crc16ccitt(std::string_view dati) {
+    std::uint16_t crc = 0xFFFF;
+    for (unsigned char c : dati) {
+        crc ^= std::uint16_t(c) << 8;
+        for (int b = 0; b < 8; ++b)
+            crc = crc & 0x8000 ? std::uint16_t((crc << 1) ^ 0x1021) : std::uint16_t(crc << 1);
+    }
+    return crc;
+}
+
+int main() { std::cout << std::hex << std::uppercase << "0x" << crc16ccitt("123456789") << '\n'; }
+```
+
+```text
+0x29B1
+```
+
+La stringa `"123456789"` e' il "check value" standard con cui si verificano tutte le implementazioni di CRC. Nei firmware si usa spesso una tabella di 256 voci per elaborare un byte alla volta, o la periferica CRC hardware del microcontrollore.
+
+#### Soluzione 26.2
+
+```cpp
+#include <concepts>
+#include <cstdint>
+#include <iostream>
+#include <span>
+#include <string>
+#include <vector>
+
+template <typename B>
+concept BusI2C = requires(B b, std::uint8_t ind, std::span<const std::uint8_t> dati,
+                          std::size_t n) {
+    { b.scrivi(ind, dati) } -> std::same_as<bool>;
+    { b.leggi(ind, n) } -> std::same_as<std::vector<std::uint8_t>>;
+};
+
+template <BusI2C Bus>
+class SensoreTemperatura {                 // registro 0x00: temperatura in 1/256 di grado
+    Bus& bus_;
+    std::uint8_t ind_;
+public:
+    SensoreTemperatura(Bus& b, std::uint8_t ind) : bus_(b), ind_(ind) {}
+    double gradi() {
+        const std::uint8_t reg[] = {0x00};
+        bus_.scrivi(ind_, reg);
+        auto r = bus_.leggi(ind_, 2);
+        return std::int16_t((r[0] << 8) | r[1]) / 256.0;
+    }
+};
+
+struct BusFinto {                          // registra le transazioni e risponde con dati fissi
+    std::vector<std::string> log;
+    bool scrivi(std::uint8_t ind, std::span<const std::uint8_t> d) {
+        log.push_back("W " + std::to_string(ind) + " [" + std::to_string(d.size()) + "]");
+        return true;
+    }
+    std::vector<std::uint8_t> leggi(std::uint8_t ind, std::size_t n) {
+        log.push_back("R " + std::to_string(ind) + " [" + std::to_string(n) + "]");
+        return {0x15, 0x80};               // 21.5 gradi
+    }
+};
+
+int main() {
+    BusFinto bus;
+    SensoreTemperatura s(bus, 0x48);
+    std::cout << s.gradi() << " C;";
+    for (auto& t : bus.log) std::cout << ' ' << t;
+    std::cout << '\n';
+}
+```
+
+```text
+21.5 C; W 72 [1] R 72 [2]
+```
+
+Sul microcontrollore si passa una classe con gli stessi metodi che usa la periferica I2C reale: il driver non cambia e non ha funzioni virtuali, quindi nessun costo a runtime.
+
+#### Soluzione 26.3
+
+```cpp
+#include <iostream>
+
+enum class Fase { VerdeAuto, Giallo, Rosso, VerdePedoni };
+
+class Semaforo {
+    Fase f_ = Fase::VerdeAuto;
+    int tick_ = 0;
+    bool prenotato_ = false;
+public:
+    void premiPulsante() { prenotato_ = true; }
+    Fase fase() const { return f_; }
+    void tick() {                                  // chiamata ogni 100 ms
+        ++tick_;
+        switch (f_) {
+            case Fase::VerdeAuto:                  // almeno 10 s, poi cede se prenotato
+                if (prenotato_ && tick_ >= 100) { f_ = Fase::Giallo; tick_ = 0; }
+                break;
+            case Fase::Giallo: if (tick_ >= 30) { f_ = Fase::Rosso; tick_ = 0; } break;
+            case Fase::Rosso: if (tick_ >= 10) { f_ = Fase::VerdePedoni; tick_ = 0; } break;
+            case Fase::VerdePedoni:
+                if (tick_ >= 80) { f_ = Fase::VerdeAuto; tick_ = 0; prenotato_ = false; }
+                break;
+        }
+    }
+};
+
+int main() {
+    const char* nomi[] = {"verde auto", "giallo", "rosso", "verde pedoni"};
+    Semaforo s;
+    Fase prec = s.fase();
+    for (int t = 1; t <= 600; ++t) {               // un minuto
+        if (t == 50 || t == 400) s.premiPulsante();
+        s.tick();
+        if (s.fase() != prec) {
+            prec = s.fase();
+            std::cout << t / 10.0 << " s: " << nomi[static_cast<int>(prec)] << '\n';
+        }
+    }
+}
+```
+
+```text
+10 s: giallo
+13 s: rosso
+14 s: verde pedoni
+22 s: verde auto
+40 s: giallo
+43 s: rosso
+44 s: verde pedoni
+52 s: verde auto
+```
+
+La seconda prenotazione (a 40 s) arriva mentre il verde per le auto e' gia' durato piu' di 10 s, quindi il ciclo pedonale riparte subito; la prima deve attendere il verde minimo.
+
+#### Soluzione 26.4
+
+Un'architettura ragionevole:
+
+- **Task Sensori** (priorita' alta, periodico ogni 1 s con `vTaskDelayUntil`): legge I2C, applica il filtro mediano, invia una struct `Misura` a due code.
+- **Task Display** (priorita' media): riceve dalla coda e aggiorna l'OLED; non deve mai bloccare i sensori.
+- **Task Log SD** (priorita' bassa): accumula le misure e scrive un blocco ogni minuto (le scritture su SD sono lente e assorbono corrente).
+- **Task Rete** (priorita' bassa): gestisce Wi-Fi e MQTT; si risveglia ogni 5 minuti, si connette, pubblica le medie e spegne la radio (il Wi-Fi e' il consumo principale).
+- Il bus I2C, se condiviso, e' protetto da un **mutex** (non un semaforo binario) per avere la priority inheritance ed evitare l'inversione di priorita'.
+- La comunicazione avviene solo tramite code (copie dei dati, nessuna memoria condivisa); le ISR usano le varianti `FromISR` e `portYIELD_FROM_ISR`.
+- In assenza di lavoro il tick-less idle di FreeRTOS lascia il processore in sleep.
+
+#### Soluzione 26.5
+
+Il `multiset` resta ordinato; l'iteratore `mid` punta all'elemento centrale e viene spostato di un passo a ogni inserimento o rimozione, a seconda del lato su cui cade l'elemento. Costo O(n log k).
+
+```cpp
+#include <iostream>
+#include <iterator>
+#include <set>
+#include <vector>
+
+std::vector<double> medianeMobili(const std::vector<int>& a, int k) {
+    std::multiset<int> w(a.begin(), a.begin() + k);
+    auto mid = std::next(w.begin(), k / 2);
+    std::vector<double> out;
+    for (int i = k;; ++i) {
+        out.push_back(k % 2 ? *mid : (double(*mid) + *std::prev(mid)) / 2);
+        if (i == (int)a.size()) break;
+        w.insert(a[i]);                                  // inserito dopo gli uguali
+        if (a[i] < *mid) --mid;
+        if (a[i - k] <= *mid) ++mid;                     // l'uscente e' a sinistra (o e' mid)
+        w.erase(w.lower_bound(a[i - k]));
+    }
+    return out;
+}
+
+int main() {
+    for (double m : medianeMobili({1, 3, -1, -3, 5, 3, 6, 7}, 3)) std::cout << m << ' ';
+    std::cout << "| ";
+    for (double m : medianeMobili({20, 21, 95, 21, 22, 22, 23}, 3)) std::cout << m << ' ';
+    std::cout << '\n';
+}
+```
+
+```text
+1 -1 -1 3 5 6 | 21 21 22 22 22
+```
+
+Il secondo caso mostra l'uso come filtro: il picco spurio 95 sparisce completamente, mentre una media mobile lo avrebbe "spalmato" su tre campioni.
+
+## Soluzioni - Parte 9
+
+### Capitolo 27 - Programmazione di sistema
+
+#### Soluzione 27.1
+
+```cpp
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+
+std::string semplifica(const std::string& percorso) {
+    std::vector<std::string> pila;
+    std::istringstream ss(percorso);
+    for (std::string parte; std::getline(ss, parte, '/');) {
+        if (parte.empty() || parte == ".") continue;          // "//" e "." non cambiano nulla
+        if (parte == "..") { if (!pila.empty()) pila.pop_back(); }
+        else pila.push_back(parte);
+    }
+    std::string out;
+    for (auto& p : pila) out += "/" + p;
+    return out.empty() ? "/" : out;
+}
+
+int main() {
+    for (auto p : {"/home/", "/../", "/home//foo/", "/a/./b/../../c/", "/a/../../b/../c//.//"})
+        std::cout << semplifica(p) << ' ';
+    std::cout << '\n';
+}
+```
+
+```text
+/home / /home/foo /c /c
+```
+
+#### Soluzione 27.2
+
+`read` puo' restituire meno byte di quelli chiesti (letture parziali), 0 a fine file, oppure -1 con `errno == EINTR` se un segnale l'ha interrotta: in quel caso si riprova.
+
+```cpp
+#include <fcntl.h>
+#include <unistd.h>
+#include <cerrno>
+#include <iostream>
+#include <stdexcept>
+#include <string>
+#include <utility>
+
+class Fd {
+    int fd_;
+public:
+    explicit Fd(int fd = -1) : fd_(fd) {}
+    ~Fd() { if (fd_ >= 0) ::close(fd_); }
+    Fd(Fd&& o) noexcept : fd_(std::exchange(o.fd_, -1)) {}
+    Fd& operator=(Fd&& o) noexcept { std::swap(fd_, o.fd_); return *this; }
+    Fd(const Fd&) = delete; Fd& operator=(const Fd&) = delete;
+    int get() const { return fd_; }
+};
+
+std::string leggiTutto(int fd) {
+    std::string out;
+    char buf[4096];
+    for (;;) {
+        ssize_t n = ::read(fd, buf, sizeof buf);
+        if (n > 0) out.append(buf, n);
+        else if (n == 0) return out;                          // fine file
+        else if (errno != EINTR) throw std::runtime_error("read fallita");
+    }
+}
+
+int main() {
+    Fd f(::open("/proc/self/status", O_RDONLY));
+    if (f.get() < 0) { std::cout << "non e' Linux\n"; return 0; }
+    std::string s = leggiTutto(f.get());
+    std::cout << s.substr(0, s.find('\n')).substr(0, 5) << " ... (" << (s.size() > 100) << ")\n";
+}
+```
+
+```text
+Name: ... (1)
+```
+
+#### Soluzione 27.3
+
+Il gestore puo' interrompere il programma in qualsiasi punto, anche dentro `malloc` o mentre `std::cout` aggiorna il suo buffer: richiamarli dal gestore corromperebbe il loro stato interno (non sono **async-signal-safe**). Si imposta solo un flag; `write` e `_exit` sono invece permesse.
+
+```cpp
+#include <signal.h>
+#include <unistd.h>
+#include <csignal>
+#include <iostream>
+
+volatile std::sig_atomic_t fermati = 0;
+extern "C" void gestore(int) { fermati = 1; }
+
+int main() {
+    struct sigaction sa{};
+    sa.sa_handler = gestore;
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGINT, &sa, nullptr);
+
+    int iterazioni = 0;
+    while (!fermati) {
+        if (++iterazioni == 3) raise(SIGINT);       // simula Ctrl+C
+        usleep(1000);
+    }
+    std::cout << "interrotto dopo " << iterazioni << " iterazioni, pulizia eseguita\n";
+}
+```
+
+```text
+interrotto dopo 3 iterazioni, pulizia eseguita
+```
+
+Nei programmi multithread si preferisce bloccare i segnali in tutti i thread e riceverli in un thread dedicato con `sigwait`, o con `signalfd` su Linux.
+
+#### Soluzione 27.4
+
+Le redirezioni si estraggono dai token del comando prima dell'`exec`; nel figlio si apre il file e lo si duplica su 0 o 1. La parte nuova e' tutta nel figlio:
+
+```cpp
+#include <fcntl.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#include <fstream>
+#include <iostream>
+#include <string>
+#include <vector>
+
+int esegui(std::vector<std::string> argv) {
+    std::string in, out;
+    std::vector<std::string> args;
+    for (std::size_t i = 0; i < argv.size(); ++i) {
+        if (argv[i] == "<" && i + 1 < argv.size()) in = argv[++i];
+        else if (argv[i] == ">" && i + 1 < argv.size()) out = argv[++i];
+        else args.push_back(argv[i]);
+    }
+    pid_t pid = fork();
+    if (pid == 0) {
+        if (!in.empty()) {
+            int fd = open(in.c_str(), O_RDONLY);
+            if (fd < 0) { perror(in.c_str()); _exit(1); }
+            dup2(fd, 0); close(fd);
+        }
+        if (!out.empty()) {
+            int fd = open(out.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            if (fd < 0) { perror(out.c_str()); _exit(1); }
+            dup2(fd, 1); close(fd);
+        }
+        std::vector<char*> a;
+        for (auto& s : args) a.push_back(s.data());
+        a.push_back(nullptr);
+        execvp(a[0], a.data());
+        _exit(127);
+    }
+    int stato;
+    waitpid(pid, &stato, 0);
+    return WEXITSTATUS(stato);
+}
+
+int main() {
+    { std::ofstream("numeri.txt") << "3\n1\n2\n"; }
+    esegui({"sort", "-n", "<", "numeri.txt", ">", "ordinati.txt"});   // sort -n < ... > ...
+    std::ifstream f("ordinati.txt");
+    for (std::string r; std::getline(f, r);) std::cout << r << ' ';
+    std::cout << '\n';
+}
+```
+
+```text
+1 2 3
+```
+
+In `eseguiPipeline` le redirezioni si applicano dopo i `dup2` delle pipe, cosi' che `> file` sull'ultimo comando prevalga sullo stdout ereditato.
+
+#### Soluzione 27.5
+
+La pila contiene le funzioni in esecuzione; la cima e' quella che sta usando la CPU. Quando inizia una nuova funzione, la cima smette temporaneamente di contare; `end` e' inclusivo, quindi la durata e' `t - inizio + 1`.
+
+```cpp
+#include <iostream>
+#include <sstream>
+#include <stack>
+#include <string>
+#include <vector>
+
+std::vector<int> tempiEsclusivi(int n, const std::vector<std::string>& log) {
+    std::vector<int> tempo(n, 0);
+    std::stack<int> pila;
+    int precedente = 0;                                  // inizio dell'intervallo corrente
+    for (const auto& riga : log) {
+        std::istringstream ss(riga);
+        std::string id, tipo, t;
+        std::getline(ss, id, ':'); std::getline(ss, tipo, ':'); std::getline(ss, t);
+        int f = std::stoi(id), ts = std::stoi(t);
+        if (tipo == "start") {
+            if (!pila.empty()) tempo[pila.top()] += ts - precedente;
+            pila.push(f);
+            precedente = ts;
+        } else {
+            tempo[pila.top()] += ts - precedente + 1;
+            pila.pop();
+            precedente = ts + 1;
+        }
+    }
+    return tempo;
+}
+
+int main() {
+    for (int x : tempiEsclusivi(2, {"0:start:0", "1:start:2", "1:end:5", "0:end:6"}))
+        std::cout << x << ' ';
+    std::cout << '\n';
+}
+```
+
+```text
+3 4
+```
+
+### Capitolo 28 - Concetti di sistemi operativi
+
+#### Soluzione 28.1
+
+```cpp
+#include <iostream>
+#include <string>
+#include <vector>
+
+struct Processo { std::string nome; int arrivo, burst; };
+
+int main() {
+    std::vector<Processo> p{{"P1", 0, 5}, {"P2", 1, 3}, {"P3", 2, 1}, {"P4", 4, 2}};
+    std::vector<bool> fatto(p.size(), false);
+    int t = 0;
+    double attesaTot = 0;
+    for (std::size_t k = 0; k < p.size(); ++k) {
+        int scelto = -1;
+        for (std::size_t i = 0; i < p.size(); ++i)               // il piu' corto tra gli arrivati
+            if (!fatto[i] && p[i].arrivo <= t && (scelto < 0 || p[i].burst < p[scelto].burst))
+                scelto = i;
+        if (scelto < 0) { --k; ++t; continue; }                  // CPU inattiva
+        std::cout << "|" << t << ' ' << p[scelto].nome << ' ';
+        attesaTot += t - p[scelto].arrivo;
+        t += p[scelto].burst;
+        fatto[scelto] = true;
+    }
+    std::cout << "|" << t << "\nattesa media " << attesaTot / p.size() << '\n';
+}
+```
+
+```text
+|0 P1 |5 P3 |6 P4 |8 P2 |11
+attesa media 3
+```
+
+SJF minimizza l'attesa media (3 contro 4,25 del Round Robin), ma P2 aspetta 7 unita' e un processo lungo puo' attendere all'infinito se continuano ad arrivare processi brevi (**starvation**); inoltre richiede di conoscere in anticipo la durata dei burst.
+
+#### Soluzione 28.2
+
+Ogni frame ha un bit "usato". La lancetta scorre i frame in cerchio: se il bit e' 1 lo azzera e passa oltre (seconda possibilita'), se e' 0 sostituisce quella pagina.
+
+```cpp
+#include <iostream>
+#include <vector>
+
+int faultClock(const std::vector<int>& rif, std::size_t n) {
+    std::vector<int> pagina(n, -1);
+    std::vector<bool> usato(n, false);
+    std::size_t lancetta = 0;
+    int fault = 0;
+    for (int p : rif) {
+        bool trovata = false;
+        for (std::size_t i = 0; i < n; ++i)
+            if (pagina[i] == p) { usato[i] = true; trovata = true; break; }
+        if (trovata) continue;
+        ++fault;
+        while (usato[lancetta]) { usato[lancetta] = false; lancetta = (lancetta + 1) % n; }
+        pagina[lancetta] = p;
+        usato[lancetta] = true;
+        lancetta = (lancetta + 1) % n;
+    }
+    return fault;
+}
+
+int main() {
+    std::vector<int> rif{1, 2, 3, 4, 1, 2, 5, 1, 2, 3, 4, 5};
+    std::cout << faultClock(rif, 3) << ' ' << faultClock(rif, 4) << '\n';
+}
+```
+
+```text
+9 10
+```
+
+Su questa sequenza Clock si comporta come FIFO (anche l'anomalia di Belady compare): ogni pagina viene "salvata" una volta sola prima di essere espulsa. Su carichi reali, con localita' dei riferimenti, si avvicina molto a LRU.
+
+#### Soluzione 28.3
+
+Bianco = non visitato, grigio = sulla pila di ricorsione, nero = completato. Un arco verso un nodo grigio chiude un ciclo; il ciclo si ricostruisce con i predecessori.
+
+```cpp
+#include <iostream>
+#include <map>
+#include <string>
+#include <vector>
+
+struct Rilevatore {
+    std::map<std::string, std::vector<std::string>> attende;   // A -> thread che A aspetta
+    std::map<std::string, int> colore;                          // 0 bianco, 1 grigio, 2 nero
+    std::vector<std::string> pila, ciclo;
+
+    bool dfs(const std::string& u) {
+        colore[u] = 1; pila.push_back(u);
+        for (auto& v : attende[u]) {
+            if (colore[v] == 1) {                               // ciclo trovato
+                auto it = pila.begin();
+                while (*it != v) ++it;
+                ciclo.assign(it, pila.end());
+                return true;
+            }
+            if (colore[v] == 0 && dfs(v)) return true;
+        }
+        colore[u] = 2; pila.pop_back();
+        return false;
+    }
+};
+
+int main() {
+    Rilevatore r;
+    r.attende = {{"T1", {"T2"}}, {"T2", {"T3"}}, {"T3", {"T4", "T1"}}, {"T4", {}}, {"T5", {"T1"}}};
+    for (auto& [t, _] : r.attende)
+        if (r.colore[t] == 0 && r.dfs(t)) break;
+    std::cout << "deadlock:";
+    for (auto& t : r.ciclo) std::cout << ' ' << t << " ->";
+    std::cout << ' ' << r.ciclo.front() << '\n';
+}
+```
+
+```text
+deadlock: T1 -> T2 -> T3 -> T1
+```
+
+#### Soluzione 28.4
+
+Il deadlock nasce dall'attesa circolare: se ogni filosofo prende prima la forchetta sinistra, tutti possono restare con una forchetta in mano. Due rimedi: acquisire entrambe atomicamente con `std::scoped_lock` (che usa un algoritmo anti-deadlock), oppure imporre un **ordine globale** sulle risorse (sempre prima la forchetta con indice minore), rompendo il ciclo.
+
+```cpp
+#include <algorithm>
+#include <array>
+#include <atomic>
+#include <iostream>
+#include <mutex>
+#include <thread>
+#include <vector>
+
+int main() {
+    constexpr int N = 5, PASTI = 1000;
+    std::array<std::mutex, N> forchette;
+    std::atomic<int> pastiTotali{0};
+    {
+        std::vector<std::jthread> filosofi;
+        for (int i = 0; i < N; ++i)
+            filosofi.emplace_back([&, i] {
+                int sx = i, dx = (i + 1) % N;
+                for (int k = 0; k < PASTI; ++k) {
+                    if (i % 2 == 0) {                    // soluzione 1: scoped_lock
+                        std::scoped_lock lk(forchette[sx], forchette[dx]);
+                        ++pastiTotali;
+                    } else {                             // soluzione 2: ordine delle risorse
+                        std::lock_guard a(forchette[std::min(sx, dx)]);
+                        std::lock_guard b(forchette[std::max(sx, dx)]);
+                        ++pastiTotali;
+                    }
+                }
+            });
+    }
+    std::cout << "pasti: " << pastiTotali << " (nessun deadlock)\n";
+}
+```
+
+```text
+pasti: 5000 (nessun deadlock)
+```
+
+#### Soluzione 28.5
+
+```cpp
+#include <cstddef>
+#include <cstdint>
+#include <iostream>
+
+class FirstFit {
+    struct Blocco { std::size_t dim; bool libero; Blocco* next; };   // intestazione
+    alignas(std::max_align_t) std::byte mem_[4096];
+    Blocco* primo_;
+    static constexpr std::size_t H = sizeof(Blocco);
+public:
+    FirstFit() : primo_(new (mem_) Blocco{sizeof mem_ - H, true, nullptr}) {}
+    void* alloca(std::size_t n) {
+        n = (n + 15) & ~std::size_t(15);                              // allineamento a 16
+        for (Blocco* b = primo_; b; b = b->next) {
+            if (!b->libero || b->dim < n) continue;
+            if (b->dim >= n + H + 16) {                               // divide il blocco
+                auto* resto = new (reinterpret_cast<std::byte*>(b) + H + n)
+                    Blocco{b->dim - n - H, true, b->next};
+                b->dim = n;
+                b->next = resto;
+            }
+            b->libero = false;
+            return reinterpret_cast<std::byte*>(b) + H;
+        }
+        return nullptr;
+    }
+    void libera(void* p) {
+        if (!p) return;
+        auto* b = reinterpret_cast<Blocco*>(static_cast<std::byte*>(p) - H);
+        b->libero = true;
+        for (Blocco* x = primo_; x; x = x->next)                      // fonde i vicini liberi
+            while (x->libero && x->next && x->next->libero) {
+                x->dim += H + x->next->dim;
+                x->next = x->next->next;
+            }
+    }
+    std::size_t bloccoLiberoMax() const {
+        std::size_t m = 0;
+        for (Blocco* b = primo_; b; b = b->next) if (b->libero && b->dim > m) m = b->dim;
+        return m;
+    }
+};
+
+int main() {
+    FirstFit h;
+    std::size_t iniziale = h.bloccoLiberoMax();
+    void* a = h.alloca(100);
+    void* b = h.alloca(200);
+    void* c = h.alloca(50);
+    h.libera(b);
+    void* d = h.alloca(150);                       // entra nel buco lasciato da b
+    std::cout << (d == b) << ' ';
+    h.libera(a); h.libera(c); h.libera(d);
+    std::cout << (h.bloccoLiberoMax() == iniziale) << ' ' << (h.alloca(5000) == nullptr) << '\n';
+}
+```
+
+```text
+1 1 1
+```
+
+Dopo aver liberato tutto, la fusione ricostruisce un unico blocco grande quanto quello iniziale: senza fusione la memoria resterebbe **frammentata** in blocchi piccoli.
+
+### Capitolo 29 - Costruire un sistema operativo
+
+#### Soluzione 29.1
+
+```cpp
+#include <cstdint>
+#include <iostream>
+
+int main() {
+    std::uint64_t v = 0xFFFF800000201ABC;
+    unsigned pml4 = (v >> 39) & 0x1FF, pdpt = (v >> 30) & 0x1FF;
+    unsigned pd = (v >> 21) & 0x1FF, pt = (v >> 12) & 0x1FF, offset = v & 0xFFF;
+    std::cout << "PML4 " << pml4 << ", PDPT " << pdpt << ", PD " << pd << ", PT " << pt
+              << ", offset 0x" << std::hex << offset << '\n';
+}
+```
+
+```text
+PML4 256, PDPT 0, PD 1, PT 1, offset 0xabc
+```
+
+L'indice PML4 256 indica la meta' alta dello spazio di indirizzamento, dove i kernel x86_64 mappano se stessi; i bit 48-63 devono essere copie del bit 47 (indirizzo **canonico**), altrimenti la CPU genera un'eccezione.
+
+#### Soluzione 29.2
+
+```cpp
+#include <cstdarg>
+#include <cstdio>
+
+void put(char c) { std::putchar(c); }               // nel kernel: Console::put o la seriale
+
+void stampaNumero(unsigned long v, unsigned base) {
+    char buf[32];
+    int i = 0;
+    do { buf[i++] = "0123456789abcdef"[v % base]; v /= base; } while (v);
+    while (i) put(buf[--i]);
+}
+
+void kprintf(const char* f, ...) {
+    va_list ap;
+    va_start(ap, f);
+    for (; *f; ++f) {
+        if (*f != '%') { put(*f); continue; }
+        switch (*++f) {
+            case 'd': {
+                int x = va_arg(ap, int);
+                if (x < 0) { put('-'); stampaNumero(0ul - static_cast<unsigned long>(x), 10); }
+                else stampaNumero(x, 10);
+                break;
+            }
+            case 'u': stampaNumero(va_arg(ap, unsigned), 10); break;
+            case 'x': stampaNumero(va_arg(ap, unsigned), 16); break;
+            case 's': for (const char* s = va_arg(ap, const char*); *s; ++s) put(*s); break;
+            case 'c': put(static_cast<char>(va_arg(ap, int))); break;
+            case '%': put('%'); break;
+            case '\0': --f; break;                    // '%' finale: si ferma
+            default: put('%'); put(*f);
+        }
+    }
+    va_end(ap);
+}
+
+int main() {
+    kprintf("memoria: %u KB, base 0x%x, %s %c%d%%\n", 640u, 0xB8000u, "carico", '-', -42);
+}
+```
+
+```text
+memoria: 640 KB, base 0xb8000, carico --42%
+```
+
+Il valore negativo si converte prima a `unsigned long` (`0ul - x`): cosi' anche `INT_MIN` viene stampato correttamente, mentre `-x` sarebbe overflow.
+
+#### Soluzione 29.3
+
+`swapcontext` salva i registri del contesto corrente e carica quelli del successivo: e' esattamente cio' che fa il cambio di contesto di un kernel, ma in user space. Ogni "thread" ha il proprio stack.
+
+```cpp
+#include <ucontext.h>
+#include <iostream>
+#include <vector>
+
+ucontext_t principale, ctx[3];
+int corrente = 0;
+bool finito[3] = {};
+
+void cedi() {                                    // scheduler round robin cooperativo
+    int prec = corrente;
+    do corrente = (corrente + 1) % 3; while (finito[corrente] && corrente != prec);
+    if (corrente != prec) swapcontext(&ctx[prec], &ctx[corrente]);
+}
+
+void lavoro(int id, int passi) {
+    for (int i = 0; i < passi; ++i) { std::cout << "T" << id << ":" << i << ' '; cedi(); }
+    finito[id] = true;
+    cedi();                                      // non ritorna se ci sono altri thread
+}
+
+int main() {
+    std::vector<std::vector<char>> stack(3, std::vector<char>(64 * 1024));
+    int passi[3] = {2, 3, 1};
+    for (int i = 0; i < 3; ++i) {
+        getcontext(&ctx[i]);
+        ctx[i].uc_stack.ss_sp = stack[i].data();
+        ctx[i].uc_stack.ss_size = stack[i].size();
+        ctx[i].uc_link = &principale;            // dove andare quando la funzione termina
+        makecontext(&ctx[i], reinterpret_cast<void (*)()>(lavoro), 2, i, passi[i]);
+    }
+    swapcontext(&principale, &ctx[0]);
+    std::cout << "\nfine\n";
+}
+```
+
+```text
+T0:0 T1:0 T2:0 T0:1 T1:1 T1:2
+fine
+```
+
+NOTA: AddressSanitizer puo' segnalare falsi positivi con i cambi di stack di `swapcontext`; se succede, compila questo esempio senza `-fsanitize=address`.
+
+#### Soluzione 29.4
+
+Un blocco di ordine k ha dimensione `4 KB * 2^k`. Le liste libere sono una per ordine; il "compagno" di un blocco all'offset `o` di dimensione `d` si trova all'offset `o ^ d`.
+
+```cpp
+#include <cstddef>
+#include <iostream>
+#include <optional>
+#include <set>
+
+class Buddy {
+    static constexpr std::size_t MIN = 4096, ORDINI = 9;     // 4 KB .. 1 MB (2^8 * 4 KB)
+    std::set<std::size_t> liberi_[ORDINI];                   // offset dei blocchi liberi
+public:
+    Buddy() { liberi_[ORDINI - 1].insert(0); }
+    static std::size_t ordine(std::size_t n) {
+        std::size_t k = 0;
+        while ((MIN << k) < n) ++k;
+        return k;
+    }
+    std::optional<std::size_t> alloca(std::size_t n) {
+        std::size_t k = ordine(n), j = k;
+        while (j < ORDINI && liberi_[j].empty()) ++j;          // il piu' piccolo disponibile
+        if (j == ORDINI) return std::nullopt;
+        std::size_t off = *liberi_[j].begin();
+        liberi_[j].erase(liberi_[j].begin());
+        while (j > k) { --j; liberi_[j].insert(off + (MIN << j)); }   // divide il blocco
+        return off;
+    }
+    void libera(std::size_t off, std::size_t n) {
+        std::size_t k = ordine(n);
+        for (; k + 1 < ORDINI; ++k) {
+            std::size_t compagno = off ^ (MIN << k);
+            auto it = liberi_[k].find(compagno);
+            if (it == liberi_[k].end()) break;                   // compagno occupato: stop
+            liberi_[k].erase(it);
+            off = std::min(off, compagno);                       // fusione
+        }
+        liberi_[k].insert(off);
+    }
+    bool tuttoLibero() const { return liberi_[ORDINI - 1].count(0) == 1; }
+};
+
+int main() {
+    Buddy b;
+    auto a = b.alloca(4096), c = b.alloca(10000), d = b.alloca(4096);
+    std::cout << *a << ' ' << *c << ' ' << *d << ' ';
+    b.libera(*a, 4096); b.libera(*d, 4096); b.libera(*c, 10000);
+    std::cout << b.tuttoLibero() << '\n';
+}
+```
+
+```text
+0 16384 4096 1
+```
+
+La richiesta di 10.000 byte viene arrotondata a 16 KB: e' la **frammentazione interna** tipica del buddy allocator, ripagata da allocazione e fusione in O(log n). Linux lo usa per le pagine fisiche e vi appoggia sopra l'allocatore slab per gli oggetti piccoli.
+
+## Soluzioni - Parte 10
+
+### Capitolo 30 - Fondamenti di networking
+
+#### Soluzione 30.1
+
+Con UDP non ci sono connessione, `listen` o `accept`: ogni `recvfrom` restituisce **un datagramma intero** (o niente) insieme all'indirizzo del mittente, che si usa per rispondere. In compenso i datagrammi possono perdersi, duplicarsi o arrivare in ordine diverso: affidabilita' e ordinamento, se servono, li deve fornire l'applicazione.
+
+```cpp
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <iostream>
+#include <string>
+#include <thread>
+
+int main() {
+    int srv = socket(AF_INET, SOCK_DGRAM, 0);
+    sockaddr_in a{};
+    a.sin_family = AF_INET;
+    a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    bind(srv, (sockaddr*)&a, sizeof a);
+    socklen_t len = sizeof a;
+    getsockname(srv, (sockaddr*)&a, &len);
+
+    std::jthread server([srv] {
+        for (int i = 0; i < 2; ++i) {
+            char buf[512];
+            sockaddr_in mitt{};
+            socklen_t l = sizeof mitt;
+            ssize_t n = recvfrom(srv, buf, sizeof buf, 0, (sockaddr*)&mitt, &l);
+            std::string r = "ricevuto " + std::to_string(n) + " byte";
+            sendto(srv, r.data(), r.size(), 0, (sockaddr*)&mitt, l);   // risponde al mittente
+        }
+    });
+
+    int cli = socket(AF_INET, SOCK_DGRAM, 0);
+    for (std::string msg : {"datagramma uno", "due"}) {
+        sendto(cli, msg.data(), msg.size(), 0, (sockaddr*)&a, sizeof a);
+        char buf[512];
+        ssize_t n = recvfrom(cli, buf, sizeof buf, 0, nullptr, nullptr);
+        std::cout << std::string(buf, n) << '\n';
+    }
+    server.join();
+    close(cli); close(srv);
+}
+```
+
+```text
+ricevuto 14 byte
+ricevuto 3 byte
+```
+
+#### Soluzione 30.2
+
+```cpp
+#include <sys/socket.h>
+#include <unistd.h>
+#include <cerrno>
+#include <cstring>
+#include <iostream>
+
+bool riceviTutto(int fd, char* buf, std::size_t n) {
+    std::size_t letti = 0;
+    while (letti < n) {
+        ssize_t r = recv(fd, buf + letti, n - letti, 0);
+        if (r > 0) letti += r;
+        else if (r == 0) return false;                     // connessione chiusa prima del tempo
+        else if (errno != EINTR) return false;             // errore vero
+    }
+    return true;
+}
+
+int main() {
+    int sv[2];
+    socketpair(AF_UNIX, SOCK_STREAM, 0, sv);               // due socket gia' collegati
+    write(sv[0], "ab", 2);
+    write(sv[0], "cdef", 4);                               // arriva in due pezzi
+    char buf[7] = {};
+    std::cout << riceviTutto(sv[1], buf, 6) << ' ' << buf << ' ';
+    close(sv[0]);
+    std::cout << riceviTutto(sv[1], buf, 1) << '\n';       // l'altro lato ha chiuso
+    close(sv[1]);
+}
+```
+
+```text
+1 abcdef 0
+```
+
+#### Soluzione 30.3
+
+```cpp
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <iostream>
+#include <memory>
+#include <set>
+#include <string>
+
+int main() {
+    addrinfo hints{};
+    hints.ai_family = AF_UNSPEC;                       // IPv4 e IPv6
+    hints.ai_socktype = SOCK_STREAM;
+    addrinfo* raw = nullptr;
+    if (int e = getaddrinfo("localhost", "80", &hints, &raw); e != 0) {
+        std::cout << "errore: " << gai_strerror(e) << '\n';
+        return 1;
+    }
+    std::unique_ptr<addrinfo, decltype(&freeaddrinfo)> risultati(raw, &freeaddrinfo);
+
+    std::set<std::string> indirizzi;                   // ordinati e senza duplicati
+    for (addrinfo* p = risultati.get(); p; p = p->ai_next) {
+        char testo[INET6_ADDRSTRLEN];
+        const void* a = p->ai_family == AF_INET
+            ? (const void*)&((sockaddr_in*)p->ai_addr)->sin_addr
+            : (const void*)&((sockaddr_in6*)p->ai_addr)->sin6_addr;
+        inet_ntop(p->ai_family, a, testo, sizeof testo);
+        indirizzi.insert(testo);
+    }
+    std::cout << "localhost IPv4: " << indirizzi.count("127.0.0.1") << '\n';
+}
+```
+
+```text
+localhost IPv4: 1
+```
+
+A seconda della configurazione del sistema compare anche `::1` (IPv6). Un client robusto prova gli indirizzi nell'ordine restituito finche' una `connect` riesce.
+
+#### Soluzione 30.4
+
+Si sommano le parole di 16 bit in un accumulatore a 32 bit, si ripiegano i riporti nei 16 bit bassi e si complementa. Poiche' il campo checksum fa parte dei dati, il ricalcolo su un pacchetto integro da' 0.
+
+```cpp
+#include <cstdint>
+#include <cstdio>
+#include <vector>
+
+std::uint16_t checksum(const std::vector<std::uint8_t>& d) {
+    std::uint32_t somma = 0;
+    for (std::size_t i = 0; i + 1 < d.size(); i += 2) somma += d[i] << 8 | d[i + 1];
+    if (d.size() % 2) somma += d.back() << 8;              // byte dispari: riempito con 0
+    while (somma >> 16) somma = (somma & 0xFFFF) + (somma >> 16);
+    return static_cast<std::uint16_t>(~somma);
+}
+
+int main() {
+    std::vector<std::uint8_t> ip{0x45, 0x00, 0x00, 0x73, 0x00, 0x00, 0x40, 0x00, 0x40, 0x11,
+                                 0x00, 0x00, 0xC0, 0xA8, 0x00, 0x01, 0xC0, 0xA8, 0x00, 0xC7};
+    std::uint16_t c = checksum(ip);
+    ip[10] = c >> 8; ip[11] = c & 0xFF;                    // scrive il checksum nell'intestazione
+    std::printf("checksum 0x%04X, verifica 0x%04X\n", c, checksum(ip));
+}
+```
+
+```text
+checksum 0xB861, verifica 0x0000
+```
+
+### Capitolo 31 - Server scalabili
+
+#### Soluzione 31.1
+
+Il prefisso di lunghezza rende la codifica indipendente dal contenuto: anche una stringa che contiene `#` o cifre viene ricostruita correttamente.
+
+```cpp
+#include <iostream>
+#include <string>
+#include <vector>
+
+std::string codifica(const std::vector<std::string>& v) {
+    std::string out;
+    for (const auto& s : v) out += std::to_string(s.size()) + '#' + s;
+    return out;
+}
+
+std::vector<std::string> decodifica(const std::string& s) {
+    std::vector<std::string> out;
+    for (std::size_t i = 0; i < s.size();) {
+        std::size_t h = s.find('#', i);
+        std::size_t n = std::stoul(s.substr(i, h - i));
+        out.push_back(s.substr(h + 1, n));
+        i = h + 1 + n;
+    }
+    return out;
+}
+
+int main() {
+    std::vector<std::string> v{"ciao", "", "3#x", "a b"};
+    auto c = codifica(v);
+    std::cout << c << " -> " << (decodifica(c) == v ? "ok" : "errore") << '\n';
+}
+```
+
+```text
+4#ciao0#3#3#x3#a b -> ok
+```
+
+#### Soluzione 31.2
+
+```cpp
+#include <iostream>
+#include <optional>
+#include <string>
+
+std::optional<std::string> estraiRichiesta(std::string& buf) {
+    auto fineTesta = buf.find("\r\n\r\n");
+    if (fineTesta == std::string::npos) return std::nullopt;     // intestazioni incomplete
+    std::size_t corpo = 0;
+    auto p = buf.find("Content-Length:");
+    if (p != std::string::npos && p < fineTesta) corpo = std::stoul(buf.substr(p + 15));
+    std::size_t totale = fineTesta + 4 + corpo;
+    if (buf.size() < totale) return std::nullopt;                // corpo incompleto
+    std::string r = buf.substr(0, totale);
+    buf.erase(0, totale);                                        // il resto e' la prossima
+    return r;
+}
+
+int main() {
+    std::string buf = "POST /a HTTP/1.1\r\nContent-Length: 5\r\n\r\nciao!"
+                      "GET /b HTTP/1.1\r\nHost: x\r\n\r\n"
+                      "POST /c HTTP/1.1\r\nContent-Length: 10\r\n\r\nparz";
+    while (auto r = estraiRichiesta(buf)) std::cout << r->substr(0, r->find('\r')) << '\n';
+    std::cout << "in attesa: " << buf.size() << " byte\n";
+}
+```
+
+```text
+POST /a HTTP/1.1
+GET /b HTTP/1.1
+in attesa: 44 byte
+```
+
+La ricerca di `Content-Length` qui e' semplificata: un parser reale confronta i nomi delle intestazioni senza distinguere maiuscole e minuscole e valida il valore.
+
+#### Soluzione 31.3
+
+L'array `tempi[i]` ricorda a quale secondo si riferisce il contatore `colpi[i]` (con `i = t % 300`): se il secondo e' cambiato, il contatore vecchio viene azzerato.
+
+```cpp
+#include <array>
+#include <iostream>
+
+class HitCounter {
+    std::array<int, 300> tempi_{}, colpi_{};
+public:
+    void hit(int t) {
+        int i = t % 300;
+        if (tempi_[i] != t) { tempi_[i] = t; colpi_[i] = 0; }
+        ++colpi_[i];
+    }
+    int getHits(int t) const {
+        int tot = 0;
+        for (int i = 0; i < 300; ++i) if (t - tempi_[i] < 300) tot += colpi_[i];
+        return tot;
+    }
+};
+
+int main() {
+    HitCounter h;
+    h.hit(1); h.hit(2); h.hit(3); h.hit(3);
+    std::cout << h.getHits(4) << ' ';
+    h.hit(300);
+    std::cout << h.getHits(300) << ' ' << h.getHits(301) << ' ' << h.getHits(700) << '\n';
+}
+```
+
+```text
+4 5 4 0
+```
+
+#### Soluzione 31.4
+
+Ogni cella conserva la lista delle coppie `(idSnap, valore)` in cui e' stata modificata; `get` cerca con ricerca binaria l'ultima modifica con `idSnap <= richiesto`. Lo spazio e' proporzionale alle modifiche, non a `numero di snapshot * dimensione`.
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <limits>
+#include <utility>
+#include <vector>
+
+class SnapshotArray {
+    std::vector<std::vector<std::pair<int, int>>> storia_;
+    int snap_ = 0;
+public:
+    explicit SnapshotArray(int n) : storia_(n, {{0, 0}}) {}
+    void set(int i, int v) {
+        auto& h = storia_[i];
+        if (h.back().first == snap_) h.back().second = v;      // stessa versione: sovrascrive
+        else h.emplace_back(snap_, v);
+    }
+    int snap() { return snap_++; }
+    int get(int i, int id) const {
+        const auto& h = storia_[i];
+        auto chiave = std::pair{id, std::numeric_limits<int>::max()};
+        auto it = std::upper_bound(h.begin(), h.end(), chiave);
+        return std::prev(it)->second;
+    }
+};
+
+int main() {
+    SnapshotArray a(3);
+    a.set(0, 5);
+    int s0 = a.snap();
+    a.set(0, 6);
+    a.set(1, 9);
+    int s1 = a.snap();
+    std::cout << a.get(0, s0) << ' ' << a.get(0, s1) << ' ' << a.get(1, s0) << ' ' << a.get(1, s1)
+              << '\n';
+}
+```
+
+```text
+5 6 0 9
+```
+
+#### Soluzione 31.5
+
+Per ogni connessione servono un buffer di ricezione (con il `Deframer` dell'Esempio 31.1) e un buffer di invio. Lo schema dell'evento di scrittura e' il seguente:
+
+```cpp
+// non compilare qui: frammento da inserire nel server dell'Esempio 31.2
+struct Connessione { Deframer in; std::string out; };
+std::unordered_map<int, Connessione> conn;
+
+void accoda(int ep, int fd, const std::string& msg) {
+    auto& c = conn[fd];
+    bool eraVuoto = c.out.empty();
+    c.out += incapsula(msg);
+    if (eraVuoto) svuota(ep, fd);                 // prova subito a inviare
+}
+
+void svuota(int ep, int fd) {
+    auto& c = conn[fd];
+    while (!c.out.empty()) {
+        ssize_t n = send(fd, c.out.data(), c.out.size(), MSG_NOSIGNAL);
+        if (n > 0) { c.out.erase(0, n); continue; }
+        if (errno == EAGAIN) {                    // buffer del kernel pieno: attendi EPOLLOUT
+            epoll_event e{EPOLLIN | EPOLLOUT, {.fd = fd}};
+            epoll_ctl(ep, EPOLL_CTL_MOD, fd, &e);
+            return;
+        }
+        chiudi(ep, fd); return;                   // errore vero
+    }
+    epoll_event e{EPOLLIN, {.fd = fd}};           // tutto inviato: non serve piu' EPOLLOUT
+    epoll_ctl(ep, EPOLL_CTL_MOD, fd, &e);
+}
+
+// nel ciclo eventi:
+//   if (ev.events & EPOLLIN) {
+//       leggi in un buffer e chiama conn[fd].in.ricevi(...);
+//       while (auto m = conn[fd].in.prossimo()) accoda(ep, fd, elabora(*m));
+//   }
+//   if (ev.events & EPOLLOUT) svuota(ep, fd);
+```
+
+`EPOLLOUT` va registrato **solo** quando c'e' qualcosa da inviare: un socket e' quasi sempre scrivibile e lasciarlo attivo farebbe girare il ciclo a vuoto al 100% di CPU. Conviene anche limitare la dimensione di `out` (backpressure): un client che non legge non deve far crescere la memoria del server all'infinito.
+
+### Capitolo 32 - Algoritmi e progetti di rete
+
+#### Soluzione 32.1
+
+```cpp
+#include <iostream>
+#include <numeric>
+#include <vector>
+
+struct DSU {
+    std::vector<int> p;
+    explicit DSU(int n) : p(n) { std::iota(p.begin(), p.end(), 0); }
+    int find(int x) { return p[x] == x ? x : p[x] = find(p[x]); }
+    bool unisci(int a, int b) {
+        a = find(a); b = find(b);
+        if (a == b) return false;
+        p[a] = b;
+        return true;
+    }
+};
+
+int operazioni(int n, const std::vector<std::vector<int>>& cavi) {
+    if ((int)cavi.size() < n - 1) return -1;          // cavi insufficienti
+    DSU d(n);
+    int componenti = n;
+    for (auto& c : cavi) if (d.unisci(c[0], c[1])) --componenti;
+    return componenti - 1;
+}
+
+int main() {
+    std::cout << operazioni(4, {{0, 1}, {0, 2}, {1, 2}}) << ' '
+              << operazioni(6, {{0, 1}, {0, 2}, {0, 3}, {1, 2}, {1, 3}}) << ' '
+              << operazioni(6, {{0, 1}, {0, 2}, {0, 3}, {1, 2}}) << '\n';
+}
+```
+
+```text
+1 2 -1
+```
+
+#### Soluzione 32.2
+
+Il leaky bucket mette in coda le richieste e le fa uscire a velocita' costante: **livella** il traffico e scarta solo quando la coda e' piena, ma non ammette picchi. Il token bucket accumula credito nei periodi di quiete e permette raffiche fino alla capacita'.
+
+```cpp
+#include <algorithm>
+#include <iostream>
+
+class LeakyBucket {
+    double capacita_, velocita_, livello_ = 0, ultimo_ = 0;
+public:
+    LeakyBucket(double c, double v) : capacita_(c), velocita_(v) {}
+    bool consenti(double ora) {
+        livello_ = std::max(0.0, livello_ - (ora - ultimo_) * velocita_);   // la coda si svuota
+        ultimo_ = ora;
+        if (livello_ + 1 > capacita_) return false;
+        livello_ += 1;
+        return true;
+    }
+};
+
+class TokenBucket {
+    double capacita_, velocita_, gettoni_, ultimo_ = 0;
+public:
+    TokenBucket(double c, double v) : capacita_(c), velocita_(v), gettoni_(c) {}
+    bool consenti(double ora) {
+        gettoni_ = std::min(capacita_, gettoni_ + (ora - ultimo_) * velocita_);
+        ultimo_ = ora;
+        if (gettoni_ < 1) return false;
+        gettoni_ -= 1;
+        return true;
+    }
+};
+
+int main() {
+    LeakyBucket lb(5, 2);
+    TokenBucket tb(5, 2);
+    int okL = 0, okT = 0;
+    for (int i = 0; i < 10; ++i) { okL += lb.consenti(0); okT += tb.consenti(0); }   // raffica
+    std::cout << "raffica di 10: leaky " << okL << ", token " << okT << '\n';
+}
+```
+
+```text
+raffica di 10: leaky 5, token 5
+```
+
+Con la stessa capacita' entrambi accettano 5 richieste della raffica, ma la differenza e' **quando** vengono servite: nel leaky bucket le 5 accettate restano in coda ed escono una ogni 0,5 s (ritardo fino a 2,5 s), nel token bucket vengono servite subito. Il primo protegge un backend che non regge i picchi, il secondo offre bassa latenza tollerando raffiche brevi.
+
+#### Soluzione 32.3
+
+```cpp
+#include <array>
+#include <cstdint>
+#include <cstdio>
+#include <string_view>
+
+constexpr std::array<std::uint32_t, 256> tabellaCrc() {
+    std::array<std::uint32_t, 256> t{};
+    for (std::uint32_t i = 0; i < 256; ++i) {
+        std::uint32_t c = i;
+        for (int k = 0; k < 8; ++k) c = c & 1 ? 0xEDB88320u ^ (c >> 1) : c >> 1;
+        t[i] = c;
+    }
+    return t;
+}
+constexpr auto TABELLA = tabellaCrc();                    // calcolata dal compilatore
+
+constexpr std::uint32_t crc32(std::string_view s) {
+    std::uint32_t c = 0xFFFFFFFFu;
+    for (unsigned char b : s) c = TABELLA[(c ^ b) & 0xFF] ^ (c >> 8);
+    return c ^ 0xFFFFFFFFu;
+}
+static_assert(crc32("123456789") == 0xCBF43926);
+
+int main() { std::printf("0x%08X\n", crc32("123456789")); }
+```
+
+```text
+0xCBF43926
+```
+
+#### Soluzione 32.4
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <vector>
+
+struct Richiesta { int arrivo, durata; };
+
+std::vector<int> simula(const std::vector<Richiesta>& r, bool leastConn) {
+    std::vector<std::vector<int>> fine(3);       // istanti di fine delle richieste attive
+    std::vector<int> lavoro(3, 0);
+    int rr = 0;
+    for (const auto& q : r) {
+        for (auto& f : fine)                                   // rimuove le richieste concluse
+            std::erase_if(f, [&](int t) { return t <= q.arrivo; });
+        int b;
+        if (leastConn)
+            b = std::ranges::min_element(fine, {}, &std::vector<int>::size) - fine.begin();
+        else b = rr++ % 3;
+        fine[b].push_back(q.arrivo + q.durata);
+        lavoro[b] += q.durata;
+    }
+    return lavoro;
+}
+
+int main() {
+    std::vector<Richiesta> r;
+    for (int i = 0; i < 20; ++i) r.push_back({i, i % 3 == 0 ? 30 : 1});   // una lenta ogni tre
+    for (bool lc : {false, true}) {
+        auto l = simula(r, lc);
+        std::cout << (lc ? "least connections:" : "round robin:      ");
+        for (int x : l) std::cout << ' ' << x;
+        std::cout << '\n';
+    }
+}
+```
+
+```text
+round robin:       210 7 6
+least connections: 94 65 64
+```
+
+Con round robin tutte le richieste lente (una ogni tre) finiscono sul primo backend, perche' il periodo delle richieste coincide con il numero di server: e' un caso patologico ma realistico. Least connections tiene conto delle richieste ancora attive e distribuisce il lavoro molto meglio (94, 65, 64). Nella pratica si usano anche varianti pesate (per server di potenza diversa) o "power of two choices" (si scelgono a caso due server e si prende il meno carico), che evita di dover conoscere lo stato di tutti.
+
+#### Soluzione 32.5
+
+Modello semplificato a "giri": a ogni giro il mittente invia l'intera finestra a partire da `base`; il ricevitore accetta solo il pacchetto che si aspetta (in ordine) e scarta gli altri; alla fine del giro l'ACK cumulativo sposta `base`, e se qualcosa e' andato perso il timeout fa ripartire l'invio da li'.
+
+```cpp
+#include <iostream>
+
+int main() {
+    const int N = 20, FINESTRA = 4;
+    int base = 0, trasmissioni = 0, contatore = 0, giri = 0;
+    int atteso = 0;                                     // prossimo numero atteso dal ricevitore
+    while (base < N) {
+        ++giri;
+        for (int seq = base; seq < base + FINESTRA && seq < N; ++seq) {
+            ++trasmissioni;
+            bool perso = ++contatore % 5 == 0;          // il canale perde 1 pacchetto su 5
+            if (!perso && seq == atteso) ++atteso;      // accettato solo se in ordine
+        }
+        base = atteso;                                  // ACK cumulativo (+ timeout se serve)
+    }
+    std::cout << "consegnati " << atteso << " pacchetti in " << giri << " giri con "
+              << trasmissioni << " trasmissioni\n";
+}
+```
+
+```text
+consegnati 20 pacchetti in 10 giri con 39 trasmissioni
+```
+
+Ogni perdita costringe a ritrasmettere anche i pacchetti successivi gia' inviati nella finestra, che il ricevitore aveva scartato perche' fuori ordine: e' il limite di Go-Back-N. Selective Repeat conserva i pacchetti fuori ordine e ritrasmette solo quelli persi, al prezzo di buffer anche nel ricevitore; TCP moderno usa ACK selettivi (SACK) per lo stesso motivo.
+
+## Soluzioni - Parti 11 e 12
+
+### Capitolo 33 - Usare database da C++
+
+#### Soluzione 33.1
+
+```cpp
+// compila: -lsqlite3
+#include <sqlite3.h>
+#include <iostream>
+
+int stampa(void*, int, char** v, char**) { std::cout << v[0] << ' '; return 0; }
+
+int main() {
+    sqlite3* db;
+    sqlite3_open(":memory:", &db);
+    sqlite3_exec(db, R"(
+        CREATE TABLE clienti(id INTEGER PRIMARY KEY, nome TEXT);
+        CREATE TABLE ordini(id INTEGER PRIMARY KEY, cliente INT REFERENCES clienti(id));
+        INSERT INTO clienti VALUES (1, 'Joe'), (2, 'Henry'), (3, 'Sam'), (4, 'Max');
+        INSERT INTO ordini VALUES (1, 3), (2, 1);)", nullptr, nullptr, nullptr);
+    sqlite3_exec(db, "SELECT c.nome FROM clienti c LEFT JOIN ordini o ON o.cliente = c.id"
+                     " WHERE o.id IS NULL ORDER BY c.nome", stampa, nullptr, nullptr);
+    std::cout << "| ";
+    sqlite3_exec(db, "SELECT nome FROM clienti c WHERE NOT EXISTS"
+                     " (SELECT 1 FROM ordini o WHERE o.cliente = c.id) ORDER BY nome",
+                 stampa, nullptr, nullptr);
+    std::cout << '\n';
+    sqlite3_close(db);
+}
+```
+
+```text
+Henry Max | Henry Max
+```
+
+Il `LEFT JOIN` conserva tutti i clienti e riempie con `NULL` le colonne degli ordini mancanti; `NOT EXISTS` esprime l'intenzione in modo piu' diretto e molti ottimizzatori lo eseguono come **anti-join**, fermandosi al primo ordine trovato.
+
+#### Soluzione 33.2
+
+```cpp
+// compila: -lsqlite3
+#include <sqlite3.h>
+#include <iostream>
+#include <optional>
+#include <string>
+
+std::optional<std::string> testoOpzionale(sqlite3_stmt* st, int c) {
+    if (sqlite3_column_type(st, c) == SQLITE_NULL) return std::nullopt;
+    return reinterpret_cast<const char*>(sqlite3_column_text(st, c));
+}
+
+int main() {
+    sqlite3* db;
+    sqlite3_open(":memory:", &db);
+    sqlite3_exec(db, "CREATE TABLE p(nome TEXT, email TEXT);"
+                     "INSERT INTO p VALUES ('Anna', 'anna@x.it'), ('Ugo', NULL);",
+                 nullptr, nullptr, nullptr);
+    sqlite3_stmt* st;
+    sqlite3_prepare_v2(db, "SELECT nome, email FROM p", -1, &st, nullptr);
+    while (sqlite3_step(st) == SQLITE_ROW)
+        std::cout << *testoOpzionale(st, 0) << ": " << testoOpzionale(st, 1).value_or("(nessuna)")
+                  << '\n';
+    sqlite3_finalize(st);
+    sqlite3_close(db);
+}
+```
+
+```text
+Anna: anna@x.it
+Ugo: (nessuna)
+```
+
+Nel wrapper dell'Esempio 33.1 diventa un metodo di `Statement`. Senza questo controllo, `sqlite3_column_text` su un `NULL` restituisce un puntatore nullo, e costruire una `std::string` da `nullptr` e' comportamento indefinito.
+
+#### Soluzione 33.3
+
+```cpp
+// compila: -lsqlite3
+#include <sqlite3.h>
+#include <iostream>
+#include <string>
+
+int conta(void* n, int, char**, char**) { ++*static_cast<int*>(n); return 0; }
+
+int main() {
+    sqlite3* db;
+    sqlite3_open(":memory:", &db);
+    sqlite3_exec(db, "CREATE TABLE utenti(nome TEXT, segreto TEXT);"
+                     "INSERT INTO utenti VALUES ('anna', 's1'), ('bruno', 's2'), ('carla', 's3');",
+                 nullptr, nullptr, nullptr);
+    std::string input = "x' OR '1'='1";
+
+    std::string sql = "SELECT * FROM utenti WHERE nome = '" + input + "'";   // VULNERABILE
+    int righe = 0;
+    sqlite3_exec(db, sql.c_str(), conta, &righe, nullptr);
+    std::cout << "concatenazione: " << sql << "\n  -> righe restituite: " << righe << '\n';
+
+    sqlite3_stmt* st;
+    sqlite3_prepare_v2(db, "SELECT * FROM utenti WHERE nome = ?", -1, &st, nullptr);
+    sqlite3_bind_text(st, 1, input.c_str(), -1, SQLITE_TRANSIENT);
+    righe = 0;
+    while (sqlite3_step(st) == SQLITE_ROW) ++righe;
+    sqlite3_finalize(st);
+    std::cout << "parametro: righe restituite: " << righe << '\n';
+    sqlite3_close(db);
+}
+```
+
+```text
+concatenazione: SELECT * FROM utenti WHERE nome = 'x' OR '1'='1'
+  -> righe restituite: 3
+parametro: righe restituite: 0
+```
+
+Concatenando, l'apice nell'input chiude la stringa SQL e il resto diventa **codice**: la condizione `'1'='1'` e' sempre vera e la query restituisce i segreti di tutti. Con il parametro l'input resta un **dato**: si cerca un utente che si chiama letteralmente `x' OR '1'='1`.
+
+#### Soluzione 33.4
+
+```cpp
+// compila: -lsqlite3
+#include <sqlite3.h>
+#include <chrono>
+#include <cstdio>
+#include <iostream>
+
+double inserisci(sqlite3* db, int n, bool transazione) {
+    auto t0 = std::chrono::steady_clock::now();
+    if (transazione) sqlite3_exec(db, "BEGIN", nullptr, nullptr, nullptr);
+    sqlite3_stmt* st;
+    sqlite3_prepare_v2(db, "INSERT INTO t(k, v) VALUES(?, ?)", -1, &st, nullptr);
+    for (int i = 0; i < n; ++i) {
+        sqlite3_bind_int(st, 1, i);
+        sqlite3_bind_int(st, 2, i * 7 % 1000);
+        sqlite3_step(st);
+        sqlite3_reset(st);
+    }
+    sqlite3_finalize(st);
+    if (transazione) sqlite3_exec(db, "COMMIT", nullptr, nullptr, nullptr);
+    return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+}
+
+int piano(void*, int, char** v, char**) { std::cout << "  " << v[3] << '\n'; return 0; }
+
+int main() {
+    std::remove("prova.db");
+    sqlite3* db;
+    sqlite3_open("prova.db", &db);                        // su file: ogni COMMIT tocca il disco
+    sqlite3_exec(db, "CREATE TABLE t(k INT, v INT)", nullptr, nullptr, nullptr);
+    double senza = inserisci(db, 300, false);             // 300 transazioni implicite
+    double con = inserisci(db, 100000, true);             // una sola transazione
+    std::cerr << "300 righe senza transazione: " << senza << " s, 100000 con: " << con << " s\n";
+
+    const char* q = "EXPLAIN QUERY PLAN SELECT * FROM t WHERE v = 42";
+    std::cout << "prima dell'indice:\n";
+    sqlite3_exec(db, q, piano, nullptr, nullptr);
+    sqlite3_exec(db, "CREATE INDEX idx_v ON t(v)", nullptr, nullptr, nullptr);
+    std::cout << "dopo l'indice:\n";
+    sqlite3_exec(db, q, piano, nullptr, nullptr);
+    sqlite3_close(db);
+}
+```
+
+```text
+prima dell'indice:
+  SCAN t
+dopo l'indice:
+  SEARCH t USING INDEX idx_v (v=?)
+```
+
+Senza transazione esplicita ogni `INSERT` e' una transazione a se': SQLite deve attendere che il journal arrivi fisicamente sul disco (`fsync`) a ogni riga, e un disco completa solo qualche centinaio (HDD) o migliaio (SSD) di sincronizzazioni al secondo. In una transazione l'`fsync` si fa una volta sola al `COMMIT`: 100.000 righe richiedono una frazione di secondo, contro diversi secondi per poche centinaia di righe senza transazione. Il piano mostra il passaggio da `SCAN` (lettura di tutta la tabella, O(n)) a `SEARCH ... USING INDEX` (B-tree, O(log n)).
+
+### Capitolo 34 - Costruire un database
+
+#### Soluzione 34.1
+
+Si legge un numero alla volta insieme all'operatore che lo precede: `+` e `-` mettono il numero (con segno) sulla pila, `*` e `/` lo combinano subito con la cima, perche' hanno precedenza. Alla fine si somma la pila.
+
+```cpp
+#include <cctype>
+#include <iostream>
+#include <numeric>
+#include <string>
+#include <vector>
+
+int calcola(const std::string& s) {
+    std::vector<long long> pila;
+    long long num = 0;
+    char op = '+';
+    for (std::size_t i = 0; i <= s.size(); ++i) {
+        char c = i < s.size() ? s[i] : '+';                 // sentinella finale
+        if (std::isdigit(static_cast<unsigned char>(c))) { num = num * 10 + (c - '0'); continue; }
+        if (c == ' ') continue;
+        if (op == '+') pila.push_back(num);
+        else if (op == '-') pila.push_back(-num);
+        else if (op == '*') pila.back() *= num;
+        else pila.back() /= num;                            // divisione troncata verso zero
+        op = c;
+        num = 0;
+    }
+    return static_cast<int>(std::accumulate(pila.begin(), pila.end(), 0LL));
+}
+
+int main() {
+    std::cout << calcola("3+2*2") << ' ' << calcola(" 3/2 ") << ' ' << calcola("14-3/2*4") << '\n';
+}
+```
+
+```text
+7 1 10
+```
+
+#### Soluzione 34.2
+
+Ogni modifica viene **prima** scritta e resa persistente nel log, **poi** applicata in memoria: se il processo muore tra le due operazioni il dato non e' perso. Il recupero rilegge il log dall'inizio. In un motore reale si chiama `fsync` dopo ogni scrittura (o a gruppi, "group commit") e il log viene troncato dopo lo scarico della memtable.
+
+```cpp
+#include <fstream>
+#include <iostream>
+#include <map>
+#include <optional>
+#include <sstream>
+#include <string>
+
+class MemtableConWAL {
+    std::map<std::string, std::optional<std::string>> mem_;
+    std::ofstream log_;
+public:
+    explicit MemtableConWAL(const std::string& file) : log_(file, std::ios::app) {}
+    void put(const std::string& k, const std::string& v) {
+        log_ << "P " << k << ' ' << v << '\n' << std::flush;     // prima il log...
+        mem_[k] = v;                                             // ...poi la memoria
+    }
+    void del(const std::string& k) {
+        log_ << "D " << k << '\n' << std::flush;
+        mem_[k] = std::nullopt;
+    }
+    static std::map<std::string, std::optional<std::string>> recupera(const std::string& file) {
+        std::map<std::string, std::optional<std::string>> m;
+        std::ifstream in(file);
+        for (std::string riga; std::getline(in, riga);) {
+            std::istringstream ss(riga);
+            std::string op, k, v;
+            ss >> op >> k;
+            if (op == "P" && ss >> v) m[k] = v;
+            else if (op == "D") m[k] = std::nullopt;
+            // una riga troncata (crash durante la scrittura) viene ignorata
+        }
+        return m;
+    }
+};
+
+int main() {
+    std::remove("wal.log");
+    {
+        MemtableConWAL db("wal.log");
+        db.put("a", "1"); db.put("b", "2"); db.del("a"); db.put("c", "3");
+    }                                                            // "crash": la memoria e' persa
+    { std::ofstream("wal.log", std::ios::app) << "P d"; }        // scrittura interrotta a meta'
+    for (auto& [k, v] : MemtableConWAL::recupera("wal.log"))
+        std::cout << k << '=' << v.value_or("(cancellato)") << ' ';
+    std::cout << '\n';
+}
+```
+
+```text
+a=(cancellato) b=2 c=3
+```
+
+#### Soluzione 34.3
+
+```cpp
+#include <iostream>
+#include <stack>
+#include <string>
+#include <vector>
+
+int valutaRPN(const std::vector<std::string>& t) {
+    std::stack<long long> s;
+    for (const auto& x : t) {
+        if (x.size() == 1 && std::string("+-*/").find(x[0]) != std::string::npos) {
+            long long b = s.top(); s.pop();
+            long long a = s.top(); s.pop();                    // attenzione all'ordine
+            s.push(x == "+" ? a + b : x == "-" ? a - b : x == "*" ? a * b : a / b);
+        } else s.push(std::stoll(x));
+    }
+    return static_cast<int>(s.top());
+}
+
+int main() {
+    std::cout << valutaRPN({"2", "1", "+", "3", "*"}) << ' '
+              << valutaRPN({"4", "13", "5", "/", "+"}) << ' '
+              << valutaRPN({"10", "6", "9", "3", "+", "-11", "*", "/", "*", "17", "+", "5", "+"})
+              << '\n';
+}
+```
+
+```text
+9 6 22
+```
+
+Per convertire l'AST dell'Esempio 34.2 basta aggiungere a `Espr` un metodo virtuale `void rpn(std::vector<std::string>& out) const`: `Costante` e `Colonna` accodano il proprio valore, `Binaria` chiama `a->rpn(out)`, poi `b->rpn(out)`, poi accoda `op` (visita **post-order**). La notazione polacca inversa e' il formato con cui molte macchine virtuali, compresa quella di SQLite (il "bytecode" VDBE), eseguono le espressioni.
+
+#### Soluzione 34.4
+
+```cpp
+#include <array>
+#include <iostream>
+#include <list>
+#include <stdexcept>
+#include <unordered_map>
+
+constexpr std::size_t DIM_PAGINA = 4096;
+using Pagina = std::array<char, DIM_PAGINA>;
+
+struct Disco {                                        // "disco" simulato con contatori
+    std::unordered_map<int, Pagina> pagine;
+    int letture = 0, scritture = 0;
+    Pagina leggi(int id) { ++letture; return pagine[id]; }
+    void scrivi(int id, const Pagina& p) { ++scritture; pagine[id] = p; }
+};
+
+class BufferPool {
+    struct Frame { int id; Pagina dati; int pin = 0; bool sporca = false; };
+    std::size_t capacita_;
+    Disco& disco_;
+    std::list<Frame> lru_;                            // in testa la piu' recente
+    std::unordered_map<int, std::list<Frame>::iterator> mappa_;
+public:
+    BufferPool(std::size_t c, Disco& d) : capacita_(c), disco_(d) {}
+    Pagina& fissa(int id, bool scrittura) {
+        auto it = mappa_.find(id);
+        if (it == mappa_.end()) {
+            if (lru_.size() == capacita_) {           // cerca la vittima meno recente non fissata
+                auto v = lru_.end();
+                for (auto x = lru_.rbegin(); x != lru_.rend(); ++x)
+                    if (x->pin == 0) { v = std::next(x).base(); break; }
+                if (v == lru_.end()) throw std::runtime_error("tutte le pagine sono fissate");
+                if (v->sporca) disco_.scrivi(v->id, v->dati);
+                mappa_.erase(v->id);
+                lru_.erase(v);
+            }
+            lru_.push_front({id, disco_.leggi(id)});
+            it = mappa_.emplace(id, lru_.begin()).first;
+        } else lru_.splice(lru_.begin(), lru_, it->second);
+        it->second->pin++;
+        it->second->sporca |= scrittura;
+        return it->second->dati;
+    }
+    void rilascia(int id) { mappa_.at(id)->pin--; }
+    void scaricaTutto() {
+        for (auto& f : lru_) if (f.sporca) { disco_.scrivi(f.id, f.dati); f.sporca = false; }
+    }
+};
+
+int main() {
+    Disco d;
+    BufferPool bp(3, d);
+    bp.fissa(1, false); bp.rilascia(1);
+    bp.fissa(2, true)[0] = 'x'; bp.rilascia(2);             // pagina 2 sporca
+    bp.fissa(3, false);                                     // la 3 resta fissata
+    bp.fissa(1, false); bp.rilascia(1);                     // hit: nessuna lettura
+    bp.fissa(4, false); bp.rilascia(4);                     // espelle la 2 (sporca -> scrittura)
+    bp.fissa(5, false); bp.rilascia(5);                     // espelle la 1 (la 3 e' fissata)
+    std::cout << "letture " << d.letture << ", scritture " << d.scritture
+              << ", pagina 2 su disco: " << d.pagine[2][0] << '\n';
+    bp.rilascia(3);
+    bp.scaricaTutto();
+}
+```
+
+```text
+letture 5, scritture 1, pagina 2 su disco: x
+```
+
+#### Soluzione 34.5
+
+Lo heap contiene la prossima voce di ciascuna SSTable; a parita' di chiave si preferisce la tabella piu' recente (indice maggiore) e si saltano le versioni vecchie della stessa chiave.
+
+```cpp
+#include <iostream>
+#include <queue>
+#include <string>
+#include <tuple>
+#include <utility>
+#include <vector>
+
+using SSTable = std::vector<std::pair<std::string, std::string>>;
+
+SSTable fondi(const std::vector<SSTable>& tab) {        // tab[i] piu' recente di tab[i-1]
+    using Voce = std::tuple<std::string, int, std::size_t>;   // (chiave, -tabella, posizione)
+    std::priority_queue<Voce, std::vector<Voce>, std::greater<>> pq;
+    for (int i = 0; i < (int)tab.size(); ++i)
+        if (!tab[i].empty()) pq.push({tab[i][0].first, -i, 0});
+    SSTable out;
+    while (!pq.empty()) {
+        auto [k, menoI, pos] = pq.top(); pq.pop();
+        int i = -menoI;
+        if (out.empty() || out.back().first != k) out.push_back(tab[i][pos]);   // la piu' recente
+        if (pos + 1 < tab[i].size()) pq.push({tab[i][pos + 1].first, menoI, pos + 1});
+    }
+    return out;
+}
+
+int main() {
+    std::vector<SSTable> t{{{"a", "1"}, {"c", "1"}, {"e", "1"}},
+                           {{"b", "2"}, {"c", "2"}},
+                           {{"a", "3"}, {"d", "3"}}};
+    for (auto& [k, v] : fondi(t)) std::cout << k << '=' << v << ' ';
+    std::cout << '\n';
+}
+```
+
+```text
+a=3 b=2 c=2 d=3 e=1
+```
+
+Ogni voce entra ed esce dallo heap una volta, e lo heap ha al massimo k elementi: O(n log k). Le SSTable vengono lette in sequenza, il che su disco e' molto piu' veloce di accessi casuali.
+
+### Capitolo 35 - Piano di studio e preparazione ai colloqui
+
+#### Soluzione 35.1
+
+L'acqua sopra la barra i vale `min(maxSinistra, maxDestra) - h[i]`. Con due puntatori: il lato con il massimo minore e' quello che limita, e il suo contributo si puo' calcolare subito.
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <vector>
+
+int acqua(const std::vector<int>& h) {
+    int i = 0, j = (int)h.size() - 1, maxSx = 0, maxDx = 0, tot = 0;
+    while (i < j) {
+        if (h[i] < h[j]) { maxSx = std::max(maxSx, h[i]); tot += maxSx - h[i]; ++i; }
+        else { maxDx = std::max(maxDx, h[j]); tot += maxDx - h[j]; --j; }
+    }
+    return tot;
+}
+
+int main() {
+    std::cout << acqua({0, 1, 0, 2, 1, 0, 1, 3, 2, 1, 2, 1}) << ' '
+              << acqua({4, 2, 0, 3, 2, 5}) << '\n';
+}
+```
+
+```text
+6 9
+```
+
+#### Soluzione 35.2
+
+In un colloquio: "`ok[i]` dice se il prefisso di lunghezza i si puo' spezzare; `ok[0]` e' vero (stringa vuota); `ok[i]` e' vero se esiste `j < i` con `ok[j]` vero e `s[j..i)` nel dizionario. La risposta e' `ok[n]`. Con un `unordered_set` di parole e limitando j alle lunghezze delle parole il costo e' O(n * L) controlli, dove L e' la lunghezza massima di una parola."
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <string>
+#include <unordered_set>
+#include <vector>
+
+bool spezzabile(const std::string& s, const std::vector<std::string>& dizionario) {
+    std::unordered_set<std::string> d(dizionario.begin(), dizionario.end());
+    std::size_t maxL = 0;
+    for (auto& p : dizionario) maxL = std::max(maxL, p.size());
+    std::vector<bool> ok(s.size() + 1, false);
+    ok[0] = true;
+    for (std::size_t i = 1; i <= s.size(); ++i)
+        for (std::size_t l = 1; l <= std::min(i, maxL) && !ok[i]; ++l)
+            ok[i] = ok[i - l] && d.count(s.substr(i - l, l));
+    return ok[s.size()];
+}
+
+int main() {
+    std::cout << spezzabile("leetcode", {"leet", "code"})
+              << spezzabile("applepenapple", {"apple", "pen"})
+              << spezzabile("catsandog", {"cats", "dog", "sand", "and", "cat"}) << '\n';
+}
+```
+
+```text
+110
+```
+
+#### Soluzione 35.3
+
+- **A coppie in sequenza** (fondi la prima con la seconda, il risultato con la terza...): le prime liste vengono ricopiate a ogni passo, O(n k).
+- **Divide et impera** (fondi a coppie come nel merge sort: k/2 fusioni, poi k/4...): log k livelli, ciascuno O(n): **O(n log k)**, nessuna struttura extra.
+- **Min-heap** con la testa di ogni lista: ogni elemento entra ed esce dallo heap di dimensione k, **O(n log k)**, O(k) spazio extra; e' anche la soluzione naturale quando le liste sono flussi (Soluzione 34.5).
+
+In un colloquio conviene citare la prima, spiegare perche' e' lenta e implementare una delle altre due.
+
+#### Soluzione 35.4
+
+Una traccia di progetto:
+
+- **API**: `POST /api/link {url}` restituisce `{codice}`; `GET /{codice}` risponde `301` con `Location`. Autenticazione con chiave API per la creazione.
+- **Dati**: tabella `link(codice PRIMARY KEY, url, creato, proprietario)`. 10.000 richieste al secondo sono per la maggior parte **letture** (rapporto tipico 100:1).
+- **Codici**: contatore distribuito (blocchi di ID assegnati a ogni server, cosi' non serve coordinarsi a ogni richiesta) convertito in base 62; 7 caratteri bastano per 62^7 = 3,5 * 10^12 link.
+- **Cache**: le letture passano da una cache LRU in memoria su ogni nodo e da una cache distribuita (Redis/memcached) con consistent hashing; un piccolo insieme di link molto popolari genera la maggior parte del traffico, quindi il tasso di hit e' alto.
+- **Rate limiting**: token bucket per chiave API e per IP davanti agli endpoint di creazione.
+- **Stime**: 100 creazioni al secondo per cinque anni sono circa 1,6 * 10^10 link; con circa 500 byte per riga (URL, indici, metadati) servono circa 8 TB, da partizionare (sharding per codice). Per la cache, tenere in memoria il 20% dei link letti ogni giorno richiede poche decine di GB.
+- **Scalabilita'**: server applicativi senza stato dietro un bilanciatore, repliche di sola lettura del database, CDN per le redirezioni piu' frequenti.

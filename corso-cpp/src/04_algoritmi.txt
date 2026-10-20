@@ -38,6 +38,123 @@ LC: 438 - Find All Anagrams in a String
 LC: 303 - Range Sum Query - Immutable
 LC: 724 - Find Pivot Index
 
+### Lezione 11.3 - Esempi svolti ed esercizi
+
+#### Esempio svolto 11.1 - Ricerca binaria sulla risposta: Koko Eating Bananas (LeetCode 875)
+
+**Problema.** Ci sono pile di banane `p[i]`; Koko mangia al massimo `v` banane all'ora (una pila per ora, se ne avanzano aspetta l'ora successiva) e ha `h` ore. Qual e' la velocita' minima `v` che le basta?
+
+**Ragionamento.** Le ore necessarie `ore(v) = somma(ceil(p[i] / v))` **decrescono** al crescere di v: la proprieta' "v basta" e' monotona (falsa, falsa, ..., vera, vera). Su una proprieta' monotona si puo' fare ricerca binaria sull'intervallo delle risposte `[1, max(p)]`, cercando il primo valore vero. Costo: O(n log max(p)) invece di O(n * max(p)).
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <vector>
+
+long long ore(const std::vector<int>& p, long long v) {
+    long long h = 0;
+    for (int x : p) h += (x + v - 1) / v;           // ceil(x / v) tra interi
+    return h;
+}
+
+int velocitaMinima(const std::vector<int>& p, long long h) {
+    int lo = 1, hi = *std::max_element(p.begin(), p.end());
+    while (lo < hi) {                               // invariante: la risposta e' in [lo, hi]
+        int mid = lo + (hi - lo) / 2;
+        if (ore(p, mid) <= h) hi = mid;             // mid basta: forse anche meno
+        else lo = mid + 1;                          // mid non basta
+    }
+    return lo;
+}
+
+int main() {
+    std::cout << velocitaMinima({3, 6, 7, 11}, 8) << ' '
+              << velocitaMinima({30, 11, 23, 4, 20}, 5) << ' '
+              << velocitaMinima({30, 11, 23, 4, 20}, 6) << '\n';
+}
+```
+
+```text
+4 30 23
+```
+
+Lo schema `while (lo < hi)` con `hi = mid` / `lo = mid + 1` trova il **primo** valore che soddisfa la condizione ed e' quello da memorizzare: si adatta a moltissimi problemi ("capacita' minima", "tempo minimo", "distanza massima minima").
+
+#### Esempio svolto 11.2 - Somme prefisse e hash map: Subarray Sum Equals K (LeetCode 560)
+
+**Problema.** Contare i sottoarray contigui la cui somma e' esattamente `k` (gli elementi possono essere negativi).
+
+**Ragionamento.** Sia `S[i]` la somma dei primi i elementi. La somma del sottoarray `(j, i]` vale `S[i] - S[j]`; vogliamo quindi, per ogni i, il numero di j precedenti con `S[j] = S[i] - k`. Teniamo in una hash map quante volte abbiamo visto ogni somma prefissa. La finestra scorrevole non funziona perche' con numeri negativi allargare la finestra non fa necessariamente crescere la somma.
+
+```cpp
+#include <iostream>
+#include <unordered_map>
+#include <vector>
+
+int contaSottoarray(const std::vector<int>& a, int k) {
+    std::unordered_map<long long, int> visti{{0, 1}};   // somma vuota: vista una volta
+    long long s = 0;
+    int tot = 0;
+    for (int x : a) {
+        s += x;
+        if (auto it = visti.find(s - k); it != visti.end()) tot += it->second;
+        ++visti[s];
+    }
+    return tot;
+}
+
+int main() {
+    std::cout << contaSottoarray({1, 1, 1}, 2) << ' '
+              << contaSottoarray({1, 2, 3}, 3) << ' '
+              << contaSottoarray({3, 4, 7, 2, -3, 1, 4, 2}, 7) << '\n';
+}
+```
+
+```text
+2 2 4
+```
+
+#### Esempio svolto 11.3 - Finestra scorrevole: Minimum Size Subarray Sum (LeetCode 209)
+
+**Problema.** Dati numeri **positivi** e un obiettivo `t`, trovare la lunghezza minima di un sottoarray contiguo con somma `>= t`.
+
+**Ragionamento.** Con soli positivi, allargare la finestra aumenta la somma e restringerla la diminuisce. Allarghiamo a destra; appena la somma raggiunge `t` restringiamo da sinistra finche' resta valida, aggiornando il minimo. Ogni indice entra ed esce dalla finestra una volta sola: O(n).
+
+```cpp
+#include <algorithm>
+#include <climits>
+#include <iostream>
+#include <vector>
+
+int minimaLunghezza(int t, const std::vector<int>& a) {
+    int best = INT_MAX, sx = 0, somma = 0;
+    for (int dx = 0; dx < (int)a.size(); ++dx) {
+        somma += a[dx];
+        while (somma >= t) {
+            best = std::min(best, dx - sx + 1);
+            somma -= a[sx++];
+        }
+    }
+    return best == INT_MAX ? 0 : best;
+}
+
+int main() {
+    std::cout << minimaLunghezza(7, {2, 3, 1, 2, 4, 3}) << ' '
+              << minimaLunghezza(11, {1, 1, 1, 1}) << '\n';
+}
+```
+
+```text
+2 0
+```
+
+ES: **Esercizio 11.1** [Base] - Scrivi a mano `lowerBound(a, x)`: il primo indice con `a[i] >= x` (o `a.size()` se non esiste). Verificalo confrontandolo con `std::lower_bound` su molti input casuali.
+ES: **Esercizio 11.2** [Base] - Two Sum II (LeetCode 167): su un array ordinato trova due elementi con somma `target` usando due puntatori. Perche' e' corretto spostare il puntatore sinistro quando la somma e' troppo piccola?
+ES: **Esercizio 11.3** [Medio] - Container With Most Water (LeetCode 11) in O(n) con due puntatori.
+ES: **Esercizio 11.4** [Medio] - Find Pivot Index (LeetCode 724): l'indice in cui la somma a sinistra e' uguale a quella a destra.
+ES: **Esercizio 11.5** [Medio] - Indica la complessita' di: (a) due cicli annidati `for i < n`, `for j < i`; (b) `for (i = 1; i < n; i *= 2)`; (c) un ciclo `for i < n` che contiene una ricerca binaria su n elementi; (d) la generazione di tutti i sottoinsiemi di n elementi.
+ES: **Esercizio 11.6** [Avanzato] - Find All Anagrams in a String (LeetCode 438): tutti gli indici di `s` in cui inizia un anagramma di `p`, in O(|s|) con una finestra di lunghezza fissa e due array di conteggi.
+
 ## Capitolo 12 - Ordinamento
 
 ### Lezione 12.1 - Algoritmi di ordinamento
@@ -61,6 +178,99 @@ LC: 347 - Top K Frequent Elements
 LC: 451 - Sort Characters By Frequency
 LC: 164 - Maximum Gap (radix/bucket)
 LC: 315 - Count of Smaller Numbers After Self
+
+### Lezione 12.2 - Esempi svolti ed esercizi
+
+#### Esempio svolto 12.1 - Quicksort con pivot casuale, verificato contro std::sort
+
+**Problema.** Implementare quicksort e verificarne la correttezza in modo automatico.
+
+**Ragionamento.** Usiamo la partizione di **Hoare**: due indici che avanzano l'uno verso l'altro scambiando gli elementi fuori posto. Un pivot scelto a caso rende improbabile il caso peggiore O(n^2) (che con pivot fisso si ha su input gia' ordinati). Per verificare, confrontiamo il risultato con `std::sort` su molti vettori casuali: e' un semplice **test differenziale**, utilissimo per qualunque algoritmo che abbia un'implementazione di riferimento.
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <random>
+#include <vector>
+
+std::mt19937 rng(42);
+
+void quicksort(std::vector<int>& a, int lo, int hi) {         // ordina a[lo..hi]
+    if (lo >= hi) return;
+    int pivot = a[std::uniform_int_distribution<int>(lo, hi)(rng)];
+    int i = lo - 1, j = hi + 1;
+    for (;;) {                                                // partizione di Hoare
+        do ++i; while (a[i] < pivot);
+        do --j; while (a[j] > pivot);
+        if (i >= j) break;
+        std::swap(a[i], a[j]);
+    }
+    quicksort(a, lo, j);
+    quicksort(a, j + 1, hi);
+}
+
+int main() {
+    std::uniform_int_distribution<int> len(0, 200), val(-50, 50);
+    int errori = 0;
+    for (int t = 0; t < 1000; ++t) {
+        std::vector<int> a(len(rng));
+        for (int& x : a) x = val(rng);
+        auto atteso = a;
+        std::sort(atteso.begin(), atteso.end());
+        quicksort(a, 0, (int)a.size() - 1);
+        if (a != atteso) ++errori;
+    }
+    std::cout << "test falliti: " << errori << " su 1000\n";
+}
+```
+
+```text
+test falliti: 0 su 1000
+```
+
+#### Esempio svolto 12.2 - Ordinamenti stabili e comparatori a piu' criteri
+
+**Problema.** Ordinare dei candidati per punteggio decrescente; a parita' di punteggio deve restare l'ordine di iscrizione.
+
+**Ragionamento.** Un ordinamento e' **stabile** se mantiene l'ordine relativo degli elementi equivalenti. `std::sort` non lo garantisce, `std::stable_sort` (merge sort) si'. In alternativa si puo' usare `std::sort` con un comparatore che include esplicitamente il criterio di spareggio (qui l'indice di iscrizione). Il comparatore deve essere un **ordinamento stretto debole**: usare `>=` invece di `>` e' comportamento indefinito.
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <string>
+#include <tuple>
+#include <vector>
+
+struct Candidato { std::string nome; int punti; int iscrizione; };
+
+int main() {
+    std::vector<Candidato> v{{"Ugo", 80, 1}, {"Ada", 95, 2}, {"Bea", 80, 3},
+                             {"Ciro", 95, 4}, {"Dina", 70, 5}};
+    auto a = v;
+    std::stable_sort(a.begin(), a.end(),
+                     [](const auto& x, const auto& y) { return x.punti > y.punti; });
+    auto b = v;
+    std::sort(b.begin(), b.end(), [](const auto& x, const auto& y) {
+        return std::tie(y.punti, x.iscrizione) < std::tie(x.punti, y.iscrizione);
+    });
+    for (const auto& c : a) std::cout << c.nome << ' ';
+    std::cout << "| ";
+    for (const auto& c : b) std::cout << c.nome << ' ';
+    std::cout << '\n';
+}
+```
+
+```text
+Ada Ciro Ugo Bea Dina | Ada Ciro Ugo Bea Dina
+```
+
+`std::tie(y.punti, x.iscrizione) < std::tie(x.punti, y.iscrizione)` confronta lessicograficamente: prima i punti (invertiti, quindi decrescenti), poi l'iscrizione (crescente).
+
+ES: **Esercizio 12.1** [Base] - Implementa insertion sort e conta gli spostamenti eseguiti su un vettore ordinato, uno casuale e uno ordinato al contrario. Cosa noti?
+ES: **Esercizio 12.2** [Medio] - Conta le inversioni (coppie `i < j` con `a[i] > a[j]`) in O(n log n) modificando il merge sort della Lezione 12.1.
+ES: **Esercizio 12.3** [Medio] - Sort Colors (LeetCode 75): ordina un vettore di 0, 1 e 2 in una sola passata con l'algoritmo della bandiera olandese.
+ES: **Esercizio 12.4** [Medio] - Majority Element (LeetCode 169) in O(n) tempo e O(1) spazio con il voto di Boyer-Moore.
+ES: **Esercizio 12.5** [Avanzato] - Implementa il radix sort LSD per `uint32_t` con base 256 (quattro passate di counting sort) e confrontane i tempi con `std::sort` su 10 milioni di elementi.
 
 ## Capitolo 13 - Ricorsione, backtracking, greedy
 
@@ -103,6 +313,134 @@ LC: 763 - Partition Labels
 LC: 621 - Task Scheduler
 LC: 135 - Candy
 
+### Lezione 13.3 - Esempi svolti ed esercizi
+
+#### Esempio svolto 13.1 - N regine (LeetCode 51/52)
+
+**Problema.** In quanti modi si possono disporre N regine su una scacchiera N x N senza che due si attacchino? Stampare anche la prima soluzione per N = 6.
+
+**Ragionamento.** Mettiamo una regina per riga (cosi' le righe sono gia' diverse) e proviamo ogni colonna. Una casella `(r, c)` e' libera se non sono occupate la colonna `c`, la diagonale `r - c` e l'antidiagonale `r + c`: tre vettori di booleani rendono il controllo O(1). Se nessuna colonna va bene si torna indietro (**backtracking**), annullando le scelte fatte.
+
+```cpp
+#include <iostream>
+#include <string>
+#include <vector>
+
+struct Regine {
+    int n, soluzioni = 0;
+    std::vector<bool> col, diag, anti;
+    std::vector<int> pos;                       // pos[r] = colonna della regina in riga r
+    std::vector<int> prima;
+
+    explicit Regine(int n) : n(n), col(n), diag(2 * n), anti(2 * n), pos(n) {}
+
+    void risolvi(int r) {
+        if (r == n) {
+            if (soluzioni++ == 0) prima = pos;
+            return;
+        }
+        for (int c = 0; c < n; ++c) {
+            if (col[c] || diag[r - c + n] || anti[r + c]) continue;
+            col[c] = diag[r - c + n] = anti[r + c] = true;     // scelta
+            pos[r] = c;
+            risolvi(r + 1);
+            col[c] = diag[r - c + n] = anti[r + c] = false;    // annulla la scelta
+        }
+    }
+};
+
+int main() {
+    for (int n : {4, 6, 8}) {
+        Regine q(n);
+        q.risolvi(0);
+        std::cout << n << " regine: " << q.soluzioni << " soluzioni\n";
+        if (n == 6)
+            for (int c : q.prima)
+                std::cout << std::string(c, '.') << 'Q' << std::string(n - c - 1, '.') << '\n';
+    }
+}
+```
+
+```text
+4 regine: 2 soluzioni
+6 regine: 4 soluzioni
+.Q....
+...Q..
+.....Q
+Q.....
+..Q...
+....Q.
+8 regine: 92 soluzioni
+```
+
+#### Esempio svolto 13.2 - Generate Parentheses (LeetCode 22)
+
+**Problema.** Generare tutte le stringhe di `n` coppie di parentesi ben formate.
+
+**Ragionamento.** Costruiamo la stringa un carattere alla volta e **potiamo** i rami impossibili invece di generare tutte le 2^(2n) stringhe: possiamo aggiungere `(` se ne abbiamo aperte meno di n, e `)` solo se ci sono parentesi aperte non ancora chiuse. Ogni foglia raggiunta e' una soluzione valida; il loro numero e' il numero di Catalan C(n).
+
+```cpp
+#include <iostream>
+#include <string>
+#include <vector>
+
+void genera(int n, int aperte, int chiuse, std::string& cur, std::vector<std::string>& out) {
+    if ((int)cur.size() == 2 * n) { out.push_back(cur); return; }
+    if (aperte < n) { cur += '('; genera(n, aperte + 1, chiuse, cur, out); cur.pop_back(); }
+    if (chiuse < aperte) { cur += ')'; genera(n, aperte, chiuse + 1, cur, out); cur.pop_back(); }
+}
+
+int main() {
+    std::vector<std::string> out;
+    std::string cur;
+    genera(3, 0, 0, cur, out);
+    for (const auto& s : out) std::cout << s << ' ';
+    std::cout << "(" << out.size() << ")\n";
+}
+```
+
+```text
+((())) (()()) (())() ()(()) ()()() (5)
+```
+
+#### Esempio svolto 13.3 - Greedy dimostrato: Non-overlapping Intervals (LeetCode 435)
+
+**Problema.** Dato un insieme di intervalli, quanti bisogna rimuoverne, al minimo, perche' i rimanenti non si sovrappongano?
+
+**Ragionamento.** Equivale a tenerne il **massimo** numero di compatibili (il classico problema della selezione di attivita'). Scelta greedy: tra gli intervalli compatibili con quelli gia' presi, prendere quello che **finisce prima**. Dimostrazione per scambio: in una soluzione ottima si puo' sempre sostituire il primo intervallo con quello che finisce prima senza creare conflitti, quindi la scelta greedy non peggiora mai l'ottimo. Ordinare per inizio, invece, sarebbe sbagliato: un intervallo lunghissimo che inizia per primo bloccherebbe tutti gli altri.
+
+```cpp
+#include <algorithm>
+#include <climits>
+#include <iostream>
+#include <utility>
+#include <vector>
+
+int daRimuovere(std::vector<std::pair<int, int>> v) {
+    std::sort(v.begin(), v.end(), [](auto& a, auto& b) { return a.second < b.second; });
+    int tenuti = 0, fineUltimo = INT_MIN;
+    for (auto [inizio, fine] : v)
+        if (inizio >= fineUltimo) { ++tenuti; fineUltimo = fine; }
+    return (int)v.size() - tenuti;
+}
+
+int main() {
+    std::cout << daRimuovere({{1, 2}, {2, 3}, {3, 4}, {1, 3}}) << ' '
+              << daRimuovere({{1, 100}, {2, 3}, {4, 5}, {6, 7}}) << ' '
+              << daRimuovere({{1, 2}, {1, 2}, {1, 2}}) << '\n';
+}
+```
+
+```text
+1 1 2
+```
+
+ES: **Esercizio 13.1** [Base] - Permutations (LeetCode 46): genera tutte le permutazioni di un vettore di interi distinti con il backtracking, poi verifica il risultato con `std::next_permutation`.
+ES: **Esercizio 13.2** [Medio] - Combination Sum (LeetCode 39): tutte le combinazioni (con ripetizione) di numeri candidati che sommano a `target`. Come eviti di generare la stessa combinazione in ordini diversi?
+ES: **Esercizio 13.3** [Medio] - Jump Game (LeetCode 55): ogni `a[i]` e' il salto massimo da i; si puo' raggiungere l'ultimo indice? Risolvilo in O(n) con un greedy sul punto piu' lontano raggiungibile.
+ES: **Esercizio 13.4** [Medio] - Mostra che il greedy "prendi sempre la moneta piu' grande" non e' ottimo per le monete {1, 3, 4} e l'importo 6. Per quali sistemi di monete funziona?
+ES: **Esercizio 13.5** [Avanzato] - Sudoku Solver (LeetCode 37): risolvi un sudoku con il backtracking usando tre array di bitmask (righe, colonne, riquadri) e scegliendo per prima la casella con meno candidati.
+
 ## Capitolo 14 - Programmazione dinamica
 
 ### Lezione 14.1 - Concetti e schemi classici
@@ -138,6 +476,97 @@ LC: 312 - Burst Balloons
 LC: 10 - Regular Expression Matching
 LC: 5 - Longest Palindromic Substring
 LC: 746 - Min Cost Climbing Stairs
+
+### Lezione 14.2 - Esempi svolti ed esercizi
+
+#### Esempio svolto 14.1 - Coin Change passo passo (LeetCode 322)
+
+**Problema.** Dato un insieme di monete (in quantita' illimitata) e un importo, trovare il numero minimo di monete per formarlo, oppure -1. Stampare anche quali monete usare.
+
+**Ragionamento.** Seguiamo i passi della Lezione 14.1.
+
+- **Stato**: `dp[x]` = numero minimo di monete per formare l'importo x.
+- **Ricorrenza**: l'ultima moneta usata e' una qualsiasi `m <= x`, quindi `dp[x] = 1 + min(dp[x - m])`.
+- **Caso base**: `dp[0] = 0`; gli importi non formabili valgono "infinito".
+- **Ordine**: x crescente, perche' `dp[x]` dipende da valori piu' piccoli.
+- **Ricostruzione**: salviamo in `scelta[x]` la moneta che ha dato il minimo e la seguiamo all'indietro.
+
+Costo O(importo * numero di monete). Con le monete {1, 3, 4} e importo 6 il greedy darebbe 4+1+1 (3 monete), la DP trova 3+3.
+
+```cpp
+#include <iostream>
+#include <vector>
+
+int main() {
+    std::vector<int> monete{1, 3, 4};
+    int importo = 6;
+    const int INF = importo + 1;                       // piu' di qualsiasi soluzione reale
+    std::vector<int> dp(importo + 1, INF), scelta(importo + 1, -1);
+    dp[0] = 0;
+    for (int x = 1; x <= importo; ++x)
+        for (int m : monete)
+            if (m <= x && dp[x - m] + 1 < dp[x]) { dp[x] = dp[x - m] + 1; scelta[x] = m; }
+
+    for (int x = 0; x <= importo; ++x) std::cout << "dp[" << x << "]=" << dp[x] << ' ';
+    std::cout << '\n';
+    if (dp[importo] >= INF) { std::cout << "-1\n"; return 0; }
+    std::cout << dp[importo] << " monete:";
+    for (int x = importo; x > 0; x -= scelta[x]) std::cout << ' ' << scelta[x];
+    std::cout << '\n';
+}
+```
+
+```text
+dp[0]=0 dp[1]=1 dp[2]=2 dp[3]=1 dp[4]=1 dp[5]=2 dp[6]=2
+2 monete: 3 3
+```
+
+#### Esempio svolto 14.2 - Longest Common Subsequence con ricostruzione (LeetCode 1143)
+
+**Problema.** Trovare la piu' lunga sottosequenza comune (non necessariamente contigua) di due stringhe, e stamparla.
+
+**Ragionamento.** `dp[i][j]` = lunghezza della LCS tra i primi i caratteri di `a` e i primi j di `b`. Se `a[i-1] == b[j-1]` il carattere fa parte della LCS: `dp[i][j] = dp[i-1][j-1] + 1`; altrimenti si scarta l'ultimo carattere di una delle due: `max(dp[i-1][j], dp[i][j-1])`. Per ricostruire si parte da `dp[n][m]` e si ripercorrono le scelte. Costo O(n m) tempo e spazio (lo spazio scende a O(m) se basta la lunghezza).
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <string>
+#include <vector>
+
+std::string lcs(const std::string& a, const std::string& b) {
+    std::size_t n = a.size(), m = b.size();
+    std::vector<std::vector<int>> dp(n + 1, std::vector<int>(m + 1, 0));
+    for (std::size_t i = 1; i <= n; ++i)
+        for (std::size_t j = 1; j <= m; ++j)
+            dp[i][j] = a[i - 1] == b[j - 1] ? dp[i - 1][j - 1] + 1
+                                            : std::max(dp[i - 1][j], dp[i][j - 1]);
+    std::string out;
+    for (std::size_t i = n, j = m; i > 0 && j > 0;) {
+        if (a[i - 1] == b[j - 1]) { out += a[i - 1]; --i; --j; }
+        else if (dp[i - 1][j] >= dp[i][j - 1]) --i;
+        else --j;
+    }
+    std::reverse(out.begin(), out.end());
+    return out;
+}
+
+int main() {
+    std::cout << lcs("ABCBDAB", "BDCABA") << ' ' << lcs("programmazione", "grammatica") << '\n';
+}
+```
+
+```text
+BCBA grammai
+```
+
+La stessa tabella, con costi diversi, risolve l'**edit distance** (LeetCode 72) ed e' alla base di `diff` e degli strumenti di confronto tra file.
+
+ES: **Esercizio 14.1** [Base] - Min Cost Climbing Stairs (LeetCode 746) con O(1) spazio.
+ES: **Esercizio 14.2** [Base] - House Robber (LeetCode 198): massimo bottino senza svaligiare due case adiacenti. Scrivi la ricorrenza prima del codice.
+ES: **Esercizio 14.3** [Medio] - Edit Distance (LeetCode 72): numero minimo di inserimenti, cancellazioni e sostituzioni per trasformare una parola in un'altra.
+ES: **Esercizio 14.4** [Medio] - Unique Paths II (LeetCode 63): numero di percorsi (solo destra o giu') in una griglia con ostacoli, usando un solo vettore di dimensione pari alle colonne.
+ES: **Esercizio 14.5** [Avanzato] - Longest Increasing Subsequence (LeetCode 300) in O(n log n) con `std::lower_bound` sul vettore delle "code" minime.
+ES: **Esercizio 14.6** [Avanzato] - Partition Equal Subset Sum (LeetCode 416) come zaino 0/1 booleano; poi riscrivilo con `std::bitset` e spiega perche' e' molto piu' veloce.
 
 ## Capitolo 15 - Algoritmi su grafi
 
@@ -178,6 +607,115 @@ LC: 399 - Evaluate Division
 LC: 695 - Max Area of Island
 LC: 130 - Surrounded Regions
 
+### Lezione 15.2 - Esempi svolti ed esercizi
+
+#### Esempio svolto 15.1 - Dijkstra con ricostruzione del percorso
+
+**Problema.** Su una rete stradale con distanze positive, trovare la distanza minima da Milano a ogni altra citta' e il percorso verso Napoli.
+
+**Ragionamento.** Dijkstra estrae sempre il nodo non definitivo con distanza minima: con pesi non negativi quella distanza non puo' piu' migliorare. Quando un arco migliora la distanza di `v` ricordiamo il **predecessore** `prec[v] = u`; il percorso si ottiene risalendo i predecessori dalla destinazione. Usiamo la variante "lazy": le voci obsolete nella coda vengono scartate controllando `du > d[u]`.
+
+```cpp
+#include <algorithm>
+#include <climits>
+#include <iostream>
+#include <queue>
+#include <string>
+#include <vector>
+
+int main() {
+    std::vector<std::string> nome{"Milano", "Bologna", "Firenze", "Roma", "Napoli", "Genova"};
+    struct Arco { int a, b, km; };
+    std::vector<Arco> archi{{0, 1, 214}, {0, 5, 142}, {1, 2, 106}, {5, 2, 230},
+                            {2, 3, 273}, {1, 3, 380}, {3, 4, 226}, {5, 3, 501}};
+    int n = nome.size();
+    std::vector<std::vector<std::pair<int, int>>> g(n);
+    for (auto [a, b, km] : archi) { g[a].push_back({b, km}); g[b].push_back({a, km}); }
+
+    std::vector<long long> d(n, LLONG_MAX);
+    std::vector<int> prec(n, -1);
+    using P = std::pair<long long, int>;
+    std::priority_queue<P, std::vector<P>, std::greater<>> pq;
+    d[0] = 0; pq.push({0, 0});
+    while (!pq.empty()) {
+        auto [du, u] = pq.top(); pq.pop();
+        if (du > d[u]) continue;                         // voce obsoleta
+        for (auto [v, w] : g[u])
+            if (du + w < d[v]) { d[v] = du + w; prec[v] = u; pq.push({d[v], v}); }
+    }
+
+    for (int i = 0; i < n; ++i) std::cout << nome[i] << ' ' << d[i] << "  ";
+    std::cout << '\n';
+    std::vector<int> percorso;
+    for (int v = 4; v != -1; v = prec[v]) percorso.push_back(v);
+    std::reverse(percorso.begin(), percorso.end());
+    for (std::size_t i = 0; i < percorso.size(); ++i)
+        std::cout << (i ? " -> " : "") << nome[percorso[i]];
+    std::cout << '\n';
+}
+```
+
+```text
+Milano 0  Bologna 214  Firenze 320  Roma 593  Napoli 819  Genova 142
+Milano -> Bologna -> Firenze -> Roma -> Napoli
+```
+
+#### Esempio svolto 15.2 - Albero ricoprente minimo con Kruskal
+
+**Problema.** Collegare con cavi `n` edifici spendendo il meno possibile, dati i costi di ogni collegamento possibile.
+
+**Ragionamento.** Kruskal ordina gli archi per costo e li aggiunge uno alla volta, **scartando** quelli che creerebbero un ciclo; per sapere in O(1) circa se due nodi sono gia' connessi si usa Union-Find. Ci si ferma quando si hanno `n - 1` archi. Costo O(E log E) dominato dall'ordinamento.
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <numeric>
+#include <tuple>
+#include <vector>
+
+struct DSU {
+    std::vector<int> p;
+    explicit DSU(int n) : p(n) { std::iota(p.begin(), p.end(), 0); }
+    int find(int x) { return p[x] == x ? x : p[x] = find(p[x]); }
+    bool unisci(int a, int b) {
+        a = find(a); b = find(b);
+        if (a == b) return false;
+        p[b] = a;
+        return true;
+    }
+};
+
+int main() {
+    int n = 5;
+    std::vector<std::tuple<int, int, int>> archi{                  // (costo, a, b)
+        {4, 0, 1}, {8, 0, 2}, {2, 1, 2}, {6, 1, 3}, {3, 2, 3}, {9, 3, 4}, {5, 2, 4}};
+    std::sort(archi.begin(), archi.end());
+    DSU d(n);
+    int totale = 0, presi = 0;
+    for (auto [c, a, b] : archi) {
+        if (!d.unisci(a, b)) continue;                             // creerebbe un ciclo
+        std::cout << a << '-' << b << " (" << c << ")\n";
+        totale += c;
+        if (++presi == n - 1) break;
+    }
+    std::cout << "costo totale: " << totale << '\n';
+}
+```
+
+```text
+1-2 (2)
+2-3 (3)
+0-1 (4)
+2-4 (5)
+costo totale: 14
+```
+
+ES: **Esercizio 15.1** [Base] - Network Delay Time (LeetCode 743): il tempo perche' un segnale partito da k raggiunga tutti i nodi (massimo delle distanze di Dijkstra), o -1.
+ES: **Esercizio 15.2** [Medio] - Implementa Floyd-Warshall e usalo per stampare la matrice delle distanze tra tutte le coppie del grafo dell'Esempio 15.1.
+ES: **Esercizio 15.3** [Medio] - Implementa Bellman-Ford e usalo per rilevare un ciclo di peso negativo (per esempio in un grafo di tassi di cambio con pesi `-log(tasso)`).
+ES: **Esercizio 15.4** [Medio] - Implementa Prim con `priority_queue` e verifica che sul grafo dell'Esempio 15.2 dia lo stesso costo di Kruskal.
+ES: **Esercizio 15.5** [Avanzato] - Cheapest Flights Within K Stops (LeetCode 787): perche' Dijkstra classico non basta? Risolvilo con Bellman-Ford limitato a k+1 iterazioni.
+
 ## Capitolo 16 - Stringhe, matematica e bit manipulation
 
 ### Lezione 16.1 - Algoritmi su stringhe
@@ -217,3 +755,100 @@ LC: 2 - Add Two Numbers
 LC: 48 - Rotate Image
 LC: 54 - Spiral Matrix
 LC: 73 - Set Matrix Zeroes
+
+### Lezione 16.3 - Esempi svolti ed esercizi
+
+#### Esempio svolto 16.1 - Ricerca di un pattern con KMP
+
+**Problema.** Trovare tutte le occorrenze di un pattern `p` in un testo `t` in tempo O(|t| + |p|).
+
+**Ragionamento.** La ricerca ingenua, dopo un confronto fallito, riparte dal carattere successivo e puo' costare O(|t| |p|). KMP precalcola la **prefix function** `pi[i]`: la lunghezza del piu' lungo prefisso proprio di `p[0..i]` che e' anche suffisso. Dopo un fallimento sappiamo gia' quanti caratteri del pattern coincidono ancora, e non torniamo mai indietro nel testo. Trucco elegante: calcolare la prefix function di `p + '#' + t`; ogni posizione con valore |p| segna un'occorrenza.
+
+```cpp
+#include <iostream>
+#include <string>
+#include <vector>
+
+std::vector<int> prefixFunction(const std::string& s) {
+    std::vector<int> pi(s.size(), 0);
+    for (std::size_t i = 1; i < s.size(); ++i) {
+        int k = pi[i - 1];
+        while (k > 0 && s[i] != s[k]) k = pi[k - 1];   // ripiega sul bordo piu' corto
+        if (s[i] == s[k]) ++k;
+        pi[i] = k;
+    }
+    return pi;
+}
+
+std::vector<int> trova(const std::string& t, const std::string& p) {
+    auto pi = prefixFunction(p + '#' + t);              // '#' non compare nel testo
+    std::vector<int> pos;
+    for (std::size_t i = p.size() + 1; i < pi.size(); ++i)
+        if (pi[i] == (int)p.size()) pos.push_back(i - 2 * p.size());
+    return pos;
+}
+
+int main() {
+    for (int x : prefixFunction("abacaba")) std::cout << x;
+    std::cout << " |";
+    for (int i : trova("abababcabababab", "abab")) std::cout << ' ' << i;
+    std::cout << '\n';
+}
+```
+
+```text
+0010123 | 0 2 7 9 11
+```
+
+#### Esempio svolto 16.2 - Crivello di Eratostene ed esponenziazione modulare
+
+**Problema.** (a) Elencare i primi fino a 100 e contare quelli sotto 10^7. (b) Calcolare 2^(10^18) mod 10^9+7 e verificare il piccolo teorema di Fermat `a^(p-1) = 1 (mod p)`.
+
+**Ragionamento.** Il crivello parte da un vettore "tutti primi" e, per ogni primo `i`, cancella i multipli a partire da `i*i` (quelli piu' piccoli sono gia' stati cancellati da fattori minori): O(n log log n). Per la potenza, `potMod` della Lezione 16.2 usa O(log e) moltiplicazioni; con un modulo di circa 10^9 il prodotto di due residui sta in 64 bit.
+
+```cpp
+#include <iostream>
+#include <vector>
+
+std::vector<bool> crivello(int n) {
+    std::vector<bool> primo(n + 1, true);
+    primo[0] = primo[1] = false;
+    for (long long i = 2; i * i <= n; ++i)
+        if (primo[i])
+            for (long long j = i * i; j <= n; j += i) primo[j] = false;
+    return primo;
+}
+
+long long potMod(long long b, long long e, long long m) {
+    long long r = 1; b %= m;
+    for (; e; e >>= 1, b = b * b % m) if (e & 1) r = r * b % m;
+    return r;
+}
+
+int main() {
+    auto p = crivello(100);
+    for (int i = 0; i <= 100; ++i) if (p[i]) std::cout << i << ' ';
+    auto grande = crivello(10'000'000);
+    int conta = 0;
+    for (bool b : grande) conta += b;
+    std::cout << "\nprimi sotto 10^7: " << conta << '\n';
+
+    const long long MOD = 1'000'000'007;
+    std::cout << potMod(2, 1'000'000'000'000'000'000LL, MOD) << ' ' << potMod(12345, MOD - 1, MOD)
+              << '\n';
+}
+```
+
+```text
+2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97
+primi sotto 10^7: 664579
+719476260 1
+```
+
+`std::vector<bool>` e' specializzato per occupare un bit per elemento: 10^7 elementi occupano circa 1,2 MB invece di 10 MB.
+
+ES: **Esercizio 16.1** [Base] - Missing Number (LeetCode 268): trova il numero mancante in `0..n` con lo XOR, senza rischio di overflow.
+ES: **Esercizio 16.2** [Medio] - String to Integer (LeetCode 8): implementa `atoi` gestendo spazi iniziali, segno, cifre e saturazione a `INT_MIN`/`INT_MAX`.
+ES: **Esercizio 16.3** [Medio] - Multiply Strings (LeetCode 43): moltiplica due numeri naturali rappresentati come stringhe, come si fa a mano.
+ES: **Esercizio 16.4** [Medio] - Rotate Image (LeetCode 48): ruota di 90 gradi in senso orario una matrice n x n in loco (trasposta + inversione delle righe).
+ES: **Esercizio 16.5** [Avanzato] - Rabin-Karp: trova le occorrenze di un pattern con un rolling hash polinomiale modulo un primo grande, verificando i candidati per evitare falsi positivi.

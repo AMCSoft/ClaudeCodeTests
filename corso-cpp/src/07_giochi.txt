@@ -63,6 +63,187 @@ model = glm::rotate(model, glm::radians(45.f), glm::vec3(0, 1, 0));
 glm::mat4 proj = glm::perspective(glm::radians(60.f), 16.f / 9.f, 0.1f, 100.f);
 ```
 
+### Lezione 22.4 - Esempi svolti ed esercizi
+
+#### Esempio svolto 22.1 - Fisica a passo fisso e indipendenza dal frame rate
+
+**Problema.** Una palla cade da 10 m con gravita' 9,81 m/s^2 e rimbalza perdendo il 30% della velocita'. Mostrare che con un **passo fisso** la simulazione da' lo stesso risultato sia a 30 sia a 144 frame al secondo, mentre con un passo variabile no.
+
+**Ragionamento.** Con il passo variabile `aggiorna(dtFrame)` l'integrazione dipende dalla durata dei frame: macchine diverse producono traiettorie diverse (e in multiplayer i client divergono). Con l'accumulatore della Lezione 22.1 la fisica avanza sempre di `dt = 1/120 s`, indipendentemente da quanti frame vengono disegnati. Per rendere l'esempio riproducibile simuliamo l'orologio invece di leggerlo, e misuriamo il tempo in **tick interi** (qui 1/720 di secondo), come fa `std::chrono`: accumulare durate in virgola mobile introdurrebbe errori di arrotondamento che fanno saltare o raddoppiare un passo.
+
+```cpp
+#include <iomanip>
+#include <iostream>
+
+struct Palla {
+    double y = 10, v = 0;
+    void aggiorna(double dt) {
+        v -= 9.81 * dt;                       // Eulero semi-implicito
+        y += v * dt;
+        if (y < 0) { y = -y; v = -v * 0.7; }  // rimbalzo con perdita di energia
+    }
+};
+
+constexpr long TICK_AL_SECONDO = 720;           // divisibile per 30, 144 e 120
+
+Palla simulaPassoFisso(long fps, long secondi) {
+    const long passo = TICK_AL_SECONDO / 120;     // fisica a 120 Hz
+    Palla p;
+    long accumulatore = 0;
+    for (long frame = 0; frame < fps * secondi; ++frame) {   // un giro = un frame disegnato
+        accumulatore += TICK_AL_SECONDO / fps;
+        while (accumulatore >= passo) { p.aggiorna(1.0 / 120); accumulatore -= passo; }
+    }
+    return p;
+}
+
+Palla simulaPassoVariabile(long fps, long secondi) {
+    Palla p;
+    for (long frame = 0; frame < fps * secondi; ++frame) p.aggiorna(1.0 / fps);
+    return p;
+}
+
+int main() {
+    std::cout << std::fixed << std::setprecision(3);
+    for (long fps : {30, 144})
+        std::cout << fps << " fps -> fisso y=" << simulaPassoFisso(fps, 3).y
+                  << "  variabile y=" << simulaPassoVariabile(fps, 3).y << '\n';
+}
+```
+
+```text
+30 fps -> fisso y=3.199  variabile y=3.436
+144 fps -> fisso y=3.199  variabile y=3.369
+```
+
+#### Esempio svolto 22.2 - Un mini ECS scritto da zero
+
+**Problema.** Capire come funzionano librerie come EnTT implementando un Entity Component System minimo: entita' come semplici numeri, componenti memorizzati in array contigui, sistemi che iterano solo sulle entita' che hanno i componenti richiesti.
+
+**Ragionamento.** Per ogni tipo di componente usiamo un **sparse set**: un vettore denso dei componenti (contiguo, ottimo per la cache), un vettore delle entita' corrispondenti e un indice sparso entita' -> posizione. Rimuovere un componente scambia l'elemento con l'ultimo: O(1) e l'array resta compatto. Un sistema itera sul componente meno numeroso e controlla la presenza degli altri.
+
+```cpp
+#include <cstdint>
+#include <iostream>
+#include <vector>
+
+using Entita = std::uint32_t;
+
+template <typename C>
+class Pool {
+    std::vector<C> denso_;
+    std::vector<Entita> entita_;
+    std::vector<std::int32_t> sparso_;              // entita -> indice in denso_, -1 se assente
+public:
+    void aggiungi(Entita e, C c) {
+        if (e >= sparso_.size()) sparso_.resize(e + 1, -1);
+        sparso_[e] = static_cast<std::int32_t>(denso_.size());
+        denso_.push_back(c);
+        entita_.push_back(e);
+    }
+    bool ha(Entita e) const { return e < sparso_.size() && sparso_[e] >= 0; }
+    C& get(Entita e) { return denso_[sparso_[e]]; }
+    void rimuovi(Entita e) {
+        auto i = sparso_[e];
+        denso_[i] = denso_.back(); entita_[i] = entita_.back();   // l'ultimo prende il posto
+        sparso_[entita_[i]] = i;
+        denso_.pop_back(); entita_.pop_back();
+        sparso_[e] = -1;
+    }
+    const std::vector<Entita>& entita() const { return entita_; }
+};
+
+struct Posizione { float x, y; };
+struct Velocita { float dx, dy; };
+
+struct Mondo {
+    Entita prossima = 0;
+    Pool<Posizione> pos;
+    Pool<Velocita> vel;
+    Entita crea() { return prossima++; }
+};
+
+void sistemaMovimento(Mondo& m, float dt) {
+    for (Entita e : m.vel.entita())
+        if (m.pos.ha(e)) {
+            auto& p = m.pos.get(e); const auto& v = m.vel.get(e);
+            p.x += v.dx * dt; p.y += v.dy * dt;
+        }
+}
+
+int main() {
+    Mondo m;
+    Entita giocatore = m.crea(), albero = m.crea(), proiettile = m.crea();
+    m.pos.aggiungi(giocatore, {0, 0});   m.vel.aggiungi(giocatore, {1, 0});
+    m.pos.aggiungi(albero, {5, 5});                                    // statico: niente velocita'
+    m.pos.aggiungi(proiettile, {0, 0});  m.vel.aggiungi(proiettile, {10, 2});
+    for (int i = 0; i < 3; ++i) sistemaMovimento(m, 0.5f);
+    m.vel.rimuovi(giocatore);                                          // il giocatore si ferma
+    sistemaMovimento(m, 0.5f);
+    for (Entita e : {giocatore, albero, proiettile})
+        std::cout << e << ": (" << m.pos.get(e).x << ", " << m.pos.get(e).y << ")\n";
+}
+```
+
+```text
+0: (1.5, 0)
+1: (5, 5)
+2: (20, 4)
+```
+
+#### Esempio svolto 22.3 - Vettori 2D e collisioni AABB
+
+**Problema.** Scrivere un tipo `Vec2` con le operazioni essenziali e verificare le collisioni tra rettangoli allineati agli assi (AABB), calcolando anche di quanto separarli.
+
+**Ragionamento.** Due AABB si sovrappongono se e solo se si sovrappongono le loro proiezioni su **entrambi** gli assi. La penetrazione su un asse e' `(meta' larghezza A + meta' larghezza B) - distanza tra i centri`; per separare i corpi si spinge lungo l'asse con penetrazione minima (minimum translation vector).
+
+```cpp
+#include <cmath>
+#include <iostream>
+#include <optional>
+
+struct Vec2 {
+    float x = 0, y = 0;
+    Vec2 operator+(Vec2 o) const { return {x + o.x, y + o.y}; }
+    Vec2 operator-(Vec2 o) const { return {x - o.x, y - o.y}; }
+    Vec2 operator*(float k) const { return {x * k, y * k}; }
+    float dot(Vec2 o) const { return x * o.x + y * o.y; }
+    float lunghezza() const { return std::sqrt(dot(*this)); }
+    Vec2 normalizzato() const { float l = lunghezza(); return l > 0 ? *this * (1 / l) : Vec2{}; }
+};
+
+struct AABB { Vec2 centro, meta; };                 // meta = meta' larghezza e altezza
+
+std::optional<Vec2> collisione(const AABB& a, const AABB& b) {   // vettore per separare a
+    Vec2 d = b.centro - a.centro;
+    float px = a.meta.x + b.meta.x - std::fabs(d.x);
+    float py = a.meta.y + b.meta.y - std::fabs(d.y);
+    if (px <= 0 || py <= 0) return std::nullopt;
+    if (px < py) return Vec2{d.x < 0 ? px : -px, 0};
+    return Vec2{0, d.y < 0 ? py : -py};
+}
+
+int main() {
+    Vec2 v{3, 4};
+    std::cout << v.lunghezza() << ' ' << v.normalizzato().x << ' ' << v.dot({1, 0}) << '\n';
+    AABB giocatore{{0, 0}, {1, 1}}, muro{{1.5f, 0.2f}, {1, 2}}, lontano{{10, 0}, {1, 1}};
+    if (auto mtv = collisione(giocatore, muro))
+        std::cout << "spingi di " << mtv->x << ", " << mtv->y;
+    std::cout << " | lontano: " << collisione(giocatore, lontano).has_value() << '\n';
+}
+```
+
+```text
+5 0.6 3
+spingi di -0.5, 0 | lontano: 0
+```
+
+ES: **Esercizio 22.1** [Base] - Game of Life (LeetCode 289): calcola la generazione successiva di una griglia in loco, codificando lo stato vecchio e nuovo nello stesso intero (bit 0 = vecchio, bit 1 = nuovo).
+ES: **Esercizio 22.2** [Base] - Estendi `Vec2` a `Vec3` con prodotto vettoriale e verifica che `(1,0,0) x (0,1,0) = (0,0,1)` e che il risultato sia perpendicolare a entrambi.
+ES: **Esercizio 22.3** [Medio] - Scrivi un `ObjectPool<T, N>` per i proiettili: `acquisisci()` restituisce un puntatore a un oggetto libero (o `nullptr`), `rilascia(p)` lo rimette disponibile, tutto in O(1) e senza allocazioni dopo la costruzione (usa una free list di indici).
+ES: **Esercizio 22.4** [Medio] - Minimum Knight Moves (LeetCode 1197): il numero minimo di mosse di un cavallo da (0,0) a (x,y) su una scacchiera infinita, con una BFS.
+ES: **Esercizio 22.5** [Avanzato] - Implementa una griglia spaziale uniforme (celle di lato fisso, `unordered_map` da cella a lista di entita') e usala per trovare le coppie di AABB in collisione tra 10.000 oggetti. Confronta il numero di test con l'approccio O(n^2).
+
 ## Capitolo 23 - Librerie e motori
 
 ### Lezione 23.1 - SDL2, SFML e un primo gioco 2D
@@ -114,6 +295,105 @@ public:
 };
 ```
 
+### Lezione 23.4 - Esempi svolti ed esercizi
+
+#### Esempio svolto 23.1 - Snake con la logica separata dal rendering
+
+**Problema.** Scrivere la logica completa di Snake (movimento, crescita, cibo, collisioni) in modo che sia testabile senza finestra e poi collegabile a SFML, SDL o al terminale.
+
+**Ragionamento.** Il modello di gioco non sa nulla di pixel e tastiera: riceve comandi (`gira`), avanza di un passo (`passo`) e espone lo stato. Il serpente e' una `std::deque` di celle: si aggiunge la nuova testa davanti e si toglie la coda dietro (a meno che abbia mangiato). Un generatore casuale con seme fisso rende la partita riproducibile, utile per i test e per i replay.
+
+```cpp
+#include <algorithm>
+#include <deque>
+#include <iostream>
+#include <random>
+#include <string>
+#include <vector>
+
+struct Cella { int x, y; bool operator==(const Cella&) const = default; };
+enum class Dir { Su, Giu, Sx, Dx };
+
+class Snake {
+    int w_, h_;
+    std::deque<Cella> corpo_;
+    Dir dir_ = Dir::Dx;
+    Cella cibo_{};
+    std::mt19937 rng_;
+    bool vivo_ = true;
+    int punti_ = 0;
+
+    void nuovoCibo() {
+        std::uniform_int_distribution<int> rx(0, w_ - 1), ry(0, h_ - 1);
+        do cibo_ = {rx(rng_), ry(rng_)};
+        while (std::find(corpo_.begin(), corpo_.end(), cibo_) != corpo_.end());
+    }
+public:
+    Snake(int w, int h, unsigned seme) : w_(w), h_(h), rng_(seme) {
+        corpo_ = {{2, h / 2}, {1, h / 2}, {0, h / 2}};
+        nuovoCibo();
+    }
+    void gira(Dir d) {                       // vietato invertire la marcia
+        bool opposta = (d == Dir::Su && dir_ == Dir::Giu) || (d == Dir::Giu && dir_ == Dir::Su) ||
+                       (d == Dir::Sx && dir_ == Dir::Dx) || (d == Dir::Dx && dir_ == Dir::Sx);
+        if (!opposta) dir_ = d;
+    }
+    void passo() {
+        if (!vivo_) return;
+        Cella t = corpo_.front();
+        if (dir_ == Dir::Su) --t.y; else if (dir_ == Dir::Giu) ++t.y;
+        else if (dir_ == Dir::Sx) --t.x; else ++t.x;
+        bool mangia = t == cibo_;
+        if (!mangia) corpo_.pop_back();      // la coda si sposta (prima del test di collisione)
+        if (t.x < 0 || t.y < 0 || t.x >= w_ || t.y >= h_ ||
+            std::find(corpo_.begin(), corpo_.end(), t) != corpo_.end()) { vivo_ = false; return; }
+        corpo_.push_front(t);
+        if (mangia) { ++punti_; nuovoCibo(); }
+    }
+    void forzaCibo(Cella c) { cibo_ = c; }   // per i test
+    bool vivo() const { return vivo_; }
+    int punti() const { return punti_; }
+    std::size_t lunghezza() const { return corpo_.size(); }
+    std::string disegna() const {            // "renderer" testuale
+        std::vector<std::string> g(h_, std::string(w_, '.'));
+        g[cibo_.y][cibo_.x] = '*';
+        for (const auto& c : corpo_) g[c.y][c.x] = 'o';
+        g[corpo_.front().y][corpo_.front().x] = '@';
+        std::string out;
+        for (auto& r : g) out += r + '\n';
+        return out;
+    }
+};
+
+int main() {
+    Snake s(8, 5, 7);
+    s.forzaCibo({4, 2});
+    s.passo(); s.passo();                    // mangia al secondo passo
+    s.gira(Dir::Su); s.passo();
+    std::cout << s.disegna();
+    std::cout << "punti " << s.punti() << ", lunghezza " << s.lunghezza() << '\n';
+    s.passo(); s.passo(); s.passo();         // esce dal bordo superiore
+    std::cout << "vivo? " << s.vivo() << '\n';
+}
+```
+
+```text
+........
+....@.*.
+..ooo...
+........
+........
+punti 1, lunghezza 4
+vivo? 0
+```
+
+Collegarlo a SFML significa solo tradurre gli eventi tastiera in `gira(...)`, chiamare `passo()` a intervalli fissi (per esempio 8 volte al secondo con l'accumulatore dell'Esempio 22.1) e disegnare un `sf::RectangleShape` per cella al posto della stringa.
+
+ES: **Esercizio 23.1** [Base] - Per Pong: scrivi la funzione che, quando la palla colpisce la racchetta, calcola la nuova direzione in base al punto d'impatto (al centro rimbalza orizzontale, ai bordi con angolo massimo di 60 gradi) mantenendo costante la velocita'.
+ES: **Esercizio 23.2** [Medio] - Tetris: rappresenta un pezzo come matrice 4x4 di booleani, scrivi la rotazione di 90 gradi e la funzione `collide(griglia, pezzo, x, y)`. Poi la rimozione delle righe complete.
+ES: **Esercizio 23.3** [Medio] - Collega lo Snake dell'Esempio 23.1 a SFML 3 (o raylib): finestra 640x400, celle da 40 pixel, frecce per girare, 8 passi al secondo, schermata di game over con il punteggio.
+ES: **Esercizio 23.4** [Avanzato] - Scrivi una classe `Animazione` che, dato un elenco di frame con durate diverse e un tempo trascorso, restituisce il frame corrente, gestendo sia la riproduzione in loop sia quella singola.
+
 ## Capitolo 24 - IA, rete e ottimizzazione nei giochi
 
 ### Lezione 24.1 - Intelligenza artificiale per i giochi
@@ -134,3 +414,136 @@ LC: 130 - Surrounded Regions
 ### Lezione 24.2 - Multiplayer e ottimizzazione
 
 Networking: UDP vs TCP, modelli client-server autoritativo, client-side prediction, riconciliazione, interpolazione delle entita', lag compensation, serializzazione compatta, librerie (ENet, GameNetworkingSockets, Photon). Ottimizzazione: profiling frame per frame, batching, culling (frustum, occlusion), LOD, streaming asset, multithreading con job system, evitare allocazioni durante il frame, SIMD.
+
+### Lezione 24.3 - Esempi svolti ed esercizi
+
+#### Esempio svolto 24.1 - Pathfinding con A*
+
+**Problema.** Trovare il percorso piu' breve tra due celle di una mappa a griglia con muri (movimenti in 4 direzioni) e disegnarlo.
+
+**Ragionamento.** A* e' Dijkstra guidato da un'**euristica** `h(n)` che stima la distanza residua: espande per primo il nodo con `f = g + h` minima, dove `g` e' il costo gia' percorso. Con la distanza di Manhattan l'euristica non sovrastima mai (e' **ammissibile**), quindi il percorso trovato e' ottimo; su mappe grandi e aperte vengono esplorate molte meno celle che con Dijkstra, perche' la ricerca "punta" verso l'obiettivo.
+
+```cpp
+#include <algorithm>
+#include <cstdlib>
+#include <iostream>
+#include <queue>
+#include <string>
+#include <tuple>
+#include <vector>
+
+int main() {
+    std::vector<std::string> mappa{
+        "S.....#...",
+        ".####.#.#.",
+        "....#...#.",
+        "###.#####.",
+        "........#G",
+    };
+    int H = mappa.size(), W = mappa[0].size();
+    int sr = 0, sc = 0, gr = 4, gc = 9;
+    auto h = [&](int r, int c) { return std::abs(r - gr) + std::abs(c - gc); };
+
+    std::vector<int> g(H * W, 1 << 30), prec(H * W, -1);
+    using N = std::tuple<int, int, int>;                       // (f, g, cella)
+    std::priority_queue<N, std::vector<N>, std::greater<>> aperti;
+    g[sr * W + sc] = 0;
+    aperti.push({h(sr, sc), 0, sr * W + sc});
+    int espansi = 0;
+    const int dr[] = {1, -1, 0, 0}, dc[] = {0, 0, 1, -1};
+    while (!aperti.empty()) {
+        auto [f, gu, u] = aperti.top(); aperti.pop();
+        if (gu > g[u]) continue;
+        ++espansi;
+        if (u == gr * W + gc) break;
+        for (int d = 0; d < 4; ++d) {
+            int r = u / W + dr[d], c = u % W + dc[d];
+            if (r < 0 || c < 0 || r >= H || c >= W || mappa[r][c] == '#') continue;
+            int v = r * W + c;
+            if (gu + 1 < g[v]) {
+                g[v] = gu + 1;
+                prec[v] = u;
+                aperti.push({g[v] + h(r, c), g[v], v});
+            }
+        }
+    }
+    for (int v = prec[gr * W + gc]; v != sr * W + sc; v = prec[v]) mappa[v / W][v % W] = '*';
+    for (const auto& riga : mappa) std::cout << riga << '\n';
+    std::cout << "lunghezza " << g[gr * W + gc] << ", celle espanse " << espansi << '\n';
+}
+```
+
+```text
+S*****#***
+.####*#*#*
+....#***#*
+###.#####*
+........#G
+lunghezza 17, celle espanse 31
+```
+
+#### Esempio svolto 24.2 - Minimax per il tris
+
+**Problema.** Scrivere un giocatore imbattibile di tris e verificare che, con gioco perfetto da entrambe le parti, la partita finisce in pareggio.
+
+**Ragionamento.** Minimax esplora l'albero delle mosse: il giocatore di turno sceglie la mossa che **massimizza** il proprio risultato sapendo che l'avversario sceglie quella che lo **minimizza**. Valutiamo +1 la vittoria di X, -1 quella di O, 0 il pareggio. Nel tris l'albero completo ha poco piu' di mezzo milione di nodi, quindi si esplora tutto; per giochi piu' grandi si aggiungono potatura alfa-beta, profondita' limitata e funzioni di valutazione.
+
+```cpp
+#include <array>
+#include <iostream>
+
+using Tavola = std::array<char, 9>;
+
+char vincitore(const Tavola& t) {
+    static const int linee[8][3] = {{0, 1, 2}, {3, 4, 5}, {6, 7, 8}, {0, 3, 6},
+                                    {1, 4, 7}, {2, 5, 8}, {0, 4, 8}, {2, 4, 6}};
+    for (auto& l : linee)
+        if (t[l[0]] != ' ' && t[l[0]] == t[l[1]] && t[l[1]] == t[l[2]]) return t[l[0]];
+    return ' ';
+}
+
+long nodi = 0;
+int minimax(Tavola& t, char turno) {
+    ++nodi;
+    if (char w = vincitore(t); w != ' ') return w == 'X' ? 1 : -1;
+    int migliore = turno == 'X' ? -2 : 2;
+    bool mossaFatta = false;
+    for (int i = 0; i < 9; ++i) {
+        if (t[i] != ' ') continue;
+        mossaFatta = true;
+        t[i] = turno;
+        int v = minimax(t, turno == 'X' ? 'O' : 'X');
+        t[i] = ' ';
+        migliore = turno == 'X' ? std::max(migliore, v) : std::min(migliore, v);
+    }
+    return mossaFatta ? migliore : 0;                  // tavola piena: pareggio
+}
+
+int main() {
+    Tavola t;
+    t.fill(' ');
+    std::cout << "valore della partita: " << minimax(t, 'X') << " (nodi visitati " << nodi << ")\n";
+    t = {'X', ' ', ' ', ' ', 'O', ' ', ' ', ' ', 'X'};  // O deve evitare l'angolo
+    nodi = 0;
+    for (int i : {1, 2})
+        if (t[i] == ' ') {
+            t[i] = 'O';
+            std::cout << "O in " << i << " -> " << minimax(t, 'X') << '\n';
+            t[i] = ' ';
+        }
+}
+```
+
+```text
+valore della partita: 0 (nodi visitati 549946)
+O in 1 -> 0
+O in 2 -> 1
+```
+
+Con X negli angoli opposti e O al centro, giocare O in un angolo (casella 2) perde: X crea una doppia minaccia. Giocare su un lato (casella 1) pareggia.
+
+ES: **Esercizio 24.1** [Base] - Scrivi la macchina a stati di un nemico (`Pattuglia`, `Insegui`, `Attacca`, `Fuga`) con transizioni basate su distanza dal giocatore e salute, usando `enum class` e uno `switch`. Simula 10 tick e stampa lo stato.
+ES: **Esercizio 24.2** [Medio] - Aggiungi la potatura alfa-beta al minimax dell'Esempio 24.2 e confronta il numero di nodi visitati partendo dalla tavola vuota.
+ES: **Esercizio 24.3** [Medio] - Nim Game (LeetCode 292) e Predict the Winner (LeetCode 486): per il secondo scrivi la DP su intervalli `dp[i][j]` = vantaggio massimo del giocatore di turno sui numeri da i a j.
+ES: **Esercizio 24.4** [Medio] - Interpolazione delle entita' in multiplayer: il client riceve dal server snapshot `(tempo, posizione)` a 20 Hz e disegna con 100 ms di ritardo. Scrivi la funzione che, dati gli snapshot e il tempo di rendering, interpola linearmente la posizione.
+ES: **Esercizio 24.5** [Avanzato] - Implementa i tre comportamenti del flocking di Reynolds (separazione, allineamento, coesione) per 50 boid in 2D usando `Vec2` dell'Esempio 22.3, e verifica che dopo molti passi le velocita' tendano ad allinearsi.

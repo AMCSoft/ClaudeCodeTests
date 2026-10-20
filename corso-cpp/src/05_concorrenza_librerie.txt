@@ -48,6 +48,127 @@ int r = f.get();
 double s = std::reduce(std::execution::par, v.begin(), v.end(), 0.0);
 ```
 
+### Lezione 17.3 - Esempi svolti ed esercizi
+
+#### Esempio svolto 17.1 - Produttore/consumatore con una coda bloccante limitata
+
+**Problema.** Due produttori generano i numeri da 1 a 1000 ciascuno; tre consumatori li sommano. La coda condivisa ha capacita' 8: i produttori devono attendere quando e' piena, i consumatori quando e' vuota. Alla fine la somma totale deve valere 2 * 500500.
+
+**Ragionamento.** Un mutex protegge la coda; due `condition_variable` segnalano "non piena" e "non vuota". L'attesa va sempre fatta con un **predicato** (`wait(lock, pred)`), che gestisce i risvegli spuri. Per terminare, la coda viene "chiusa": `pop` restituisce `std::nullopt` quando e' chiusa e vuota. `std::jthread` esegue il join nel distruttore, quindi nessun thread viene dimenticato.
+
+```cpp
+#include <atomic>
+#include <condition_variable>
+#include <deque>
+#include <iostream>
+#include <mutex>
+#include <optional>
+#include <thread>
+#include <vector>
+
+template <typename T>
+class CodaBloccante {
+    std::mutex m_;
+    std::condition_variable nonPiena_, nonVuota_;
+    std::deque<T> q_;
+    std::size_t cap_;
+    bool chiusa_ = false;
+public:
+    explicit CodaBloccante(std::size_t cap) : cap_(cap) {}
+    void push(T x) {
+        std::unique_lock lk(m_);
+        nonPiena_.wait(lk, [&] { return q_.size() < cap_; });
+        q_.push_back(std::move(x));
+        nonVuota_.notify_one();
+    }
+    std::optional<T> pop() {
+        std::unique_lock lk(m_);
+        nonVuota_.wait(lk, [&] { return !q_.empty() || chiusa_; });
+        if (q_.empty()) return std::nullopt;            // chiusa e svuotata
+        T x = std::move(q_.front());
+        q_.pop_front();
+        nonPiena_.notify_one();
+        return x;
+    }
+    void chiudi() {
+        { std::lock_guard lk(m_); chiusa_ = true; }
+        nonVuota_.notify_all();                         // sveglia tutti i consumatori
+    }
+};
+
+int main() {
+    CodaBloccante<int> coda(8);
+    std::atomic<long> totale{0};
+    {
+        std::vector<std::jthread> consumatori;
+        for (int c = 0; c < 3; ++c)
+            consumatori.emplace_back([&] {
+                long parziale = 0;
+                while (auto x = coda.pop()) parziale += *x;
+                totale += parziale;
+            });
+        {
+            std::vector<std::jthread> produttori;
+            for (int p = 0; p < 2; ++p)
+                produttori.emplace_back([&] { for (int i = 1; i <= 1000; ++i) coda.push(i); });
+        }                                   // join dei produttori
+        coda.chiudi();
+    }                                       // join dei consumatori
+    std::cout << "totale = " << totale << " (atteso " << 2 * 500500 << ")\n";
+}
+```
+
+```text
+totale = 1001000 (atteso 1001000)
+```
+
+#### Esempio svolto 17.2 - Somma parallela con std::async
+
+**Problema.** Sommare 10 milioni di numeri dividendo il lavoro tra piu' task e confrontare il risultato con la versione sequenziale.
+
+**Ragionamento.** Dividiamo il vettore in blocchi contigui (uno per core, ricavato con `std::thread::hardware_concurrency`); ogni blocco e' sommato da un task `std::async(std::launch::async, ...)`. I `future` raccolgono i parziali con `get()`, che attende la fine del task e propaga eventuali eccezioni. Nessuna variabile e' condivisa in scrittura, quindi non serve alcun lock: e' la forma piu' semplice (e piu' scalabile) di parallelismo.
+
+```cpp
+#include <algorithm>
+#include <future>
+#include <iostream>
+#include <numeric>
+#include <thread>
+#include <vector>
+
+long long sommaParallela(const std::vector<int>& v) {
+    std::size_t nt = std::max(1u, std::thread::hardware_concurrency());
+    std::size_t blocco = (v.size() + nt - 1) / nt;
+    std::vector<std::future<long long>> parziali;
+    for (std::size_t inizio = 0; inizio < v.size(); inizio += blocco) {
+        auto a = v.begin() + inizio, b = v.begin() + std::min(v.size(), inizio + blocco);
+        parziali.push_back(std::async(std::launch::async,
+                                      [a, b] { return std::accumulate(a, b, 0LL); }));
+    }
+    long long tot = 0;
+    for (auto& f : parziali) tot += f.get();
+    return tot;
+}
+
+int main() {
+    std::vector<int> v(10'000'000);
+    std::iota(v.begin(), v.end(), 1);
+    long long seq = std::accumulate(v.begin(), v.end(), 0LL);
+    std::cout << sommaParallela(v) << ' ' << (sommaParallela(v) == seq ? "ok" : "ERRORE") << '\n';
+}
+```
+
+```text
+50000005000000 ok
+```
+
+NOTA: Compila gli esercizi di questo capitolo anche con `-fsanitize=thread` (ThreadSanitizer, non combinabile con AddressSanitizer): segnala le data race anche quando il programma sembra funzionare.
+
+ES: **Esercizio 17.1** [Base] - Print in Order (LeetCode 1114): tre thread chiamano `primo()`, `secondo()`, `terzo()` in ordine casuale; garantisci che stampino sempre nell'ordine giusto usando due `std::promise<void>`.
+ES: **Esercizio 17.2** [Base] - Ripeti il contatore della Lezione 17.1 con `std::atomic<long>` al posto del mutex e poi senza alcuna sincronizzazione. Che risultati ottieni? Cosa dice ThreadSanitizer?
+ES: **Esercizio 17.3** [Medio] - Print FooBar Alternately (LeetCode 1115) con due `std::binary_semaphore` (C++20).
+ES: **Esercizio 17.4** [Avanzato] - Scrivi un thread pool con un numero fisso di thread e un metodo `invia(f)` che restituisce un `std::future` del risultato di `f`. Usa `std::packaged_task` e la coda dell'Esempio 17.1.
+
 ## Capitolo 18 - Prestazioni e ottimizzazione
 
 ### Lezione 18.1 - Misurare, profilare, ottimizzare
@@ -57,6 +178,98 @@ Prima misura, poi ottimizza. Strumenti: `perf`, Valgrind/Callgrind, Google Bench
 ### Lezione 18.2 - Comportamento indefinito e sicurezza
 
 Undefined behavior: overflow dei signed, accesso fuori limiti, dereferenziazione di nullptr, uso di oggetti distrutti, data race, violazione dello strict aliasing. Difese: sanitizer (ASan, UBSan, TSan, MSan), `at()` invece di `[]` quando serve, `std::span`, analisi statica, fuzzing (libFuzzer, AFL++), hardening del compilatore (`-D_GLIBCXX_ASSERTIONS`, `-fstack-protector`, CFI).
+
+### Lezione 18.3 - Esempi svolti ed esercizi
+
+#### Esempio svolto 18.1 - Misurare l'effetto della cache
+
+**Problema.** Sommare tutti gli elementi di una matrice 4096 x 4096 memorizzata per righe, una volta scorrendola per righe e una per colonne. Il numero di operazioni e' identico: perche' i tempi sono cosi' diversi?
+
+**Ragionamento.** La memoria viene caricata in cache a **linee** di 64 byte (16 `int`). Scorrendo per righe ogni linea caricata viene usata per intero; scorrendo per colonne si salta di 16 KB a ogni accesso e quasi ogni lettura e' un cache miss. Per misurare correttamente: compilare con `-O2`, usare `std::chrono::steady_clock`, ripetere le misure e **usare il risultato** (altrimenti il compilatore puo' eliminare il calcolo).
+
+```cpp
+#include <chrono>
+#include <iostream>
+#include <vector>
+
+template <typename F>
+double millisecondi(F&& f) {
+    auto t0 = std::chrono::steady_clock::now();
+    f();
+    return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+}
+
+int main() {
+    const std::size_t N = 4096;
+    std::vector<int> m(N * N, 1);
+    long long s1 = 0, s2 = 0;
+    double tRighe = millisecondi([&] {
+        for (std::size_t i = 0; i < N; ++i)
+            for (std::size_t j = 0; j < N; ++j) s1 += m[i * N + j];
+    });
+    double tColonne = millisecondi([&] {
+        for (std::size_t j = 0; j < N; ++j)
+            for (std::size_t i = 0; i < N; ++i) s2 += m[i * N + j];
+    });
+    std::cout << "somme uguali: " << (s1 == s2) << '\n';
+    std::cerr << "righe: " << tRighe << " ms, colonne: " << tColonne << " ms\n";
+}
+```
+
+```text
+somme uguali: 1
+```
+
+```console
+$ g++ -std=c++20 -O2 cache.cpp -o cache && ./cache
+somme uguali: 1
+righe: 9.8 ms, colonne: 112.4 ms
+```
+
+I valori esatti dipendono dalla macchina, ma un fattore 5-20 e' tipico. La stessa ragione rende `std::vector` piu' veloce di `std::list` e motiva il layout **struct of arrays** nei motori di gioco (Capitolo 22).
+
+#### Esempio svolto 18.2 - Riconoscere e correggere il comportamento indefinito
+
+**Problema.** Le tre funzioni seguenti contengono comportamento indefinito. Individuarlo e correggerlo.
+
+```cpp
+int media(int a, int b) { return (a + b) / 2; }           // 1
+bool contiene(const std::vector<int>& v, int x) {           // 2
+    for (int i = 0; i <= (int)v.size(); ++i) if (v[i] == x) return true;
+    return false;
+}
+float comeFloat(std::uint32_t bits) { return *reinterpret_cast<float*>(&bits); }   // 3
+```
+
+**Ragionamento.** (1) `a + b` puo' superare `INT_MAX`: l'overflow dei signed e' UB e l'ottimizzatore puo' assumere che non avvenga. (2) `<=` legge `v[v.size()]`, fuori dai limiti. (3) Accedere a un `uint32_t` tramite un `float*` viola lo **strict aliasing**. Le correzioni usano strumenti standard: `std::midpoint` (C++20), un range-for o `std::ranges::find`, `std::bit_cast` (C++20).
+
+```cpp
+#include <algorithm>
+#include <bit>
+#include <climits>
+#include <cstdint>
+#include <iostream>
+#include <numeric>
+#include <vector>
+
+int media(int a, int b) { return std::midpoint(a, b); }
+bool contiene(const std::vector<int>& v, int x) { return std::ranges::find(v, x) != v.end(); }
+float comeFloat(std::uint32_t bits) { return std::bit_cast<float>(bits); }
+
+int main() {
+    std::cout << media(INT_MAX, INT_MAX - 2) << ' ' << contiene({1, 2, 3}, 4) << ' '
+              << comeFloat(0x40490FDB) << '\n';
+}
+```
+
+```text
+2147483646 0 3.14159
+```
+
+ES: **Esercizio 18.1** [Base] - Riempi un `std::vector` con 1000 `push_back` e stampa ogni volta che `capacity()` cambia. Ripeti dopo `reserve(1000)`. Qual e' il fattore di crescita della tua implementazione?
+ES: **Esercizio 18.2** [Medio] - Confronta il tempo per aggiornare la posizione di un milione di particelle memorizzate come array di struct (`struct P { float x, y, z, vx, vy, vz; char nome[40]; }`) e come struct di array. Spiega il risultato.
+ES: **Esercizio 18.3** [Medio] - Questa funzione e' chiamata milioni di volte: `bool inizia(std::string s, std::string p) { return s.substr(0, p.size()) == p; }`. Elenca le allocazioni inutili e riscrivila senza.
+ES: **Esercizio 18.4** [Medio] - Spiega perche' `for (unsigned i = n - 1; i >= 0; --i)` non termina e perche' `int x = INT_MAX; if (x + 1 < x) ...` puo' essere eliminato dal compilatore. Scrivi le versioni corrette.
 
 ## Capitolo 19 - Le principali librerie del C++
 
@@ -90,3 +303,123 @@ Test unitari con GoogleTest/Catch2, mocking (gMock), TDD, code coverage (gcov/lc
 int somma(int a, int b) { return a + b; }
 TEST_CASE("somma") { REQUIRE(somma(2, 3) == 5); }
 ```
+
+### Lezione 19.4 - Esempi svolti ed esercizi
+
+#### Esempio svolto 19.1 - Un progetto CMake completo con libreria, app e test
+
+**Problema.** Organizzare un progetto reale: una libreria `geometria`, un eseguibile che la usa, test con Catch2 scaricato automaticamente, e avvisi del compilatore attivi.
+
+**Ragionamento.** Struttura consigliata: un target per la libreria con le intestazioni pubbliche in `include/`, l'eseguibile e i test che vi si collegano. `FetchContent` scarica Catch2 alla configurazione; `catch_discover_tests` registra ogni `TEST_CASE` in CTest, cosi' `ctest` li esegue singolarmente.
+
+```text
+geometria/
+  CMakeLists.txt
+  include/geometria/vettore.hpp
+  src/vettore.cpp
+  app/main.cpp
+  test/test_vettore.cpp
+```
+
+```cmake
+cmake_minimum_required(VERSION 3.24)
+project(geometria LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+add_library(geometria src/vettore.cpp)
+target_include_directories(geometria PUBLIC include)
+target_compile_options(geometria PRIVATE -Wall -Wextra -Wpedantic)
+
+add_executable(app app/main.cpp)
+target_link_libraries(app PRIVATE geometria)
+
+include(FetchContent)
+FetchContent_Declare(Catch2 GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+                     GIT_TAG v3.5.2)
+FetchContent_MakeAvailable(Catch2)
+add_executable(test_geometria test/test_vettore.cpp)
+target_link_libraries(test_geometria PRIVATE geometria Catch2::Catch2WithMain)
+include(CTest)
+include(Catch)
+catch_discover_tests(test_geometria)
+```
+
+```cpp
+// test/test_vettore.cpp
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <geometria/vettore.hpp>
+
+TEST_CASE("lunghezza di un vettore") {
+    REQUIRE_THAT(lunghezza({3, 4}), Catch::Matchers::WithinAbs(5.0, 1e-9));
+}
+TEST_CASE("somma e' commutativa") {
+    Vettore a{1, 2}, b{3, -1};
+    CHECK(a + b == b + a);
+}
+```
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build -j
+ctest --test-dir build --output-on-failure
+```
+
+#### Esempio svolto 19.2 - Un mini framework di test senza dipendenze
+
+**Problema.** Capire cosa fanno le macro di un framework come Catch2 scrivendone una versione minima: registrazione automatica dei test, controlli che riportano file e riga, riepilogo finale.
+
+**Ragionamento.** Ogni `TEST(nome)` definisce una funzione e un oggetto statico il cui costruttore la registra in un vettore globale **prima** che `main` inizi. `CHECK(expr)` usa `#expr` per trasformare l'espressione in stringa e `__LINE__` per la posizione. Il `main` esegue tutti i test registrati.
+
+```cpp
+#include <functional>
+#include <iostream>
+#include <string>
+#include <vector>
+
+struct Test { std::string nome; std::function<void()> f; };
+std::vector<Test>& registro() { static std::vector<Test> r; return r; }   // evita il problema
+int falliti = 0;                                                         // dell'ordine statico
+
+struct Registra { Registra(std::string n, std::function<void()> f) {
+    registro().push_back({std::move(n), std::move(f)}); } };
+
+#define TEST(nome) void nome(); static Registra reg_##nome(#nome, nome); void nome()
+#define CHECK(expr) do { if (!(expr)) { ++falliti; \
+    std::cout << "  FALLITO: " #expr " (riga " << __LINE__ << ")\n"; } } while (0)
+
+int fattoriale(int n) { return n <= 1 ? 1 : n * fattoriale(n - 1); }
+
+TEST(fattoriale_base) {
+    CHECK(fattoriale(0) == 1);
+    CHECK(fattoriale(5) == 120);
+}
+TEST(fattoriale_sbagliato) {
+    CHECK(fattoriale(3) == 9);              // test volutamente errato
+}
+
+int main() {
+    for (const auto& t : registro()) {
+        int prima = falliti;
+        t.f();
+        std::cout << (falliti == prima ? "[ok] " : "[KO] ") << t.nome << '\n';
+    }
+    std::cout << registro().size() << " test, " << falliti << " controlli falliti\n";
+    return falliti ? 1 : 0;
+}
+```
+
+Eseguito, il programma esce con codice 1 (un controllo e' fallito) e stampa:
+
+```console
+[ok] fattoriale_base
+  FALLITO: fattoriale(3) == 9 (riga 24)
+[KO] fattoriale_sbagliato
+2 test, 1 controlli falliti
+```
+
+ES: **Esercizio 19.1** [Base] - Aggiungi al progetto dell'Esempio 19.1 un file `CMakePresets.json` con due preset, `debug` (con `-fsanitize=address,undefined`) e `release` (`-O2`), e usali con `cmake --preset debug`.
+ES: **Esercizio 19.2** [Medio] - Scrivi i casi di test (con il mini framework dell'Esempio 19.2 o con Catch2) per una funzione `std::optional<int> parseInt(std::string_view)`: numeri validi, segno, spazi, stringa vuota, overflow, caratteri spuri. Quali casi limite avevi dimenticato?
+ES: **Esercizio 19.3** [Medio] - Configura un file `.clang-tidy` che abiliti `modernize-*`, `bugprone-*` e `performance-*` e trasformi in errori i controlli `bugprone-use-after-move`. Eseguilo su un file che contiene un uso dopo `std::move`.
+ES: **Esercizio 19.4** [Avanzato] - Scrivi un workflow di GitHub Actions che compila il progetto con GCC e Clang (matrice), esegue i test con i sanitizer e fallisce se `clang-format --dry-run --Werror` trova file non formattati.

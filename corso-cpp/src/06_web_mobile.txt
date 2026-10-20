@@ -86,6 +86,162 @@ int somma(int a, int b) { return a + b; }
 PYBIND11_MODULE(esempio, m) { m.def("somma", &somma); }
 ```
 
+### Lezione 20.5 - Esempi svolti ed esercizi
+
+#### Esempio svolto 20.1 - Parser HTTP e router, senza librerie esterne
+
+**Problema.** Capire cosa fa un framework web scrivendo il nucleo di un server: interpretare una richiesta HTTP/1.1 testuale (metodo, percorso, query string, intestazioni, corpo), smistarla al gestore giusto e produrre una risposta.
+
+**Ragionamento.** Una richiesta HTTP e' testo: una riga `METODO PERCORSO VERSIONE`, le intestazioni `Nome: valore` terminate da `\r\n`, una riga vuota e il corpo. Il router e' una mappa da `(metodo, percorso)` a una funzione. Separare il parsing dalla rete permette di **testarlo senza socket**; il codice di rete (Capitolo 30 o Boost.Beast) si limita a leggere i byte e a passarli a queste funzioni.
+
+```cpp
+#include <functional>
+#include <iostream>
+#include <map>
+#include <optional>
+#include <sstream>
+#include <string>
+
+struct Richiesta {
+    std::string metodo, percorso, corpo;
+    std::map<std::string, std::string> query, intestazioni;
+};
+struct Risposta { int stato = 200; std::string tipo = "text/plain", corpo; };
+
+std::map<std::string, std::string> parseQuery(const std::string& q) {
+    std::map<std::string, std::string> out;
+    std::istringstream ss(q);
+    for (std::string coppia; std::getline(ss, coppia, '&');)
+        if (auto eq = coppia.find('='); eq != std::string::npos)
+            out[coppia.substr(0, eq)] = coppia.substr(eq + 1);
+    return out;
+}
+
+std::optional<Richiesta> parseRichiesta(const std::string& raw) {
+    auto fineTesta = raw.find("\r\n\r\n");
+    if (fineTesta == std::string::npos) return std::nullopt;     // richiesta incompleta
+    std::istringstream ss(raw.substr(0, fineTesta));
+    Richiesta r;
+    std::string riga, target, versione;
+    std::getline(ss, riga);
+    std::istringstream(riga) >> r.metodo >> target >> versione;
+    if (versione.rfind("HTTP/1.", 0) != 0) return std::nullopt;
+    if (auto q = target.find('?'); q != std::string::npos) {
+        r.query = parseQuery(target.substr(q + 1));
+        target.resize(q);
+    }
+    r.percorso = target;
+    while (std::getline(ss, riga)) {
+        if (!riga.empty() && riga.back() == '\r') riga.pop_back();
+        if (auto c = riga.find(':'); c != std::string::npos)
+            r.intestazioni[riga.substr(0, c)] = riga.substr(riga.find_first_not_of(' ', c + 1));
+    }
+    r.corpo = raw.substr(fineTesta + 4);
+    return r;
+}
+
+class Router {
+    std::map<std::pair<std::string, std::string>, std::function<Risposta(const Richiesta&)>> r_;
+public:
+    void aggiungi(std::string m, std::string p, std::function<Risposta(const Richiesta&)> f) {
+        r_[{std::move(m), std::move(p)}] = std::move(f);
+    }
+    std::string gestisci(const std::string& raw) const {
+        Risposta out;
+        auto req = parseRichiesta(raw);
+        if (!req) out = {400, "text/plain", "richiesta non valida"};
+        else if (auto it = r_.find({req->metodo, req->percorso}); it != r_.end())
+            out = it->second(*req);
+        else
+            out = {404, "text/plain", "non trovato"};
+        return "HTTP/1.1 " + std::to_string(out.stato) + "\r\nContent-Type: " + out.tipo +
+               "\r\nContent-Length: " + std::to_string(out.corpo.size()) + "\r\n\r\n" + out.corpo;
+    }
+};
+
+int main() {
+    Router router;
+    router.aggiungi("GET", "/api/saluto", [](const Richiesta& r) {
+        auto it = r.query.find("nome");
+        std::string nome = it != r.query.end() ? it->second : "mondo";
+        return Risposta{200, "application/json", "{\"messaggio\":\"Ciao " + nome + "\"}"};
+    });
+    router.aggiungi("POST", "/api/eco", [](const Richiesta& r) {
+        return Risposta{201, r.intestazioni.at("Content-Type"), r.corpo};
+    });
+    for (std::string raw : {"GET /api/saluto?nome=Anna HTTP/1.1\r\nHost: x\r\n\r\n",
+                            "POST /api/eco HTTP/1.1\r\nContent-Type: text/plain\r\n\r\nping",
+                            "GET /boh HTTP/1.1\r\n\r\n"}) {
+        auto risposta = router.gestisci(raw);
+        std::cout << risposta.substr(0, risposta.find("\r\n")) << " | "
+                  << risposta.substr(risposta.find("\r\n\r\n") + 4) << '\n';
+    }
+}
+```
+
+```text
+HTTP/1.1 200 | {"messaggio":"Ciao Anna"}
+HTTP/1.1 201 | ping
+HTTP/1.1 404 | non trovato
+```
+
+NOTA: Un parser esposto a Internet deve imporre limiti (lunghezza massima di intestazioni e corpo, numero di intestazioni), rispettare `Content-Length`, gestire richieste arrivate a pezzi e richieste multiple sulla stessa connessione (keep-alive). Per un server reale usa una libreria collaudata e fai fuzzing del codice di parsing.
+
+#### Esempio svolto 20.2 - Rate limiting con token bucket
+
+**Problema.** Un'API pubblica deve concedere a ogni client al massimo 5 richieste di picco e 2 richieste al secondo in media; le richieste in eccesso ricevono `429 Too Many Requests`.
+
+**Ragionamento.** Ogni client ha un "secchio" con al massimo `capacita'` gettoni, che si ricarica di `velocita'` gettoni al secondo; ogni richiesta consuma un gettone. Non serve un timer: i gettoni si ricalcolano pigramente al momento della richiesta, in base al tempo trascorso. Passiamo il tempo come parametro: il codice diventa deterministico e testabile (in produzione si usa `steady_clock::now()`).
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <string>
+#include <unordered_map>
+
+class TokenBucket {
+    double capacita_, velocita_, gettoni_, ultimo_ = 0;
+public:
+    TokenBucket(double capacita, double velocita)
+        : capacita_(capacita), velocita_(velocita), gettoni_(capacita) {}
+    bool consenti(double ora) {
+        gettoni_ = std::min(capacita_, gettoni_ + (ora - ultimo_) * velocita_);
+        ultimo_ = ora;
+        if (gettoni_ < 1) return false;
+        gettoni_ -= 1;
+        return true;
+    }
+};
+
+class RateLimiter {
+    std::unordered_map<std::string, TokenBucket> client_;
+public:
+    int stato(const std::string& ip, double ora) {
+        auto [it, nuovo] = client_.try_emplace(ip, 5.0, 2.0);
+        return it->second.consenti(ora) ? 200 : 429;
+    }
+};
+
+int main() {
+    RateLimiter rl;
+    for (int i = 0; i < 7; ++i) std::cout << rl.stato("1.2.3.4", 0.0) << ' ';   // raffica
+    std::cout << "| " << rl.stato("5.6.7.8", 0.0);                               // altro client
+    std::cout << " | dopo 1 s: ";
+    for (int i = 0; i < 3; ++i) std::cout << rl.stato("1.2.3.4", 1.0) << ' ';    // +2 gettoni
+    std::cout << '\n';
+}
+```
+
+```text
+200 200 200 200 200 429 429 | 200 | dopo 1 s: 200 200 429
+```
+
+ES: **Esercizio 20.1** [Base] - Scrivi `std::string decodificaURL(std::string_view)` che trasforma `%XX` nel carattere corrispondente e `+` in spazio, e usala in `parseQuery` dell'Esempio 20.1 (`nome=Anna%20Maria`).
+ES: **Esercizio 20.2** [Medio] - Encode and Decode TinyURL (LeetCode 535): genera codici brevi in base 62 da un contatore crescente e conserva le corrispondenze in due mappe.
+ES: **Esercizio 20.3** [Medio] - Time Based Key-Value Store (LeetCode 981): `set(chiave, valore, t)` e `get(chiave, t)` che restituisce il valore con il timestamp piu' grande `<= t`. Sfrutta il fatto che i timestamp arrivano crescenti.
+ES: **Esercizio 20.4** [Medio] - Logger Rate Limiter (LeetCode 359): un messaggio va stampato solo se lo stesso messaggio non e' stato stampato negli ultimi 10 secondi.
+ES: **Esercizio 20.5** [Avanzato] - Con cpp-httplib e nlohmann/json realizza una piccola API REST "todo" in memoria con `GET /todo`, `POST /todo` (corpo JSON `{"testo": ...}`), `DELETE /todo/:id`, protetta dal rate limiter dell'Esempio 20.2.
+
 ## Capitolo 21 - Programmazione mobile
 
 ### Lezione 21.1 - C++ su Android (NDK, JNI)
@@ -140,3 +296,150 @@ LC: 635 - Design Log Storage System
 LC: 1166 - Design File System
 LC: 380 - Insert Delete GetRandom O(1)
 LC: 432 - All O`one Data Structure
+
+### Lezione 21.4 - Esempi svolti ed esercizi
+
+#### Esempio svolto 21.1 - Un core C++ con interfaccia C per Android, iOS e Flutter
+
+**Problema.** Una libreria di calcolo deve essere usata da Kotlin (JNI), Swift e Dart (FFI). Come esporla in modo stabile e testarla sul PC prima di portarla sui dispositivi?
+
+**Ragionamento.** Le FFI di quasi tutti i linguaggi parlano **C**, non C++: niente classi, template, eccezioni o `std::string` al confine. Lo schema classico e':
+
+- la logica in C++ moderno, senza dipendenze di piattaforma;
+- un'API `extern "C"` con un **handle opaco** (puntatore a una struct che il chiamante non conosce), funzioni `crea`/`distruggi` e codici di errore;
+- le eccezioni catturate al confine (un'eccezione che attraversa una funzione C e' comportamento indefinito);
+- le stringhe restituite copiate in un buffer fornito dal chiamante.
+
+```cpp
+// ---- core.hpp: C++ puro ----
+#include <algorithm>
+#include <cstring>
+#include <iostream>
+#include <numeric>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
+class Statistiche {
+    std::vector<double> v_;
+public:
+    void aggiungi(double x) { v_.push_back(x); }
+    double media() const {
+        if (v_.empty()) throw std::logic_error("nessun dato");
+        return std::accumulate(v_.begin(), v_.end(), 0.0) / v_.size();
+    }
+    std::string riepilogo() const {
+        return std::to_string(v_.size()) + " valori, max " +
+               std::to_string(*std::max_element(v_.begin(), v_.end()));
+    }
+};
+
+// ---- api.h: confine C, l'unica cosa che vedono Kotlin/Swift/Dart ----
+extern "C" {
+typedef struct StatHandle StatHandle;                    // opaco
+enum { STAT_OK = 0, STAT_ERRORE = 1, STAT_BUFFER_CORTO = 2 };
+
+StatHandle* stat_crea();
+void stat_distruggi(StatHandle* h);
+void stat_aggiungi(StatHandle* h, double x);
+int stat_media(const StatHandle* h, double* out);
+int stat_riepilogo(const StatHandle* h, char* buf, unsigned len);
+}
+
+// ---- api.cpp ----
+struct StatHandle { Statistiche s; };
+
+extern "C" StatHandle* stat_crea() { return new (std::nothrow) StatHandle{}; }
+extern "C" void stat_distruggi(StatHandle* h) { delete h; }
+extern "C" void stat_aggiungi(StatHandle* h, double x) { h->s.aggiungi(x); }
+extern "C" int stat_media(const StatHandle* h, double* out) {
+    try { *out = h->s.media(); return STAT_OK; }
+    catch (...) { return STAT_ERRORE; }                  // nessuna eccezione oltre il confine
+}
+extern "C" int stat_riepilogo(const StatHandle* h, char* buf, unsigned len) {
+    try {
+        std::string r = h->s.riepilogo();
+        if (r.size() + 1 > len) return STAT_BUFFER_CORTO;
+        std::memcpy(buf, r.c_str(), r.size() + 1);
+        return STAT_OK;
+    } catch (...) { return STAT_ERRORE; }
+}
+
+// ---- test sul PC, come farebbe il codice nativo dell'app ----
+int main() {
+    StatHandle* h = stat_crea();
+    double m;
+    std::cout << "media senza dati -> codice " << stat_media(h, &m) << '\n';
+    for (double x : {4.0, 8.0, 6.0}) stat_aggiungi(h, x);
+    char buf[64], piccolo[4];
+    if (stat_media(h, &m) == STAT_OK && stat_riepilogo(h, buf, sizeof buf) == STAT_OK)
+        std::cout << "media " << m << ", " << buf << '\n';
+    std::cout << "buffer piccolo -> codice " << stat_riepilogo(h, piccolo, sizeof piccolo) << '\n';
+    stat_distruggi(h);
+}
+```
+
+```text
+media senza dati -> codice 1
+media 6, 3 valori, max 8.000000
+buffer piccolo -> codice 2
+```
+
+Lato Dart basta `DynamicLibrary.open("libstat.so").lookupFunction<...>("stat_media")`; lato Swift si importa `api.h` con un bridging header; lato Android si scrive un sottile strato JNI che chiama queste funzioni (Esempio 21.2).
+
+#### Esempio svolto 21.2 - Uno strato JNI robusto
+
+**Problema.** Esporre `Statistiche` a Kotlin conservando l'oggetto C++ tra una chiamata e l'altra e convertendo correttamente stringhe ed eccezioni.
+
+**Ragionamento.** Il puntatore all'oggetto C++ viene restituito a Kotlin come `Long` e ripassato a ogni chiamata. Le stringhe Java si convertono con `GetStringUTFChars`/`ReleaseStringUTFChars`, da accoppiare sempre: un piccolo wrapper RAII lo garantisce. Le eccezioni C++ si traducono in eccezioni Java con `ThrowNew`.
+
+```cpp
+#include <jni.h>
+#include <stdexcept>
+#include <string>
+#include "core.hpp"
+
+class StringaJni {                              // RAII per GetStringUTFChars
+    JNIEnv* env_; jstring s_; const char* c_;
+public:
+    StringaJni(JNIEnv* e, jstring s) : env_(e), s_(s), c_(e->GetStringUTFChars(s, nullptr)) {}
+    ~StringaJni() { if (c_) env_->ReleaseStringUTFChars(s_, c_); }
+    std::string str() const { return c_ ? c_ : ""; }
+};
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_esempio_Stat_crea(JNIEnv*, jclass) {
+    return reinterpret_cast<jlong>(new Statistiche());
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_esempio_Stat_distruggi(JNIEnv*, jclass, jlong h) {
+    delete reinterpret_cast<Statistiche*>(h);
+}
+extern "C" JNIEXPORT jdouble JNICALL
+Java_com_esempio_Stat_media(JNIEnv* env, jclass, jlong h) {
+    try { return reinterpret_cast<Statistiche*>(h)->media(); }
+    catch (const std::exception& e) {
+        env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), e.what());
+        return 0;
+    }
+}
+```
+
+```kotlin
+class Stat : AutoCloseable {
+    private val h = crea()
+    fun media(): Double = media(h)
+    override fun close() = distruggi(h)     // usato con: Stat().use { ... }
+    companion object {
+        init { System.loadLibrary("stat") }
+        @JvmStatic external fun crea(): Long
+        @JvmStatic external fun distruggi(h: Long)
+        @JvmStatic external fun media(h: Long): Double
+    }
+}
+```
+
+ES: **Esercizio 21.1** [Base] - Aggiungi all'API C dell'Esempio 21.1 la funzione `int stat_conta(const StatHandle*, unsigned* out)` e una funzione `stat_versione()` che restituisce una stringa costante. Perche' una stringa costante si puo' restituire come `const char*` senza problemi di proprieta'?
+ES: **Esercizio 21.2** [Medio] - Insert Delete GetRandom O(1) (LeetCode 380): un insieme con inserimento, rimozione ed estrazione casuale in O(1) medio, usando un vettore e una hash map valore -> indice.
+ES: **Esercizio 21.3** [Medio] - Progetta un'interfaccia `Archivio` (salva/leggi coppie chiave-valore) con un'implementazione su file per desktop e una "finta" in memoria per i test. Il core dell'app riceve l'archivio per riferimento: dimostra che si testa senza toccare il disco.
+ES: **Esercizio 21.4** [Avanzato] - Scrivi il `CMakeLists.txt` che compila il core come libreria condivisa per Android (con la toolchain dell'NDK, ABI `arm64-v8a`) e come framework statico per iOS, e spiega quali file vanno consegnati ai team mobile.
