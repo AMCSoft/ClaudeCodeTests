@@ -125,7 +125,7 @@ function poolSplitText(n) {
 function viewFencers(el) {
   const locked = current.pools.length > 0;
   el.innerHTML = `
-    <div class="grid grid-2">
+    <div class="grid grid-fencers">
       <section class="panel">
         <h2>Iscritti (${current.fencers.length})</h2>
         ${locked ? '' : `<p class="muted small">${poolSplitText(current.fencers.length)}</p>`}
@@ -204,7 +204,7 @@ function viewPools(el) {
   el.innerHTML = `
     <section class="panel">
       <div class="row">
-        <div>
+        <div style="flex: 1 1 420px">
           <h2>Gironi</h2>
           <div class="muted small">Gironi da massimo 7 tiratori, con al più un tiratore di differenza tra un girone e l'altro. Assalti a ${current.competition.pool_touches} stoccate. La composizione è casuale e separa il più possibile chi è della stessa società.</div>
         </div>
@@ -237,13 +237,15 @@ function poolCard(p, locked) {
     const bout = p.bouts.find((x) => (x.fencer_a === a.id && x.fencer_b === b.id) || (x.fencer_a === b.id && x.fencer_b === a.id));
     if (!bout || bout.winner_id == null) return '<td></td>';
     const mine = bout.fencer_a === a.id ? bout.score_a : bout.score_b;
-    const won = bout.winner_id === a.id;
-    return `<td class="${won ? 'v' : 'd'}">${won ? 'V' : 'D'}${mine}</td>`;
+    // Vittoria a stoccate piene: solo V; vittoria a tempo: V + stoccate; sconfitta: solo le stoccate date.
+    if (bout.winner_id !== a.id) return `<td class="d">${mine}</td>`;
+    return `<td class="v">V${mine < current.competition.pool_touches ? mine : ''}</td>`;
   };
   return `
     <section class="panel">
       <div class="row"><h3>Girone ${p.number}</h3><span class="spacer"></span>
         ${p.done ? '<span class="badge ok">Concluso</span>' : `<span class="muted small">${p.bouts.filter((b) => b.winner_id != null).length}/${p.bouts.length} assalti</span>`}</div>
+      <div class="pool-body">
       <div class="table-wrap"><table class="matrix">
         <thead><tr><th></th><th>Tiratore</th>${ms.map((m) => `<th>${m.position}</th>`).join('')}<th>V</th><th>Ind</th><th>TS</th><th>Pos</th></tr></thead>
         <tbody>${ms.map((a) => `
@@ -254,6 +256,7 @@ function poolCard(p, locked) {
           </tr>`).join('')}</tbody>
       </table></div>
       <div class="bouts">${p.bouts.map((b) => poolBoutRow(b, byId, locked)).join('')}</div>
+      </div>
     </section>`;
 }
 
@@ -266,9 +269,9 @@ function poolBoutRow(b, byId, locked) {
     <div class="bout ${done ? 'done' : ''}" data-id="${b.id}" data-a="${A.id}" data-b="${B.id}">
       <span class="n">${b.bout_order}</span>
       <span class="fa ${b.winner_id === A.id ? 'win' : ''}">${A.position}. ${esc(fencerName(A))}</span>
-      <input type="number" min="0" inputmode="numeric" name="sa" value="${b.score_a ?? ''}" aria-label="Stoccate ${esc(fencerName(A))}" ${locked ? 'disabled' : ''}>
+      <input type="number" min="0" max="${current.competition.pool_touches}" inputmode="numeric" name="sa" value="${b.score_a ?? ''}" aria-label="Stoccate ${esc(fencerName(A))}" ${locked ? 'disabled' : ''}>
       <span class="muted">–</span>
-      <input type="number" min="0" inputmode="numeric" name="sb" value="${b.score_b ?? ''}" aria-label="Stoccate ${esc(fencerName(B))}" ${locked ? 'disabled' : ''}>
+      <input type="number" min="0" max="${current.competition.pool_touches}" inputmode="numeric" name="sb" value="${b.score_b ?? ''}" aria-label="Stoccate ${esc(fencerName(B))}" ${locked ? 'disabled' : ''}>
       <span class="${b.winner_id === B.id ? 'win' : ''}">${esc(fencerName(B))} .${B.position}</span>
       <span class="row actions" style="flex-wrap:nowrap">${locked ? '' : `
         <button class="btn small icon" data-act="save" title="Salva risultato">✓</button>
@@ -291,9 +294,14 @@ function wirePoolBout(row) {
   const sb = row.querySelector('[name=sb]');
   const prio = row.querySelector('.prio');
   const sel = row.querySelector('[name=winner]');
+  const max = current.competition.pool_touches;
   const togglePrio = () => { prio.hidden = !(sa.value !== '' && sa.value === sb.value); };
-  sa.addEventListener('input', togglePrio);
-  sb.addEventListener('input', togglePrio);
+  // Non si possono scrivere più stoccate del limite del girone.
+  const clamp = (i) => {
+    if (i.value !== '' && Number(i.value) > max) i.value = max;
+    if (i.value !== '' && Number(i.value) < 0) i.value = 0;
+  };
+  [sa, sb].forEach((i) => i.addEventListener('input', () => { clamp(i); togglePrio(); }));
   const save = () => {
     if (sa.value === '' || sb.value === '') return toast('Inserisci entrambi i punteggi', true);
     mutate('PUT', `/api/pool-bouts/${row.dataset.id}`, {
