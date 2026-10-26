@@ -10,6 +10,8 @@ class HttpError extends Error {
   }
 }
 
+const COMPETITION_NAME = 'Spooky Mosciolino';
+
 const fail = (message, status = 400) => {
   throw new HttpError(status, message);
 };
@@ -121,28 +123,6 @@ function createApp(db) {
 
   // ---------- Validazione input ----------
 
-  function competitionInput(body, partial = false) {
-    const out = {};
-    const str = (k) => {
-      if (body[k] !== undefined) out[k] = String(body[k] ?? '').trim();
-    };
-    const int = (k, min, max, label) => {
-      if (body[k] === undefined) return;
-      const v = Number(body[k]);
-      if (!Number.isInteger(v) || v < min || v > max) fail(`${label}: inserisci un numero tra ${min} e ${max}`);
-      out[k] = v;
-    };
-    ['name', 'date', 'location', 'notes'].forEach(str);
-    int('pool_max_size', 3, 12, 'Dimensione massima girone');
-    int('pool_touches', 1, 15, 'Stoccate nei gironi');
-    int('de_touches', 1, 45, 'Stoccate nelle dirette');
-    int('qualify_percent', 1, 100, 'Percentuale qualificati');
-    if (!partial || out.name !== undefined) {
-      if (!out.name) fail('Il nome della competizione è obbligatorio');
-    }
-    return out;
-  }
-
   function fencerInput(body) {
     const last_name = String(body.last_name ?? '').trim();
     const first_name = String(body.first_name ?? '').trim();
@@ -183,45 +163,23 @@ function createApp(db) {
     }
   };
 
-  // ---------- Competizioni ----------
+  // ---------- Competizione ----------
 
-  app.get('/api/competitions', route(() =>
-    db.prepare(`SELECT c.*, (SELECT COUNT(*) FROM fencers f WHERE f.competition_id = c.id) AS fencer_count
-                FROM competitions c ORDER BY c.date DESC, c.id DESC`).all()
-      .map((c) => ({ ...c, status: fullCompetition(c.id).competition.status }))));
+  // C'è un'unica gara: lo Spooky Mosciolino. Se il database è vuoto la crea,
+  // altrimenti usa la prima già presente (mantenendo iscritti e risultati).
+  const CID = (() => {
+    const row = db.prepare('SELECT id FROM competitions ORDER BY id LIMIT 1').get();
+    const id = row ? row.id : db.prepare('INSERT INTO competitions (name) VALUES (?)').run(COMPETITION_NAME).lastInsertRowid;
+    db.prepare('UPDATE competitions SET name = ?, pool_max_size = ? WHERE id = ?').run(COMPETITION_NAME, T.POOL_MAX_SIZE, id);
+    return Number(id);
+  })();
 
-  app.post('/api/competitions', route((req) => {
-    const d = competitionInput(req.body);
-    const cols = Object.keys(d);
-    const info = db.prepare(`INSERT INTO competitions (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`)
-      .run(...cols.map((k) => d[k]));
-    return fullCompetition(info.lastInsertRowid);
-  }));
-
-  app.get('/api/competitions/:id', route((req) => fullCompetition(Number(req.params.id))));
-
-  app.put('/api/competitions/:id', route((req) => {
-    const id = Number(req.params.id);
-    getCompetition(id);
-    const d = competitionInput(req.body, true);
-    const cols = Object.keys(d);
-    if (cols.length) {
-      db.prepare(`UPDATE competitions SET ${cols.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`)
-        .run(...cols.map((k) => d[k]), id);
-    }
-    return fullCompetition(id);
-  }));
-
-  app.delete('/api/competitions/:id', route((req) => {
-    getCompetition(Number(req.params.id));
-    db.prepare('DELETE FROM competitions WHERE id = ?').run(Number(req.params.id));
-  }));
+  app.get('/api/competition', route(() => fullCompetition(CID)));
 
   // ---------- Partecipanti ----------
 
-  app.post('/api/competitions/:id/fencers', route((req) => {
-    const id = Number(req.params.id);
-    getCompetition(id);
+  app.post('/api/fencers', route((req) => {
+    const id = CID;
     if (hasPools(id)) fail('I gironi sono già stati generati: eliminali per modificare l\'elenco dei partecipanti');
     const list = req.body.bulk !== undefined ? parseBulk(req.body.bulk) : [fencerInput(req.body)];
     if (!list.length) fail('Nessun partecipante da aggiungere');
@@ -249,14 +207,13 @@ function createApp(db) {
 
   // ---------- Gironi ----------
 
-  app.post('/api/competitions/:id/pools', route((req) => {
-    const id = Number(req.params.id);
-    const c = getCompetition(id);
+  app.post('/api/pools', route(() => {
+    const id = CID;
     if (hasBracket(id)) fail('Il tabellone è già stato generato: eliminalo prima di rigenerare i gironi');
     const fencers = getFencers(id);
     let pools;
     try {
-      pools = T.generatePools(fencers, c.pool_max_size);
+      pools = T.generatePools(fencers, T.POOL_MAX_SIZE);
     } catch (e) {
       fail(e.message);
     }
@@ -275,9 +232,8 @@ function createApp(db) {
     return fullCompetition(id);
   }));
 
-  app.delete('/api/competitions/:id/pools', route((req) => {
-    const id = Number(req.params.id);
-    getCompetition(id);
+  app.delete('/api/pools', route(() => {
+    const id = CID;
     if (hasBracket(id)) fail('Il tabellone è già stato generato: eliminalo prima di eliminare i gironi');
     db.prepare('DELETE FROM pools WHERE competition_id = ?').run(id);
     return fullCompetition(id);
@@ -320,8 +276,8 @@ function createApp(db) {
     db.prepare('SELECT * FROM de_bouts WHERE competition_id = ? AND round = ? AND position = ?')
       .get(cid, bout.round / 2, Math.floor(bout.position / 2));
 
-  app.post('/api/competitions/:id/bracket', route((req) => {
-    const id = Number(req.params.id);
+  app.post('/api/bracket', route(() => {
+    const id = CID;
     const c = getCompetition(id);
     if (hasBracket(id)) fail('Il tabellone è già stato generato');
     if (!hasPools(id)) fail('Genera prima i gironi');
@@ -361,9 +317,8 @@ function createApp(db) {
     return fullCompetition(id);
   }));
 
-  app.delete('/api/competitions/:id/bracket', route((req) => {
-    const id = Number(req.params.id);
-    getCompetition(id);
+  app.delete('/api/bracket', route(() => {
+    const id = CID;
     db.prepare('DELETE FROM de_bouts WHERE competition_id = ?').run(id);
     return fullCompetition(id);
   }));

@@ -14,12 +14,11 @@ const STATUS_LABEL = {
 };
 
 const TABS = [
-  ['partecipanti', 'Partecipanti'],
+  ['iscrizioni', 'Iscrizioni'],
   ['gironi', 'Gironi'],
   ['classifica-gironi', 'Classifica gironi'],
   ['tabellone', 'Tabellone dirette'],
   ['classifica', 'Classifica finale'],
-  ['impostazioni', 'Impostazioni'],
 ];
 
 // ---------- Utilità ----------
@@ -29,12 +28,6 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 function fencerName(f) {
   if (!f) return '';
   return `${f.last_name.toUpperCase()} ${f.first_name || ''}`.trim();
-}
-
-function fmtDate(d) {
-  if (!d) return '';
-  const [y, m, g] = d.split('-');
-  return g ? `${g}/${m}/${y}` : d;
 }
 
 let toastTimer;
@@ -75,128 +68,67 @@ function formData(form) {
   return Object.fromEntries(new FormData(form).entries());
 }
 
-function route() {
-  const parts = location.hash.replace(/^#\/?/, '').split('/');
-  if (parts[0] === 'c' && parts[1]) return { id: Number(parts[1]), tab: parts[2] || 'partecipanti' };
-  return { id: null };
-}
-
-// ---------- Home ----------
-
-async function renderHome() {
-  let list = [];
-  try {
-    list = await api('GET', '/api/competitions');
-  } catch (e) {
-    toast(e.message, true);
-  }
-  app.innerHTML = `
-    <div class="grid grid-2">
-      <section class="panel">
-        <h1>Nuova competizione</h1>
-        <form id="new-comp">
-          <div class="field"><label for="nc-name">Nome</label>
-            <input id="nc-name" name="name" required placeholder="Es. Spada della Notte delle Streghe"></div>
-          <div class="fields">
-            <div class="field"><label for="nc-date">Data</label><input id="nc-date" type="date" name="date" value="${new Date().toISOString().slice(0, 10)}"></div>
-            <div class="field"><label for="nc-loc">Luogo</label><input id="nc-loc" name="location" placeholder="Palestra, città"></div>
-          </div>
-          ${settingsFields({ pool_max_size: 7, pool_touches: 5, de_touches: 15, qualify_percent: 100 })}
-          <button class="btn" type="submit">🎃 Crea competizione</button>
-        </form>
-      </section>
-      <section class="panel">
-        <h2>Competizioni</h2>
-        ${list.length ? `<div class="cards">${list.map((c) => `
-          <a class="comp-card" href="#/c/${c.id}">
-            <h3>${esc(c.name)}</h3>
-            <div class="muted small">${esc(fmtDate(c.date))}${c.location ? ` · ${esc(c.location)}` : ''}</div>
-            <div class="row" style="margin-top:10px">
-              <span class="badge ${c.status}">${STATUS_LABEL[c.status]}</span>
-              <span class="muted small">${c.fencer_count} tiratori</span>
-            </div>
-          </a>`).join('')}</div>`
-        : `<div class="empty"><img src="mosciolino.svg" alt=""><p>Nessuna competizione ancora.<br>Il mosciolino aspetta i suoi spadisti…</p></div>`}
-      </section>
-    </div>`;
-
-  document.getElementById('new-comp').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    try {
-      const data = await api('POST', '/api/competitions', formData(e.target));
-      location.hash = `#/c/${data.competition.id}/partecipanti`;
-      toast('Competizione creata');
-    } catch (err) {
-      toast(err.message, true);
-    }
-  });
-}
-
-function settingsFields(c) {
-  return `
-    <div class="fields">
-      <div class="field"><label for="sf-ps">Max tiratori per girone</label>
-        <input id="sf-ps" type="number" min="3" max="12" name="pool_max_size" value="${c.pool_max_size}"></div>
-      <div class="field"><label for="sf-pt">Stoccate gironi</label>
-        <input id="sf-pt" type="number" min="1" max="15" name="pool_touches" value="${c.pool_touches}"></div>
-      <div class="field"><label for="sf-dt">Stoccate dirette</label>
-        <input id="sf-dt" type="number" min="1" max="45" name="de_touches" value="${c.de_touches}"></div>
-      <div class="field"><label for="sf-q">% qualificati alle dirette</label>
-        <input id="sf-q" type="number" min="1" max="100" name="qualify_percent" value="${c.qualify_percent}"></div>
-    </div>`;
+function currentTab() {
+  const tab = location.hash.replace(/^#\/?/, '');
+  return TABS.some(([k]) => k === tab) ? tab : 'iscrizioni';
 }
 
 // ---------- Competizione ----------
 
-async function loadCompetition(id) {
+async function loadCompetition() {
   try {
-    current = await api('GET', `/api/competitions/${id}`);
+    current = await api('GET', '/api/competition');
   } catch (e) {
-    current = null;
-    app.innerHTML = `<div class="panel empty"><p>${esc(e.message)}</p><a href="#/">Torna alle competizioni</a></div>`;
+    app.innerHTML = `<div class="panel empty"><p>${esc(e.message)}</p></div>`;
     return;
   }
   render();
 }
 
 function render() {
-  const r = route();
-  if (!r.id) return renderHome();
-  if (!current || current.competition.id !== r.id) return loadCompetition(r.id);
+  if (!current) return loadCompetition();
+  const tab = currentTab();
   const c = current.competition;
   const view = {
-    partecipanti: viewFencers,
+    iscrizioni: viewFencers,
     gironi: viewPools,
     'classifica-gironi': viewPoolRanking,
     tabellone: viewBracket,
     classifica: viewFinal,
-    impostazioni: viewSettings,
-  }[r.tab] || viewFencers;
+  }[tab];
 
   app.innerHTML = `
-    <a href="#/" class="small">← Tutte le competizioni</a>
-    <div class="comp-head" style="margin-top:10px">
-      <div>
-        <h1>${esc(c.name)}</h1>
-        <div class="muted">${esc(fmtDate(c.date))}${c.location ? ` · ${esc(c.location)}` : ''} · ${current.fencers.length} tiratori</div>
-      </div>
-      <span class="spacer"></span>
+    <div class="row">
       <span class="badge ${c.status}">${STATUS_LABEL[c.status]}</span>
+      <span class="muted">${current.fencers.length} iscritti</span>
     </div>
-    <nav class="tabs">${TABS.map(([k, l]) => `<a class="tab ${k === r.tab ? 'active' : ''}" href="#/c/${c.id}/${k}">${l}</a>`).join('')}</nav>
+    <nav class="tabs">${TABS.map(([k, l]) => `<a class="tab ${k === tab ? 'active' : ''}" href="#/${k}">${l}</a>`).join('')}</nav>
     <div id="view"></div>`;
   view(document.getElementById('view'));
 }
 
-// ---------- Partecipanti ----------
+// ---------- Iscrizioni ----------
+
+// Stessa regola del server: gironi da massimo 7, dimensioni che differiscono al più di 1.
+function poolSplitText(n) {
+  if (n < 2) return '';
+  const count = Math.ceil(n / 7);
+  const base = Math.floor(n / count);
+  const big = n % count;
+  const part = (k, size) => `${k} ${k === 1 ? 'girone' : 'gironi'} da ${size}`;
+  const parts = [];
+  if (count - big) parts.push(part(count - big, base));
+  if (big) parts.push(part(big, base + 1));
+  return `Con ${n} iscritti: ${parts.join(' e ')}.`;
+}
 
 function viewFencers(el) {
   const locked = current.pools.length > 0;
-  const cid = current.competition.id;
   el.innerHTML = `
     <div class="grid grid-2">
       <section class="panel">
         <h2>Iscritti (${current.fencers.length})</h2>
+        ${locked ? '' : `<p class="muted small">${poolSplitText(current.fencers.length)}</p>`}
         ${locked ? '<p class="muted small">🔒 Gironi già generati: puoi correggere nomi e società, ma per aggiungere o togliere tiratori elimina prima i gironi.</p>' : ''}
         ${current.fencers.length ? `
         <div class="table-wrap"><table>
@@ -240,13 +172,13 @@ function viewFencers(el) {
 
   el.querySelector('#add-fencer').addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (await mutate('POST', `/api/competitions/${cid}/fencers`, formData(e.target), 'Partecipante aggiunto')) {
+    if (await mutate('POST', '/api/fencers', formData(e.target), 'Partecipante aggiunto')) {
       document.getElementById('af-l')?.focus();
     }
   });
   el.querySelector('#bulk-fencers').addEventListener('submit', (e) => {
     e.preventDefault();
-    mutate('POST', `/api/competitions/${cid}/fencers`, formData(e.target), 'Elenco importato');
+    mutate('POST', '/api/fencers', formData(e.target), 'Elenco importato');
   });
   el.querySelectorAll('tr[data-id]').forEach((tr) => {
     const id = tr.dataset.id;
@@ -265,7 +197,6 @@ function viewFencers(el) {
 // ---------- Gironi ----------
 
 function viewPools(el) {
-  const cid = current.competition.id;
   const hasBracket = current.bracket.length > 0;
   const n = current.fencers.length;
   const anyResult = current.pools.some((p) => p.bouts.some((b) => b.winner_id != null));
@@ -275,7 +206,7 @@ function viewPools(el) {
       <div class="row">
         <div>
           <h2>Gironi</h2>
-          <div class="muted small">Gironi da massimo ${current.competition.pool_max_size} tiratori, assalti a ${current.competition.pool_touches} stoccate. La composizione è casuale e cerca di separare chi è della stessa società.</div>
+          <div class="muted small">Gironi da massimo 7 tiratori, con al più un tiratore di differenza tra un girone e l'altro. Assalti a ${current.competition.pool_touches} stoccate. La composizione è casuale e separa il più possibile chi è della stessa società.</div>
         </div>
         <span class="spacer"></span>
         ${hasBracket ? '<span class="muted small">🔒 Tabellone generato: elimina il tabellone per modificare i gironi.</span>' : `
@@ -285,14 +216,14 @@ function viewPools(el) {
     </section>
     ${current.pools.length ? `<div class="pool-grid">${current.pools.map((p) => poolCard(p, hasBracket)).join('')}</div>`
       : `<div class="panel empty"><img src="mosciolino.svg" alt=""><p>${n < 2 ? 'Servono almeno 2 partecipanti.' : 'Nessun girone ancora: premi “Genera gironi casuali”.'}</p></div>`}
-    ${current.poolsDone && !hasBracket ? `<section class="panel row"><span>✅ Tutti gli assalti dei gironi sono conclusi.</span><span class="spacer"></span><a class="btn" href="#/c/${cid}/classifica-gironi">Vai alla classifica</a></section>` : ''}`;
+    ${current.poolsDone && !hasBracket ? `<section class="panel row"><span>✅ Tutti gli assalti dei gironi sono conclusi.</span><span class="spacer"></span><a class="btn" href="#/classifica-gironi">Vai alla classifica</a></section>` : ''}`;
 
   el.querySelector('#gen-pools')?.addEventListener('click', () => {
     if (anyResult && !confirm('Rigenerando i gironi perderai tutti i risultati già inseriti. Continuare?')) return;
-    mutate('POST', `/api/competitions/${cid}/pools`, {}, 'Gironi generati');
+    mutate('POST', '/api/pools', {}, 'Gironi generati');
   });
   el.querySelector('#del-pools')?.addEventListener('click', () => {
-    if (confirm('Eliminare tutti i gironi e i relativi risultati?')) mutate('DELETE', `/api/competitions/${cid}/pools`, null, 'Gironi eliminati');
+    if (confirm('Eliminare tutti i gironi e i relativi risultati?')) mutate('DELETE', '/api/pools', null, 'Gironi eliminati');
   });
 
   el.querySelectorAll('.bout[data-id]').forEach((row) => wirePoolBout(row));
@@ -378,7 +309,6 @@ function wirePoolBout(row) {
 // ---------- Classifica gironi ----------
 
 function viewPoolRanking(el) {
-  const cid = current.competition.id;
   if (!current.pools.length) {
     el.innerHTML = '<div class="panel empty"><p>Genera prima i gironi.</p></div>';
     return;
@@ -393,7 +323,7 @@ function viewPoolRanking(el) {
           <div class="muted small">Ordinata per V/M (vittorie/assalti), poi indice (TS−TR), poi stoccate date. Qualificati alle dirette: ${q} su ${current.ranking.length} (${current.competition.qualify_percent}%).</div>
         </div>
         <span class="spacer"></span>
-        ${hasBracket ? `<a class="btn secondary" href="#/c/${cid}/tabellone">Vai al tabellone</a>`
+        ${hasBracket ? `<a class="btn secondary" href="#/tabellone">Vai al tabellone</a>`
           : `<button class="btn" id="gen-bracket" ${current.poolsDone ? '' : 'disabled'} title="${current.poolsDone ? '' : 'Completa prima tutti gli assalti'}">🗡️ Genera tabellone dirette</button>`}
       </div>
       ${current.poolsDone ? '' : '<p class="muted small">⏳ Classifica provvisoria: ci sono ancora assalti da disputare.</p>'}
@@ -410,8 +340,8 @@ function viewPoolRanking(el) {
       </table></div>
     </section>`;
   el.querySelector('#gen-bracket')?.addEventListener('click', async () => {
-    if (await mutate('POST', `/api/competitions/${cid}/bracket`, {}, 'Tabellone generato')) {
-      location.hash = `#/c/${cid}/tabellone`;
+    if (await mutate('POST', '/api/bracket', {}, 'Tabellone generato')) {
+      location.hash = `#/tabellone`;
     }
   });
 }
@@ -419,10 +349,9 @@ function viewPoolRanking(el) {
 // ---------- Tabellone ----------
 
 function viewBracket(el) {
-  const cid = current.competition.id;
   if (!current.bracket.length) {
     el.innerHTML = `<div class="panel empty"><img src="mosciolino.svg" alt="">
-      <p>Il tabellone non è ancora stato generato.<br>${current.poolsDone ? `Vai alla <a href="#/c/${cid}/classifica-gironi">classifica dei gironi</a> per generarlo.` : 'Completa prima tutti gli assalti dei gironi.'}</p></div>`;
+      <p>Il tabellone non è ancora stato generato.<br>${current.poolsDone ? `Vai alla <a href="#/classifica-gironi">classifica dei gironi</a> per generarlo.` : 'Completa prima tutti gli assalti dei gironi.'}</p></div>`;
     return;
   }
   const byId = new Map(current.fencers.map((f) => [f.id, f]));
@@ -460,7 +389,7 @@ function viewBracket(el) {
     </section>`;
 
   el.querySelector('#del-bracket').addEventListener('click', () => {
-    if (confirm('Eliminare il tabellone e tutti i risultati delle dirette?')) mutate('DELETE', `/api/competitions/${cid}/bracket`, null, 'Tabellone eliminato');
+    if (confirm('Eliminare il tabellone e tutti i risultati delle dirette?')) mutate('DELETE', '/api/bracket', null, 'Tabellone eliminato');
   });
   el.querySelectorAll('.de[data-id]').forEach((d) => {
     const open = () => openDeDialog(Number(d.dataset.id), byId);
@@ -542,42 +471,6 @@ function viewFinal(el) {
       </table></div>
       <div style="margin-top:14px"><button class="btn secondary" onclick="window.print()">🖨️ Stampa</button></div>
     </section>`;
-}
-
-// ---------- Impostazioni ----------
-
-function viewSettings(el) {
-  const c = current.competition;
-  el.innerHTML = `
-    <section class="panel">
-      <h2>Impostazioni competizione</h2>
-      <form id="settings">
-        <div class="field"><label for="s-name">Nome</label><input id="s-name" name="name" value="${esc(c.name)}" required></div>
-        <div class="fields">
-          <div class="field"><label for="s-date">Data</label><input id="s-date" type="date" name="date" value="${esc(c.date)}"></div>
-          <div class="field"><label for="s-loc">Luogo</label><input id="s-loc" name="location" value="${esc(c.location)}"></div>
-        </div>
-        ${settingsFields(c)}
-        <div class="field"><label for="s-notes">Note</label><textarea id="s-notes" name="notes" style="font-family:inherit">${esc(c.notes)}</textarea></div>
-        <p class="muted small">La dimensione dei gironi si applica alla prossima generazione; la percentuale di qualificati al prossimo tabellone generato.</p>
-        <div class="row"><button class="btn">Salva</button><span class="spacer"></span><button type="button" class="btn danger" id="del-comp">Elimina competizione</button></div>
-      </form>
-    </section>`;
-  el.querySelector('#settings').addEventListener('submit', (e) => {
-    e.preventDefault();
-    mutate('PUT', `/api/competitions/${c.id}`, formData(e.target), 'Impostazioni salvate');
-  });
-  el.querySelector('#del-comp').addEventListener('click', async () => {
-    if (!confirm(`Eliminare definitivamente “${c.name}” con tutti i dati?`)) return;
-    try {
-      await api('DELETE', `/api/competitions/${c.id}`);
-      current = null;
-      location.hash = '#/';
-      toast('Competizione eliminata');
-    } catch (err) {
-      toast(err.message, true);
-    }
-  });
 }
 
 window.addEventListener('hashchange', render);

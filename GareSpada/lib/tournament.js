@@ -1,6 +1,9 @@
 // Logica pura del torneo: gironi, ordine degli assalti, classifiche e tabellone.
 // Nessun accesso al database qui, così è testabile in isolamento.
 
+// Gironi da massimo 7 tiratori; le dimensioni differiscono al più di 1.
+const POOL_MAX_SIZE = 7;
+
 // Ordine degli assalti nei gironi (tabelle FIE). Indici 1-based sulla posizione nel girone.
 const BOUT_ORDERS = {
   2: [[1, 2]],
@@ -167,6 +170,7 @@ function roundLabel(round) {
 }
 
 module.exports = {
+  POOL_MAX_SIZE,
   BOUT_ORDERS,
   boutOrder,
   roundRobinOrder,
