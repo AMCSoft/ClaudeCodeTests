@@ -1,4 +1,4 @@
-# 🎃 Gare di Spada del Mosciolino
+# 🎃 Spooky Mosciolino
 
 Web app locale per gestire **gare amichevoli di spada**, a tema Halloween. Il simbolo è il *mosciolino*: il mosciolo, la cozza selvatica del Conero, qui intagliato come una zucca, con cappello da strega e spada in pugno.
 

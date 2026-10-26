@@ -409,7 +409,7 @@ function createApp(db) {
 if (require.main === module) {
   const PORT = Number(process.env.PORT) || 4010;
   createApp(open()).listen(PORT, () => {
-    console.log(`🎃 Gare di Spada del Mosciolino in ascolto su http://localhost:${PORT}`);
+    console.log(`🎃 Spooky Mosciolino in ascolto su http://localhost:${PORT}`);
   });
 }
 
