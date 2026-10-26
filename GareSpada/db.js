@@ -1,10 +1,23 @@
-const Database = require('better-sqlite3');
+// SQLite integrato in Node (nessuna dipendenza nativa da compilare).
+const { DatabaseSync } = require('node:sqlite');
 const path = require('path');
 
 function open(file = process.env.DB_FILE || path.join(__dirname, 'garespada.db')) {
-  const db = new Database(file);
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
+  const db = new DatabaseSync(file);
+  db.exec('PRAGMA journal_mode = WAL');
+  db.exec('PRAGMA foreign_keys = ON');
+  // Stessa forma di better-sqlite3: db.transaction(fn)() esegue fn in una transazione.
+  db.transaction = (fn) => (...args) => {
+    db.exec('BEGIN');
+    try {
+      const result = fn(...args);
+      db.exec('COMMIT');
+      return result;
+    } catch (e) {
+      db.exec('ROLLBACK');
+      throw e;
+    }
+  };
   db.exec(`
     CREATE TABLE IF NOT EXISTS competitions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

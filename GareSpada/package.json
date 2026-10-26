@@ -4,16 +4,15 @@
   "description": "Web app locale per gestire gare amichevoli di spada (gironi, dirette, risultati) con SQLite",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js",
-    "test": "node --test"
+    "start": "node --disable-warning=ExperimentalWarning server.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch server.js",
+    "test": "node --disable-warning=ExperimentalWarning --test"
   },
   "dependencies": {
-    "better-sqlite3": "^13.0.3",
     "express": "^4.22.3"
   },
   "private": true,
   "engines": {
-    "node": ">=18"
+    "node": ">=22.13"
   }
 }

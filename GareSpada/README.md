@@ -15,7 +15,7 @@ Web app locale per gestire **gare amichevoli di spada**, a tema Halloween. Il si
 
 ## Avvio
 
-Serve Node.js 18 o superiore.
+Serve Node.js 22.13 o superiore (consigliato Node 24). Non ci sono dipendenze native da compilare.
 
 ```bash
 cd GareSpada
@@ -36,7 +36,7 @@ npm test
 ## Struttura
 
 - `server.js`: API Express e regole di gestione (blocchi, avanzamento nel tabellone)
-- `db.js`: schema SQLite (better-sqlite3)
+- `db.js`: schema SQLite (modulo `node:sqlite` integrato in Node, nessuna compilazione)
 - `lib/tournament.js`: logica pura (gironi, ordine assalti, classifiche, teste di serie)
 - `public/`: interfaccia (HTML/CSS/JS senza build) e logo `mosciolino.svg`
 - `test/`: test con `node --test`
