@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -10 240 250" role="img" aria-label="Il Mosciolino: un mosciolo del Conero intagliato come una zucca di Halloween, con cappello da strega e spada">
+  <defs>
+    <linearGradient id="shell" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5a4690"/>
+      <stop offset="0.5" stop-color="#261c45"/>
+      <stop offset="1" stop-color="#0d0a18"/>
+    </linearGradient>
+    <radialGradient id="sheen" cx="0.3" cy="0.3" r="0.55">
+      <stop offset="0" stop-color="#b9a8f0" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#b9a8f0" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.55">
+      <stop offset="0" stop-color="#fff3b0"/>
+      <stop offset="0.5" stop-color="#ffb02e"/>
+      <stop offset="1" stop-color="#ff6a00"/>
+    </radialGradient>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="5"/>
+    </filter>
+  </defs>
+
+  <!-- conchiglia del mosciolo: allungata, a punta verso l'umbone -->
+  <path id="valve" d="M58 52 C48 80 50 130 70 168 C90 206 146 224 178 204 C204 188 200 150 182 120 C158 82 112 56 58 52 Z"
+        fill="url(#shell)" stroke="#07050d" stroke-width="3.5" stroke-linejoin="round"/>
+  <path d="M58 52 C48 80 50 130 70 168 C90 206 146 224 178 204 C204 188 200 150 182 120 C158 82 112 56 58 52 Z"
+        fill="url(#sheen)"/>
+  <!-- bordo madreperlaceo e linee di crescita -->
+  <path d="M72 172 C92 204 144 218 174 200 C196 186 194 154 180 126" fill="none" stroke="#8fb4e6" stroke-opacity="0.55" stroke-width="3"/>
+  <g fill="none" stroke="#7a66b8" stroke-opacity="0.45" stroke-width="2">
+    <path d="M64 92 C80 86 120 90 150 104"/>
+    <path d="M60 130 C86 120 140 128 176 146"/>
+  </g>
+
+  <!-- faccia da zucca intagliata -->
+  <g filter="url(#blur)" opacity="0.85">
+    <path d="M88 132 L102 108 L114 134 Z M128 140 L144 118 L154 146 Z" fill="#ff8a00"/>
+    <path d="M86 160 L98 168 L106 158 L116 172 L126 162 L136 176 L146 166 L160 172 C148 202 98 196 86 160 Z" fill="#ff8a00"/>
+  </g>
+  <path d="M88 132 L102 108 L114 134 Z M128 140 L144 118 L154 146 Z" fill="url(#glow)"/>
+  <path d="M86 160 L98 168 L106 158 L116 172 L126 162 L136 176 L146 166 L160 172 C148 202 98 196 86 160 Z" fill="url(#glow)"/>
+
+  <!-- cappello da strega appoggiato sull'umbone -->
+  <g transform="rotate(-18 80 58)">
+    <ellipse cx="84" cy="62" rx="48" ry="10" fill="#1a1028" stroke="#07050d" stroke-width="2.5"/>
+    <path d="M58 60 C66 40 74 22 104 6 C94 24 100 40 110 60 Z" fill="#2a1840" stroke="#07050d" stroke-width="2.5" stroke-linejoin="round"/>
+    <path d="M59 54 C76 58 94 58 109 54 L111 60 C92 64 76 64 58 60 Z" fill="#ff7a00"/>
+  </g>
+
+  <!-- spada da spada: lama, coccia a campana, impugnatura -->
+  <g transform="rotate(14 206 140)">
+    <rect x="204" y="18" width="4" height="132" rx="2" fill="#e3e7ef" stroke="#7d8496" stroke-width="1"/>
+    <circle cx="206" cy="17" r="3.5" fill="#9aa1b1"/>
+    <path d="M186 160 C186 140 226 140 226 160 Z" fill="#c7ccd8" stroke="#5f6678" stroke-width="2.5" stroke-linejoin="round"/>
+    <rect x="201" y="160" width="10" height="34" rx="4" fill="#6b3f1d" stroke="#3c220f" stroke-width="2"/>
+    <circle cx="206" cy="198" r="6" fill="#9aa1b1" stroke="#5f6678" stroke-width="2"/>
+  </g>
+</svg>

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gare di Spada del Mosciolino</title>
+  <link rel="icon" href="mosciolino.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Creepster&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="sky" aria-hidden="true">
+    <div class="moon"></div>
+    <span class="bat b1">🦇</span>
+    <span class="bat b2">🦇</span>
+    <span class="bat b3">🦇</span>
+    <svg class="web" viewBox="0 0 200 200">
+      <g fill="none" stroke="currentColor" stroke-width="1.2">
+        <path d="M0 0 L200 200 M0 0 L200 90 M0 0 L90 200 M0 0 L200 20 M0 0 L20 200"/>
+        <path d="M40 4 Q30 30 4 40 M80 8 Q60 60 8 80 M125 12 Q95 95 12 125 M170 18 Q130 130 18 170"/>
+      </g>
+    </svg>
+  </div>
+
+  <header class="topbar">
+    <a href="#/" class="brand">
+      <img src="mosciolino.svg" alt="" class="brand-logo">
+      <span>
+        <span class="brand-title">Gare di Spada del Mosciolino</span>
+        <span class="brand-sub">Tornei amichevoli di spada · Halloween edition</span>
+      </span>
+    </a>
+  </header>
+
+  <main id="app" class="container"></main>
+
+  <dialog id="bout-dialog" class="dialog">
+    <form method="dialog" id="bout-form"></form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
