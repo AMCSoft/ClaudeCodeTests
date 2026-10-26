@@ -8,7 +8,7 @@ L'app gestisce un'unica gara, lo **Spooky Mosciolino**: non si creano altre comp
 
 - **Iscrizioni**: aggiunta singola, modifica in linea, eliminazione e importazione di un elenco (`Cognome; Nome; Società`, una riga per tiratore, si può incollare da Excel). La pagina mostra in anticipo come verranno divisi i gironi.
 - **Gironi casuali**: massimo 7 tiratori per girone e al più un tiratore di differenza tra un girone e l'altro (es. 30 iscritti → 5 gironi da 6; 32 iscritti → 3 da 6 e 2 da 7). La composizione è casuale ma separa il più possibile i tiratori della stessa società. L'ordine degli assalti segue le tabelle FIE.
-- **Risultati dei gironi**: la matrice del girone (V5/D3) si aggiorna mentre inserisci i punteggi. Come nella spada, non esiste il pari: a punteggio pari si indica chi vince alla priorità.
+- **Risultati dei gironi**: la matrice del girone (V se si vince a 5 stoccate, V3 se si vince a tempo con 3, il numero in rosso per le stoccate date da chi perde; i campi accettano al massimo 5 stoccate) si aggiorna mentre inserisci i punteggi. Come nella spada, non esiste il pari: a punteggio pari si indica chi vince alla priorità.
 - **Classifica dopo i gironi**: V/M, poi indice (TS−TR), poi stoccate date.
 - **Tabellone delle dirette**: tabellone a 2ⁿ con le teste di serie nelle posizioni standard (1–16, 8–9, …) e gli esenti assegnati alle prime teste di serie. Clicca un assalto per inserire il risultato: il vincitore passa al turno successivo.
 - **Correzioni**: un risultato si può modificare finché il turno successivo non è stato disputato. Si possono rigenerare gironi e tabellone, con conferma.
