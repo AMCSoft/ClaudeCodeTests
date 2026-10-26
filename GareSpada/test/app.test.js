@@ -25,6 +25,18 @@ test('i gironi sono bilanciati e separano le società quando possibile', () => {
   }
 });
 
+test('gironi da massimo 7 con al più 1 tiratore di differenza', () => {
+  const sizes = (n) => T.generatePools(Array.from({ length: n }, (_, i) => ({ id: i })), T.POOL_MAX_SIZE)
+    .map((p) => p.length).sort();
+  assert.deepEqual(sizes(30), [6, 6, 6, 6, 6]);
+  assert.deepEqual(sizes(32), [6, 6, 6, 7, 7]);
+  for (let n = 2; n <= 80; n++) {
+    const s = sizes(n);
+    assert.ok(Math.max(...s) <= 7 && Math.max(...s) - Math.min(...s) <= 1, `${n} iscritti: ${s}`);
+    assert.equal(s.length, Math.ceil(n / 7));
+  }
+});
+
 test('teste di serie del tabellone', () => {
   assert.deepEqual(T.seedPositions(8), [1, 8, 5, 4, 3, 6, 7, 2]);
   assert.equal(T.bracketSize(9), 16);
@@ -39,8 +51,11 @@ test('validazione dei punteggi', () => {
   assert.throws(() => T.resolveWinner({ ...base, scoreA: 6, scoreB: 1 }));
 });
 
-test('flusso completo: competizione, gironi, tabellone, classifica', async (t) => {
-  const server = createApp(open(':memory:')).listen(0);
+test('flusso completo: iscrizioni, gironi, tabellone, classifica', async (t) => {
+  const db = open(':memory:');
+  // Percentuale non più modificabile dall'interfaccia: la imposto qui per provare anche gli esclusi.
+  const server = createApp(db).listen(0);
+  db.prepare('UPDATE competitions SET qualify_percent = 80').run();
   t.after(() => server.close());
   const base = `http://127.0.0.1:${server.address().port}/api`;
   const call = async (method, url, body) => {
@@ -50,22 +65,22 @@ test('flusso completo: competizione, gironi, tabellone, classifica', async (t) =
     return { status: res.status, data: await res.json() };
   };
 
-  let { data } = await call('POST', '/competitions', { name: 'Spada di Halloween', qualify_percent: 80 });
-  const cid = data.competition.id;
   const bulk = Array.from({ length: 11 }, (_, i) => `Cognome${i}; Nome${i}; Club${i % 3}`).join('\n');
-  ({ data } = await call('POST', `/competitions/${cid}/fencers`, { bulk }));
+  let { data } = await call('GET', '/competition');
+  assert.equal(data.competition.name, 'Spooky Mosciolino');
+  ({ data } = await call('POST', '/fencers', { bulk }));
   assert.equal(data.fencers.length, 11);
 
-  ({ data } = await call('POST', `/competitions/${cid}/pools`, {}));
+  ({ data } = await call('POST', '/pools', {}));
   assert.equal(data.pools.length, 2);
   assert.equal(data.competition.status, 'gironi');
 
   // Con i gironi generati non si possono aggiungere iscritti.
-  const locked = await call('POST', `/competitions/${cid}/fencers`, { last_name: 'Tardi' });
+  const locked = await call('POST', '/fencers', { last_name: 'Tardi' });
   assert.equal(locked.status, 400);
 
   // Il tabellone richiede i gironi completi.
-  assert.equal((await call('POST', `/competitions/${cid}/bracket`, {})).status, 400);
+  assert.equal((await call('POST', '/bracket', {})).status, 400);
 
   // Risultati: vince sempre il tiratore con l'id più basso; un assalto finisce in parità alla priorità.
   const bouts = data.pools.flatMap((p) => p.bouts);
@@ -83,7 +98,7 @@ test('flusso completo: competizione, gironi, tabellone, classifica', async (t) =
   const qualified = data.ranking.filter((r) => r.qualified);
   assert.equal(qualified.length, 9); // 80% di 11
 
-  ({ data } = await call('POST', `/competitions/${cid}/bracket`, {}));
+  ({ data } = await call('POST', '/bracket', {}));
   assert.equal(data.competition.status, 'dirette');
   assert.deepEqual(data.bracket.map((r) => r.round), [16, 8, 4, 2]);
   const first = data.bracket[0].bouts;

@@ -1,5 +1,5 @@
 {
-  "name": "garespada",
+  "name": "spooky-mosciolino",
   "version": "1.0.0",
   "description": "Web app locale per gestire gare amichevoli di spada (gironi, dirette, risultati) con SQLite",
   "main": "server.js",
