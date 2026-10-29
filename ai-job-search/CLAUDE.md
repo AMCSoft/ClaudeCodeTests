@@ -1,10 +1,8 @@
-# Job Application Assistant for [YOUR_NAME]
+# Job Application Assistant for Angelo Marino Carmollingo
 
-<!-- SETUP: This file is populated by running /setup -->
-<!-- After running /setup, all [PLACEHOLDER] tokens will be replaced with your actual information -->
 
 ## Role
-This repo is a job application workspace. Claude acts as a career advisor and application assistant for [YOUR_NAME], helping with:
+This repo is a job application workspace. Claude acts as a career advisor and application assistant for Angelo Marino Carmollingo, helping with:
 1. **Job fit evaluation** - Assess job postings against your profile (skills, experience, behavioral traits)
 2. **CV tailoring** - Adapt existing CV templates (LaTeX/moderncv) to target specific roles
 3. **Cover letter writing** - Draft targeted cover letters using existing templates (LaTeX)
@@ -13,79 +11,87 @@ This repo is a job application workspace. Claude acts as a career advisor and ap
 
 ## Candidate Profile
 
-<!-- This section is auto-populated by /setup. You can also fill it in manually. -->
-
 ### Identity
-- **Name:** [YOUR_NAME]
-- **Location:** [YOUR_CITY], [YOUR_COUNTRY] ([YOUR_COMMUTE_CONSTRAINTS])
+- **Name:** Angelo Marino Carmollingo
+- **Location:** Fano (PU), Italy (open to remote; relocation/commute radius *to be confirmed*)
 - **Languages:**
   | Language | Level |
   |----------|-------|
-  | [LANGUAGE] | [LEVEL] |
-  <!-- Every language you work in professionally, with your level (CEFR, "native," "professional
-  working proficiency," whatever your CV/LinkedIn use - no need to force it into one scale). An
-  undeclared language is a hard deal-breaker if a posting requires it; a declared language at a
-  lower level than a posting wants is flagged for your own judgment, not auto-rejected. See
-  04-job-evaluation.md's Language Gate. -->
-- **CV language:** [YOUR_CV_LANGUAGE] <!-- English unless your market expects otherwise; /setup asks -->
+  | Italian | Native |
+  | English | Professional working proficiency (CV: "Excellent") |
+  | German | *To be confirmed* - two years based in Germany (Regensburg, Berlin) |
+- **CV language:** English or Italian, matched to the posting's language (cover letters always follow the posting)
 
-- **Status:** [YOUR_EMPLOYMENT_STATUS]
-- **LinkedIn headline:** "[YOUR_LINKEDIN_HEADLINE]"
+- **Status:** Freelance Software Engineer (self-employed) since 04/2024; main client KooSys GmbH
+- **LinkedIn headline:** "Software Engineer" *(CV subtitle - confirm the actual LinkedIn headline)*
 
 ### Education
-<!-- List your degrees, most recent first -->
-- **[DEGREE_LEVEL] in [FIELD]** ([YEAR_START]-[YEAR_END]) - [INSTITUTION]
-  - Thesis: "[THESIS_TITLE]"
-  - Topics: [KEY_TOPICS]
+- **MSc in Computer Engineering - Software Development** (2020-2022) - Politecnico di Torino
+  - Thesis: a complete filesystem for non-volatile memory in a safety-critical (spacecraft) environment, developed solo at Intelligentia
+  - Topics: software development, embedded and memory-constrained systems
+- **BSc in Computer Engineering** (2017-2020) - Politecnico di Torino
 
 ### Professional Experience
-<!-- List your roles, most recent first -->
-- **[JOB_TITLE]** ([START_DATE] - [END_DATE]) - **[COMPANY]** ([LOCATION])
-  - [KEY_RESPONSIBILITY_1]
-  - [KEY_RESPONSIBILITY_2]
-  - [KEY_ACHIEVEMENT]
+- **Freelance Software Engineer** (04/2024 - present) - **Self-employed** (Fano, Italy; main client KooSys GmbH)
+  - AUTOSAR environment set-up and CAN communication for automotive projects
+  - RTE configuration with DaVinci Configurator and DaVinci Developer; embedded C development
+  - Python scripting for automated testing of the C codebase; GitLab, Jira, Agile SCRUM
+- **Software Engineer** (12/2023 - 04/2024) - **KooSys GmbH** (Regensburg, Germany)
+  - RTE, BSW and SWC configuration and coding; DaVinci Toolchain
+  - Bench testing on real hardware
+- **Software Engineer** (04/2022 - 12/2023) - **DXC Luxoft** (Turin, Italy & Berlin, Germany)
+  - Embedded Linux for vehicle-to-vehicle (V2V) truck communication: kernel manipulation, systemd modules, Bluetooth and LAN
+  - C++14/C++17 and C99; Python and Bash scripting; databases
+  - Bench testing on real hardware
+- **Junior Software Engineer** (04/2021 - 04/2022) - **Intelligentia** (Benevento, Italy)
+  - PUS (Packet Utilization Standard) library in ISO-C99 for defense and aerospace, documented and validated to flight-grade standards
+  - Solo design and implementation of a non-volatile-memory filesystem for a safety-critical spacecraft context (master's thesis)
+  - CanTaTa automated testing, OsvALdo toolchain, embedded Linux, C++
+- **Trainee Software Engineer** (10/2020 - 03/2021) - **Soft.Lab. Srl** (Ponte (BN), Italy)
+  - Geomatic calculation and simulation software: C++14, STL, OpenGL, 3D scenarios
+  - Desktop applications with Qt and QML; CppUnitTest automated testing
 
 ### Technical Skills
-- **Primary:** [YOUR_PRIMARY_SKILLS]
-- **Secondary:** [YOUR_SECONDARY_SKILLS]
-- **Domain:** [YOUR_DOMAIN_EXPERTISE]
-- **Software:** [YOUR_TOOLS_AND_SOFTWARE]
+- **Primary:** C (ISO-C99, embedded, AUTOSAR, flight-grade), C++ (C++14/17, STL)
+- **Secondary:** Python, Bash, SQL, MongoDB, JavaScript (React.js, Node.js, Express.js)
+- **Domain:** Embedded systems and embedded Linux (kernel, systemd, memory management); automotive (AUTOSAR RTE/BSW/SWC, CAN, V2V); aerospace and defense (PUS, NVM filesystems, validation); safety-critical and resource-constrained development; 3D graphics and simulation
+- **Software:** Git/GitLab/GitHub, Jira, Agile/SCRUM, DaVinci Toolchain, CanTaTa, OsvALdo, Qt/QML, OpenGL, Linux/Windows/macOS, hardware bench testing
 
 ### Certifications
-<!-- List relevant certifications with dates -->
-- **[CERTIFICATION_NAME]** - [HOURS]h - completed [DATE]
+- *(none on CV)*
 
 ### Publications
-<!-- List peer-reviewed publications, if any -->
-- [AUTHOR_LIST] ([YEAR]). [TITLE]. [JOURNAL].
+- *(none)*
 
 ### Awards
-<!-- List relevant awards, hackathons, competitions -->
-- [AWARD_NAME] - [EVENT] ([YEAR])
+- *(none recorded)*
 
 ### Behavioral Profile
-<!-- Your behavioral assessment results (PI, DISC, Myers-Briggs, or self-assessment) -->
-- **[TRAIT_1]** - [DESCRIPTION]
-- **[TRAIT_2]** - [DESCRIPTION]
-- **Strengths:** [YOUR_STRENGTHS]
-- **Growth areas:** [YOUR_GROWTH_AREAS]
-- **Thrives in:** [YOUR_IDEAL_ENVIRONMENT]
+<!-- PENDING: not derivable from a CV. Fill via /setup --section behavioral or answer the
+     onboarding questions. The CV's own profile text offers only weak signal:
+     "I like hard problems and solving them even after struggling for days or weeks." -->
+- **Persistence** - self-described: stays with hard problems for days or weeks rather than dropping them
+- **Strengths:** *PENDING*
+- **Growth areas:** *PENDING*
+- **Thrives in:** *PENDING*
 
 ### What Excites You
-<!-- What motivates you professionally -->
-- [PASSION_1]
-- [PASSION_2]
+- Hard problems that take days or weeks to crack - self-described on the CV, and the most consistent signal in it
+- Performance-critical and low-level work where correctness is measurable rather than a matter of taste
+- Owning a component end to end, as with the spacecraft filesystem thesis
+- *PENDING: confirm and extend - what would you want more of in the next role than you get now?*
 
 ### Target Sectors
-<!-- Industries and companies you're targeting -->
-- [SECTOR_1]: [EXAMPLE_COMPANIES]
-- [SECTOR_2]: [EXAMPLE_COMPANIES]
+Four directions in play, in priority order (set during /setup):
+1. **Backend / infrastructure at scale** - the desired pivot. Search and discovery, high-traffic platforms, performance-critical services. Expect a lower Experience Match score and lead with the domain-transfer argument.
+2. **Embedded / systems software** - the strongest match on paper: embedded Linux, kernel, firmware, memory management.
+3. **Automotive / AUTOSAR** - current specialisation and current billable work. Germany and northern Italy; remote contracts exist.
+4. **Aerospace / defense** - niche with few qualified competitors. Watch for clearance or citizenship requirements.
 
 ### Deal-breakers
-<!-- Hard constraints on job search. Language requirements are handled separately and
-automatically from your Languages table above - don't duplicate them here. -->
-- [DEALBREAKER_1]
-- [DEALBREAKER_2]
+- Roles requiring full-time onsite presence outside commuting range of Fano, unless framed as a relocation offer
+- Postings requiring German or another undeclared language as a job condition (excluded by the Language Gate until declared)
+- *PENDING: confirm the rest - on-call expectations? pure configuration/process work with no engineering? minimum rate or salary floor? company size or sector you would refuse?*
 
 ## Repo Structure
 - `cv/` - LaTeX CV variants (moderncv template, banking style)

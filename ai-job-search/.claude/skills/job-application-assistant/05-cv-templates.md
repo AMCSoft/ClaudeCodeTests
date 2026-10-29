@@ -59,7 +59,7 @@ Expected output: `Output written on main_<company>_<role>.pdf (2 pages, ...)`. A
     linkcolor=blue,
     filecolor=magenta,
     urlcolor=blue,
-    pdftitle={[YOUR_NAME] - CV},
+    pdftitle={Angelo Marino Carmollingo - CV},
     % Keep pdfpagemode=UseNone: this block runs after moderncv's own
     % \AtEndPreamble (moderncv.cls sets pdfpagemode there), so a FullScreen
     % value here would win and open every CV in fullscreen presentation mode.
@@ -69,13 +69,13 @@ Expected output: `Output written on main_<company>_<role>.pdf (2 pages, ...)`. A
 \usepackage{import}
 
 % Personal data
-\name{[FIRST_NAME]}{[LAST_NAME]}
+\name{Angelo Marino}{Carmollingo}
 % If you have no address to list, DELETE this whole line. \address{}{}{} fails
 % with "There's no line here to end" on every moderncv version.
-\address{[YOUR_ADDRESS]}{}{}
-\phone[mobile]{[YOUR_PHONE]}
-\email{[YOUR_EMAIL]}
-\extrainfo{\href{[YOUR_LINKEDIN_URL]}{LinkedIn}, \href{[YOUR_GITHUB_URL]}{GitHub}}
+\address{Fano (PU), Italy}{}{}
+\phone[mobile]{+39 375 534 4587}
+\email{angelomarino.carmollingo@ingpec.eu}
+\extrainfo{\href{https://linkedin.com/in/angelo-marino-carmollingo}{LinkedIn}}
 
 \begin{document}
 \makecvtitle
@@ -136,12 +136,41 @@ When the role sits outside your home domain, **lead with the domain-transfer arg
 
 **Create 2-3 profile statement templates for your main role types:**
 
-<!-- SETUP: These are populated based on your background -->
-**For [YOUR_PRIMARY_ROLE_TYPE] roles:**
-> [YOUR_PROFILE_STATEMENT_TEMPLATE_1]
+**For backend / infrastructure-at-scale roles** *(domain transfer - lead with the transfer argument):*
+> Software engineer with five years in domains where performance and correctness are not negotiable:
+> flight-grade ISO-C99 for aerospace, embedded Linux for vehicle-to-vehicle communication, and AUTOSAR
+> automotive software. Fluent in C and C++ at the level where allocation, layout and lifetimes are a
+> default concern rather than an afterthought - the same discipline that high-traffic backend hot paths
+> demand, and the reason Rust's ownership model reads as familiar. Comfortable across the stack from
+> performance-critical code to on-hardware validation, and used to debugging systems that cannot simply
+> be stepped through. MSc in Computer Engineering, Politecnico di Torino.
 
-**For [YOUR_SECONDARY_ROLE_TYPE] roles:**
-> [YOUR_PROFILE_STATEMENT_TEMPLATE_2]
+**For embedded / systems software roles** *(strongest direct match):*
+> Embedded systems engineer with five years across automotive and aerospace: embedded Linux with kernel
+> and systemd work for V2V truck communication at DXC Luxoft, AUTOSAR RTE/BSW/SWC configuration and C
+> development for KooSys, and flight-grade ISO-C99 PUS library code at Intelligentia. Designed and
+> implemented, solo, a complete non-volatile-memory filesystem for a safety-critical spacecraft context
+> as a master's thesis. C and C++14/17 as primary languages, Python for test automation, and routine
+> validation on real hardware. MSc in Computer Engineering, Politecnico di Torino.
+
+**For automotive / AUTOSAR roles** *(current specialisation):*
+> Automotive software engineer currently delivering AUTOSAR work as a freelancer for KooSys GmbH:
+> environment set-up, RTE configuration with DaVinci Configurator and Developer, CAN communication, and
+> embedded C development, with Python scripting for automated testing of the C codebase. Previously
+> two years on embedded Linux for vehicle-to-vehicle truck communication at DXC Luxoft (kernel, systemd,
+> Bluetooth/LAN, C++14/17 and C99). Agile/SCRUM, GitLab and Jira throughout; bench testing on real
+> hardware as standard practice. MSc in Computer Engineering, Politecnico di Torino.
+
+**For aerospace / defense roles** *(niche, low competition):*
+> Software engineer with direct flight-grade experience: developed PUS (Packet Utilization Standard)
+> library code in ISO-C99 at Intelligentia for defense and aerospace systems, documented and validated
+> to aerospace certification standards, with CanTaTa and the OsvALdo toolchain for automated testing.
+> Master's thesis delivered solo: a complete filesystem for non-volatile memory in a safety-critical
+> spacecraft environment. Since then, five years of safety-critical and embedded practice across
+> automotive, including AUTOSAR and embedded Linux. MSc in Computer Engineering, Politecnico di Torino.
+
+<!-- All four statements are drafted from 01-candidate-profile.md and carry no claim the CV does not
+     support. Review the wording before first use; /apply tailors from these, it does not re-verify them. -->
 
 Statements labeled *[Used for: <company>_<role>]* were extracted from archived application drafts by `/setup` Path A. They are **phrasing references, never fact sources**: when drafting from one, every factual claim still comes from `01-candidate-profile.md` - a past tailored draft does not vouch for its own accuracy.
 

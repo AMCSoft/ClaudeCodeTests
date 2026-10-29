@@ -16,26 +16,72 @@ Keep answers to 1-2 minutes. Be specific. End with what you learned or would do 
 
 <!-- These are populated by /setup from your actual experience. Below are templates showing the format. -->
 
-### 1. [PROJECT_NAME] ([SKILL_DEMONSTRATED])
-**S:** [CONTEXT - what was happening, what was the problem]
-**T:** [YOUR RESPONSIBILITY - what you specifically needed to do]
-**A:** [WHAT YOU DID - specific actions, tools, methods]
-**R:** [OUTCOME - measurable results, adoption, impact]
-**Use for:** "[QUESTION_TYPE_1]", "[QUESTION_TYPE_2]"
+> **Grounding note:** the Situation / Task / Action lines below are drawn from your CV and are
+> factually safe to use. Every **R** line is marked *[fill in]* where the CV carries no measurable
+> outcome - interviews are won on the R, so write real numbers or concrete consequences there before
+> relying on any of these. Do not let `/apply` or an interview answer invent them.
 
-### 2. [PROJECT_NAME] ([SKILL_DEMONSTRATED])
-**S:** [CONTEXT]
-**T:** [YOUR RESPONSIBILITY]
-**A:** [WHAT YOU DID]
-**R:** [OUTCOME]
-**Use for:** "[QUESTION_TYPE_1]", "[QUESTION_TYPE_2]"
+### 1. Non-volatile memory filesystem for a spacecraft (solo ownership, systems design)
+**S:** At Intelligentia, working on defense and aerospace software, a non-volatile memory application
+needed a filesystem suitable for a safety-critical spacecraft environment, where a failure is not a
+rollback.
+**T:** Design and implement the entire filesystem alone, from requirements through to validated code -
+this also served as the master's thesis.
+**A:** Designed the on-memory layout and the memory management strategy for a constrained critical
+environment, implemented it, and documented it to the standard required for aerospace validation.
+Verified behaviour with the CanTaTa automated testing toolchain.
+**R:** *[fill in - delivered and validated? thesis grade? did it ship or feed a flight product? any
+figures on memory footprint, wear levelling, or recovery behaviour?]*
+**Use for:** "Tell me about the most complex thing you've built", "Describe a project you owned end to
+end", "How do you approach correctness when you can't just test in production"
 
-### 3. [PROJECT_NAME] ([SKILL_DEMONSTRATED])
-**S:** [CONTEXT]
-**T:** [YOUR RESPONSIBILITY]
-**A:** [WHAT YOU DID]
-**R:** [OUTCOME]
-**Use for:** "[QUESTION_TYPE_1]", "[QUESTION_TYPE_2]"
+### 2. Embedded Linux for V2V truck communication (systems depth, cross-layer work)
+**S:** At DXC Luxoft, trucks needed vehicle-to-vehicle communication running on an embedded Linux
+platform, spanning kernel-level concerns up to application services.
+**T:** Support and develop the automotive Linux software stack for that communication path.
+**A:** Worked at kernel level and on embedded Linux system configuration, built systemd modules,
+implemented Bluetooth and LAN functionality, and wrote the surrounding code in C++14/17 and C99 with
+Python and Bash tooling. Validated everything on real hardware benches rather than in simulation only.
+**R:** *[fill in - what shipped? how many truck platforms or ECUs? any latency, reliability or
+integration-time improvement you can point to?]*
+**Use for:** "Describe your experience across the stack", "Tell me about debugging something hard",
+"How do you work with hardware you can't easily instrument"
+
+### 3. AUTOSAR environment set-up and test automation (ownership, tooling initiative)
+**S:** KooSys GmbH was building next-generation automotive software and needed its AUTOSAR environment
+generated, configured and kept testable as the codebase grew.
+**T:** Set up and configure the AUTOSAR environment (RTE, BSW, SWC), implement CAN communication, and
+make testing of the C codebase repeatable.
+**A:** Configured and coded RTE/BSW/SWC using the DaVinci Configurator and DaVinci Developer toolchain,
+implemented CAN communication, and wrote Python scripting to drive automated tests around the C code.
+Ran bench tests on real hardware; delivered in Agile SCRUM with GitLab and Jira.
+**R:** *[fill in - what did the automation replace, and what did it save? manual test hours removed,
+regressions caught earlier, onboarding time for the next engineer?]*
+**Use for:** "Tell me about improving a process", "How do you approach testing", "Describe a time you
+built tooling nobody asked for"
+
+### 4. Continuity from employee to freelancer with the same client (trust, reliability)
+**S:** After four months as a Software Engineer at KooSys GmbH in Regensburg, the engagement changed
+shape in April 2024.
+**T:** *[fill in - what actually drove the transition? Your choice, the company's structure, relocation
+back to Italy? Interviewers will ask, and the honest version is almost always the stronger answer.]*
+**A:** Continued delivering the same AUTOSAR work as an independent freelance engineer, with KooSys as
+the main client, working remotely from Italy and staying inside their Agile SCRUM process.
+**R:** Engagement has continued for over 18 months as their main freelance contributor on the project.
+*[fill in anything further - scope growth, additional clients, rate progression.]*
+**Use for:** "Why did you leave KooSys?", "Why freelance?", "Why would you go back to a permanent
+role?", "How do you build trust remotely"
+
+### 5. C++ / OpenGL geomatic simulation software (graphics, from a standing start)
+**S:** Soft.Lab. Srl built geomatic calculation and simulation software for designing houses and
+buildings, with 3D projection as the core of the product.
+**T:** As a trainee, develop features in their desktop product.
+**A:** Worked in C++14 with the standard library and OpenGL on advanced 3D graphic scenarios and
+simulations, built desktop UI with Qt and QML, and covered the work with CppUnitTest automated tests.
+**R:** *[fill in - what did you ship in those six months? Was it your first professional C++? That
+framing is itself a strong answer about ramp-up speed.]*
+**Use for:** "Tell me about learning something new quickly", "Your earliest professional project",
+"Experience outside embedded"
 
 <!-- Add more STAR examples as needed. Aim for 4-6 covering different competencies. -->
 

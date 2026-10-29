@@ -1,4 +1,4 @@
-%% Example CV - [YOUR_NAME]
+%% Example CV - Angelo Marino Carmollingo
 %% Comprehensive overview of all competencies, experience, and achievements.
 %% Use as a master reference when tailoring role-specific CVs.
 %%
@@ -40,7 +40,7 @@
     linkcolor=blue,
     filecolor=magenta,
     urlcolor=blue,
-    pdftitle={[YOUR_NAME] - CV},
+    pdftitle={Angelo Marino Carmollingo - CV},
     % Keep pdfpagemode=UseNone: this block runs after moderncv's own
     % \AtEndPreamble (moderncv.cls sets pdfpagemode there), so a FullScreen
     % value here would win and open every CV in fullscreen presentation mode.
@@ -50,13 +50,13 @@
 \usepackage{import}
 
 % personal data
-\name{[First]}{[Last]}
+\name{Angelo Marino}{Carmollingo}
 % If you have no address to list, DELETE this whole line. \address{}{}{} fails
 % with "There's no line here to end" on every moderncv version.
-\address{[Your Address, City, Country]}{}{}
-\phone[mobile]{[+XX XXXXXXXXXX]}
-\email{[your.email@example.com]}
-\extrainfo{\href{[https://linkedin.com/in/your-profile]}{LinkedIn}, \href{[https://github.com/your-username]}{GitHub}}
+\address{Fano (PU), Italy}{}{}
+\phone[mobile]{+39 375 534 4587}
+\email{angelomarino.carmollingo@ingpec.eu}
+\extrainfo{\href{https://linkedin.com/in/angelo-marino-carmollingo}{LinkedIn}}
 
 \begin{document}
 
@@ -67,7 +67,8 @@
 % ============================================================
 
 \vspace{6pt}
-\small{[Write a 3-5 line profile statement tailored to the role you're applying for. Focus on what makes you uniquely qualified. Example: "Data scientist with a PhD in [field] and X years of industry experience. Combines deep domain expertise in [domain] with strong applied machine learning and Python development skills. Experienced in developing end-to-end ML pipelines, from data ingestion to stakeholder-facing dashboards."]}
+\small{Software engineer with five years in domains where performance and correctness are not negotiable: flight-grade ISO-C99 for aerospace, embedded Linux for vehicle-to-vehicle communication, and AUTOSAR automotive software. Fluent in C and C++ at the level where allocation, layout and lifetimes are a default concern. Comfortable across the stack from performance-critical code to on-hardware validation. MSc in Computer Engineering, Politecnico di Torino.}
+% NOTE: /apply replaces this statement per posting - see 05-cv-templates.md for the four variants.
 
 % ============================================================
 %     CORE COMPETENCIES
@@ -77,15 +78,15 @@
 \vspace{1pt}
 \begin{itemize}
 
-\item \textbf{[Skill Category 1]}: [Specific skills, frameworks, tools. Be concrete.]
+\item \textbf{Languages}: C (ISO-C99, embedded, flight-grade), C++ (C++14/C++17, STL), Python, Bash, SQL.
 
-\item \textbf{[Skill Category 2]}: [Specific skills, frameworks, tools.]
+\item \textbf{Embedded \& Systems}: Embedded Linux, Linux kernel manipulation, systemd modules, memory management in constrained environments, Bluetooth and LAN stacks.
 
-\item \textbf{[Skill Category 3]}: [Specific skills, frameworks, tools.]
+\item \textbf{Automotive}: AUTOSAR (RTE, BSW, SWC), CAN communication, DaVinci Configurator and DaVinci Developer, bench testing on real hardware.
 
-\item \textbf{[Skill Category 4]}: [Domain expertise, methods, approaches.]
+\item \textbf{Aerospace \& Safety-Critical}: PUS (Packet Utilization Standard), non-volatile memory filesystems, code documentation and validation to aerospace standards, CanTaTa, OsvALdo.
 
-\item \textbf{[Skill Category 5]}: [Tools, platforms, software.]
+\item \textbf{Tooling \& Process}: Git, GitLab, GitHub, Jira, Agile/SCRUM, automated testing (CppUnitTest, Python test harnesses), Qt/QML, OpenGL.
 
 \end{itemize}
 
@@ -98,31 +99,49 @@
 \begin{itemize}
 
 % --- Most Recent Role ---
-\item{\cventry{[YYYY-Present]}{[Job Title]}{[Company]}{[City, Country]}{}{\vspace{1pt}
+\item{\cventry{2024-Present}{Freelance Software Engineer}{Self-employed (main client: KooSys GmbH)}{Fano, Italy}{}{\vspace{1pt}
 \begin{itemize}
-    \item {[Achievement or responsibility 1 - be specific, use numbers where possible]}
-    \item {[Achievement or responsibility 2]}
-    \item {[Achievement or responsibility 3]}
-    \item {[Achievement or responsibility 4]}
+    \item {AUTOSAR environment set-up and CAN communication for automotive projects}
+    \item {RTE configuration with the DaVinci Configurator and DaVinci Developer toolchain}
+    \item {Embedded software development in C, with Python scripting driving automated tests of the C codebase}
+    \item {Delivery in Agile SCRUM using GitLab and Jira, remote from Italy}
 \end{itemize}}}
 
 \vspace{3pt}
 
 % --- Previous Role ---
-\item{\cventry{[YYYY-YYYY]}{[Job Title]}{[Company]}{[City, Country]}{}{\vspace{1pt}
+\item{\cventry{2022-2023}{Software Engineer}{DXC Luxoft}{Turin, Italy \& Berlin, Germany}{}{\vspace{1pt}
 \begin{itemize}
-    \item {[Achievement or responsibility 1]}
-    \item {[Achievement or responsibility 2]}
-    \item {[Achievement or responsibility 3]}
+    \item {Embedded Linux for vehicle-to-vehicle (V2V) communication between trucks: kernel manipulation, systemd modules, Bluetooth and LAN functionality}
+    \item {C++14/C++17 and C99 development, with Python and Bash tooling}
+    \item {Validation on real hardware benches; Agile SCRUM delivery}
+\end{itemize}}}
+
+\vspace{3pt}
+
+% --- KooSys (employee, pre-freelance) ---
+\item{\cventry{2023-2024}{Software Engineer}{KooSys GmbH}{Regensburg, Germany}{}{\vspace{1pt}
+\begin{itemize}
+    \item {RTE, BSW and SWC configuration and coding for next-generation automotive software}
+    \item {DaVinci Toolchain; bench testing on real hardware}
 \end{itemize}}}
 
 \vspace{3pt}
 
 % --- Earlier Role ---
-\item{\cventry{[YYYY-YYYY]}{[Job Title]}{[Company]}{[City, Country]}{}{\vspace{1pt}
+\item{\cventry{2021-2022}{Junior Software Engineer}{Intelligentia}{Benevento, Italy}{}{\vspace{1pt}
 \begin{itemize}
-    \item {[Achievement or responsibility 1]}
-    \item {[Achievement or responsibility 2]}
+    \item {Developed PUS (Packet Utilization Standard) library code in ISO-C99 for defense and aerospace, documented and validated to flight-grade standards}
+    \item {Designed and implemented, solo, a complete filesystem for non-volatile memory in a safety-critical spacecraft context (master's thesis)}
+\end{itemize}}}
+
+\vspace{3pt}
+
+% --- Soft.Lab. (trainee) ---
+\item{\cventry{2020-2021}{Trainee Software Engineer}{Soft.Lab. Srl}{Ponte (BN), Italy}{}{\vspace{1pt}
+\begin{itemize}
+    \item {Geomatic calculation and simulation software in C++14 with the STL and OpenGL; 3D scenarios}
+    \item {Desktop applications with Qt and QML; automated testing with CppUnitTest}
 \end{itemize}}}
 
 \end{itemize}
@@ -135,14 +154,14 @@
 \vspace{1pt}
 \begin{itemize}
 
-\item{\cventry{[YYYY-YYYY]}{[Degree] in [Field]}{[Institution]}{[City, Country]}{}{\vspace{1pt}
-Thesis: ``[Thesis Title].'' [Brief description of research focus.]
+\item{\cventry{2020-2022}{MSc in Computer Engineering}{Politecnico di Torino}{Turin, Italy}{}{\vspace{1pt}
+Software Development track. Thesis: a complete filesystem for non-volatile memory applications in a safety-critical (spacecraft) environment, designed and implemented solo at Intelligentia.
 }}
 
 \vspace{3pt}
 
-\item{\cventry{[YYYY-YYYY]}{[Degree] in [Field]}{[Institution]}{[City, Country]}{}{\vspace{1pt}
-[Brief description or key topics.]
+\item{\cventry{2017-2020}{BSc in Computer Engineering}{Politecnico di Torino}{Turin, Italy}{}{\vspace{1pt}
+Computer engineering fundamentals: algorithms and data structures, operating systems, computer architecture.
 }}
 
 \end{itemize}
@@ -154,28 +173,31 @@ Thesis: ``[Thesis Title].'' [Brief description of research focus.]
 \section{Languages}
 \vspace{1pt}
 \begin{itemize}
-\item {[Language 1] (native), [Language 2] (fluent), [Language 3] (intermediate).}
+\item {Italian (native), English (professional working proficiency).}
 \end{itemize}
 
 % ============================================================
 %     PUBLICATIONS (optional)
 % ============================================================
 
-\section{Publications}
-\vspace{1pt}
-\begin{itemize}
-\item {[Author(s)] ([Year]). [Title]. [Journal/Conference]. \href{[DOI_URL]}{DOI link}}
-\end{itemize}
+% No publications on record - section commented out so no placeholder can reach a compiled PDF.
+% Uncomment and fill if this changes.
+% \section{Publications}
+% \vspace{1pt}
+% \begin{itemize}
+% \item {Author(s) (Year). Title. Journal/Conference.}
+% \end{itemize}
 
 % ============================================================
 %     HONORS AND AWARDS (optional)
 % ============================================================
 
-\section{Honors and Awards}
-\vspace{1pt}
-\begin{itemize}
-\item{\textbf{[Award Name]} -- [Event/Organization] ([Year]).}
-\end{itemize}
+% No awards on record - section commented out for the same reason.
+% \section{Honors and Awards}
+% \vspace{1pt}
+% \begin{itemize}
+% \item{\textbf{Award Name} -- Event/Organization (Year).}
+% \end{itemize}
 
 % ============================================================
 %     REFERENCES

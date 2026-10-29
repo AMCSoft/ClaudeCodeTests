@@ -60,9 +60,9 @@ How well do the required/preferred skills align with the candidate's capabilitie
 | 40-59 | Partial match, significant upskilling needed |
 | 0-39 | Fundamental mismatch |
 
-**Strong match areas:** [YOUR_PRIMARY_SKILLS]
-**Moderate match areas:** [YOUR_SECONDARY_SKILLS]
-**Weak match areas:** [SKILLS_YOU_LACK]
+**Strong match areas:** C (ISO-C99, embedded, AUTOSAR, flight-grade), C++ (C++14/C++17, STL), embedded Linux, Linux kernel and systemd, memory management in constrained environments, safety-critical development and validation, hardware bench testing, Git/GitLab, Agile/SCRUM
+**Moderate match areas:** Python (test automation, tooling), Bash, SQL and MongoDB, Qt/QML and OpenGL, concurrency and low-level performance work, CI pipelines (GitLab CI), JavaScript/React/Node (secondary, dated)
+**Weak match areas:** Rust and Go (no production use), cloud platforms (AWS/GCP/Azure), Docker/Kubernetes operations, observability stacks (Prometheus/Grafana), distributed systems at scale, high-traffic backend operations, SRE/on-call practice, data engineering, ML/AI frameworks
 
 ### 2. Experience Match (0-100)
 Does work history align with what they're looking for? Match on the function and nature of the work performed, not the literal job title - a "Data Consultant" and a "Data Scientist" role can be functionally identical.
@@ -74,9 +74,9 @@ Does work history align with what they're looking for? Match on the function and
 | 40-59 | Adjacent experience, would need to make the case |
 | 0-39 | Unrelated experience |
 
-**Strong:** [YOUR_DIRECT_EXPERIENCE_DOMAINS]
-**Moderate:** [YOUR_ADJACENT_EXPERIENCE]
-**Entry-level:** [ROLES_WITH_LIMITED_EXPERIENCE]
+**Strong:** Automotive embedded software (AUTOSAR RTE/BSW/SWC, CAN, V2V); aerospace and defense flight-grade C; embedded Linux systems programming
+**Moderate:** Desktop C++ and 3D graphics/simulation; test automation and validation tooling; general Linux systems programming; consultancy delivery in distributed international teams
+**Entry-level:** Cloud-native backend services; distributed systems operations and capacity planning; web/full-stack development; platform/SRE roles
 
 ### 3. Behavioral/Culture Fit (0-100)
 Does the role and company culture match the behavioral profile?
@@ -107,19 +107,22 @@ Does this role advance career goals and contain tasks that energize?
 | 0-39 | Dead end or backwards step |
 
 **Career goals:**
-- [YOUR_CAREER_GOAL_1]
-- [YOUR_CAREER_GOAL_2]
-- [YOUR_CAREER_GOAL_3]
+- Move from microcontroller- and radiation-constrained systems toward systems constrained by **scale and latency**: high-traffic backend and infrastructure work, while keeping low-level performance work as the core skill
+- Convert deep C/C++ fundamentals into **Rust** and cloud-native production experience (the main declared gap)
+- Keep working on problems where correctness and performance are measurable, not matters of taste
+- Stay hands-on and close to the metal rather than moving into pure management
+<!-- Confirm or rewrite these: inferred from the CV plus the stated target directions
+     (backend/infra at scale, embedded/systems, automotive, aerospace). -->
 
 **Motivation filter:** Evaluate not just whether you *can* do the tasks, but whether the tasks will *energize* you. Consider:
-- Tasks that energize: [YOUR_ENERGIZING_TASKS]
-- Tasks that drain: [YOUR_DRAINING_TASKS]
+- Tasks that energize: hard problems that take days or weeks to crack (self-described on CV); performance-critical and low-level code; debugging systems that cannot simply be stepped through; owning a component end to end
+- Tasks that drain: *PENDING - needs your input (e.g. heavy process/documentation overhead, pure configuration work, long meeting-driven cycles?)*
 - Non-task factors: leadership style, department culture, company values, degree of autonomy
 
 **Life situation alignment:** Consider personal constraints:
-- **Security**: [YOUR_FINANCIAL_SITUATION_CONTEXT]
-- **Flexibility**: [YOUR_SCHEDULE_CONSTRAINTS]
-- **Professional development**: [YOUR_GROWTH_PRIORITIES]
+- **Security**: currently freelance (self-employed since 04/2024) with KooSys GmbH as main client - a permanent role trades rate for stability; *confirm which you are optimising for*
+- **Flexibility**: remote-first from Fano (PU), Italy; available for occasional travel and onsite/offsite visits
+- **Professional development**: Rust, cloud infrastructure (AWS), observability tooling, and distributed systems - the skills that unlock the backend-at-scale direction
 
 ### 6. Salary Benchmark (Optional)
 
