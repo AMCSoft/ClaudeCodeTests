@@ -38,6 +38,9 @@ Fano (PU), Italy - main client: KooSys GmbH (remote)
 - RTE configuration with the DaVinci Configurator and DaVinci Developer toolchain
 - Embedded software development primarily in C
 - Python scripting to support automated testing of the C codebase
+- **Scrum Master** for the delivery team for approximately two years: ceremonies, sprint planning
+  and estimation, while remaining a hands-on engineer
+- **Project Manager / Technical Lead** since 2026: technical leadership and project ownership
 - GitLab for version control, Jira for task management, Agile SCRUM delivery
 
 ### Software Engineer - KooSys GmbH (12/2023 - 04/2024)
@@ -74,14 +77,16 @@ Ponte (BN), Italy
 
 ## Leadership & Process Roles
 
-**Not currently on the CV - add them.** For an embedded engineer these are genuinely
-differentiating, and they are invisible to every recruiter reading the current document.
+Both sit under the **KooSys GmbH** engagement and are now folded into the freelance entry on the
+CV rather than kept as a separate section.
 
-- **Scrum Master** (approx. 2 years) - ran SCRUM ceremonies alongside hands-on engineering work
-- **Project Manager / Technical Lead** (approx. 3 months, current) - technical leadership and project
+- **Scrum Master** (approx. 2 years) - ran ceremonies, sprint planning and estimation for the
+  delivery team while remaining a hands-on engineer
+- **Project Manager / Technical Lead** (since 2026, current) - technical leadership and project
   ownership on top of the engineering role
-- *To confirm: which employer/client each role sits under, and the exact periods, so they can be
-  placed correctly on the CV.*
+
+For an embedded engineer these are genuinely differentiating, and they were invisible on the CV
+until 2026-10-29, so no application sent before that date shows them.
 
 ## Independent Projects
 <!-- Nothing on the CV yet. GitHub profile: https://github.com/AMCSoft - if anything there is

@@ -48,6 +48,7 @@
 }}
 \usepackage[scale=0.80]{geometry}
 \usepackage{import}
+\usepackage{needspace}  % evita titoli \cventry orfani a fine pagina
 
 % personal data
 \name{Angelo Marino}{Carmollingo}
@@ -99,17 +100,21 @@
 \begin{itemize}
 
 % --- Most Recent Role ---
+\needspace{5\baselineskip}
 \item{\cventry{2024-Present}{Freelance Software Engineer}{Self-employed (main client: KooSys GmbH)}{Fano, Italy}{}{\vspace{1pt}
 \begin{itemize}
     \item {AUTOSAR environment set-up and CAN communication for automotive projects}
     \item {RTE configuration with the DaVinci Configurator and DaVinci Developer toolchain}
     \item {Embedded software development in C, with Python scripting driving automated tests of the C codebase}
+    \item {\textbf{Scrum Master} for the delivery team for approximately two years, running ceremonies, sprint planning and estimation while remaining a hands-on engineer}
+    \item {\textbf{Project Manager / Technical Lead} since 2026: technical leadership and project ownership on top of the engineering role}
     \item {Delivery in Agile SCRUM using GitLab and Jira, remote from Italy}
 \end{itemize}}}
 
 \vspace{3pt}
 
 % --- Previous Role ---
+\needspace{5\baselineskip}
 \item{\cventry{2022-2023}{Software Engineer}{DXC Luxoft}{Turin, Italy \& Berlin, Germany}{}{\vspace{1pt}
 \begin{itemize}
     \item {Embedded Linux for vehicle-to-vehicle (V2V) communication between trucks: kernel manipulation, systemd modules, Bluetooth and LAN functionality}
@@ -120,6 +125,7 @@
 \vspace{3pt}
 
 % --- KooSys (employee, pre-freelance) ---
+\needspace{5\baselineskip}
 \item{\cventry{2023-2024}{Software Engineer}{KooSys GmbH}{Regensburg, Germany}{}{\vspace{1pt}
 \begin{itemize}
     \item {RTE, BSW and SWC configuration and coding for next-generation automotive software}
@@ -129,6 +135,7 @@
 \vspace{3pt}
 
 % --- Earlier Role ---
+\needspace{5\baselineskip}
 \item{\cventry{2021-2022}{Junior Software Engineer}{Intelligentia}{Benevento, Italy}{}{\vspace{1pt}
 \begin{itemize}
     \item {Developed PUS (Packet Utilization Standard) library code in ISO-C99 for defense and aerospace, documented and validated to flight-grade standards}
@@ -138,36 +145,11 @@
 \vspace{3pt}
 
 % --- Soft.Lab. (trainee) ---
+\needspace{5\baselineskip}
 \item{\cventry{2020-2021}{Trainee Software Engineer}{Soft.Lab. Srl}{Ponte (BN), Italy}{}{\vspace{1pt}
 \begin{itemize}
     \item {Geomatic calculation and simulation software in C++14 with the STL and OpenGL; 3D scenarios}
     \item {Desktop applications with Qt and QML; automated testing with CppUnitTest}
-\end{itemize}}}
-
-\end{itemize}
-
-% ============================================================
-%     LEADERSHIP & PROCESS
-% ============================================================
-
-\section{Leadership \& Process}
-\vspace{1pt}
-% These roles ran ALONGSIDE the engineering roles above, not instead of them - that is the
-% point worth making to a reader. Employer attribution still to be confirmed; once known,
-% consider folding each one into its role entry above instead of keeping this section.
-\begin{itemize}
-
-\item{\cventry{approx. 2 years}{Alongside engineering delivery}{Scrum Master}{}{}{\vspace{1pt}
-\begin{itemize}
-    \item {Ran SCRUM ceremonies, sprint planning and estimation for the delivery team while continuing as a hands-on engineer}
-    \item {Unblocked the team's technical impediments directly, rather than escalating them}
-\end{itemize}}}
-
-\vspace{3pt}
-
-\item{\cventry{2026 - Present}{Alongside engineering delivery}{Project Manager / Technical Lead}{}{}{\vspace{1pt}
-\begin{itemize}
-    \item {Technical leadership and project ownership on top of the engineering role}
 \end{itemize}}}
 
 \end{itemize}
@@ -180,12 +162,14 @@
 \vspace{1pt}
 \begin{itemize}
 
+\needspace{5\baselineskip}
 \item{\cventry{2020-2022}{MSc in Computer Engineering}{Politecnico di Torino}{Turin, Italy}{}{\vspace{1pt}
 Software Development track. Thesis: a complete filesystem for non-volatile memory applications in a safety-critical (spacecraft) environment, designed and implemented solo at Intelligentia.
 }}
 
 \vspace{3pt}
 
+\needspace{5\baselineskip}
 \item{\cventry{2017-2020}{BSc in Computer Engineering}{Politecnico di Torino}{Turin, Italy}{}{\vspace{1pt}
 Computer engineering fundamentals: algorithms and data structures, operating systems, computer architecture.
 }}

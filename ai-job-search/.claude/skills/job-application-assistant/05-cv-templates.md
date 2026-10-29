@@ -174,29 +174,26 @@ When the role sits outside your home domain, **lead with the domain-transfer arg
 
 Statements labeled *[Used for: <company>_<role>]* were extracted from archived application drafts by `/setup` Path A. They are **phrasing references, never fact sources**: when drafting from one, every factual claim still comes from `01-candidate-profile.md` - a past tailored draft does not vouch for its own accuracy.
 
-### Leadership & Process Section (carry it into every tailored CV)
+### Leadership & Process (inside the KooSys entry - keep it there)
 
-The master CV carries a `Leadership \& Process` section holding two roles that ran **alongside**
-the engineering work, not instead of it: Scrum Master (approx. 2 years) and Project Manager /
-Technical Lead (2026 to date). Keep it in tailored CVs. It is the profile's most differentiating
-feature for an embedded engineer and it was absent from the CV until 2026-10-29, so no past
-application shows it.
+The master CV carries two roles **inside** the freelance / KooSys GmbH entry, as bullets, not as a
+separate section: Scrum Master (approx. two years) and Project Manager / Technical Lead (since
+2026). Both ran alongside the engineering work, which is the point worth making. They were absent
+from the CV until 2026-10-29, so no application sent before that date shows them.
 
-- **Promote it when the posting asks for it.** Wording like "ownership-driven team culture",
-  "collaborate effectively", "mentor", "technical leadership", "cross-functional" makes this
-  section load-bearing: move it above Education and reference it in the profile statement.
-- **Keep it short when the posting does not.** For a pure hands-on role, two compact entries are
-  enough; do not let it crowd out the engineering history, which is still the main argument.
-- **Never inflate it.** The PM / Technical Lead role is recent and short. Claim the Scrum Master
-  duration confidently and the PM / Tech Lead role honestly as current and new. No line-management
-  of direct reports is claimed anywhere, and none should be.
-- **Employer attribution is unconfirmed.** The entries deliberately read "alongside engineering
-  delivery" rather than naming a company. Once the employer and exact periods are known, prefer
-  folding each role into the matching `\cventry` in Professional Experience, which reads stronger
-  than a standalone section, and drop the section if both fold cleanly.
-- **Watch the page count.** This section was added after the 2-page layout was settled. Compile and
-  check: if the CV spills to 3 pages, trim the Soft.Lab. trainee entry to a single bullet before
-  trimming anything here.
+- **Keep them in the KooSys entry.** A standalone "Leadership & Process" section was tried and
+  removed: it separated the roles from the engagement that gives them weight, and moderncv's
+  `\cventry` has no good slot for a role with no employer.
+- **Promote when the posting asks for it.** Wording like "ownership-driven team culture",
+  "collaborate effectively", "mentor", "technical leadership", "cross-functional" makes these
+  bullets load-bearing: move them above the technical bullets in that entry and reference the
+  Scrum Master track record in the profile statement. Do not leave it as the fifth bullet a
+  reader reaches.
+- **Demote when it does not.** For a pure hands-on role, keep them last in the entry; the
+  engineering history is still the main argument.
+- **Never inflate.** The PM / Technical Lead role is recent. Claim the Scrum Master duration
+  confidently and the PM / Tech Lead role honestly as current and new. **No line management of
+  direct reports is claimed anywhere, and none should be.**
 
 ### Core Competencies / Skills Section (Best Practice)
 Reorder and emphasize based on the role. Use bold category labels.

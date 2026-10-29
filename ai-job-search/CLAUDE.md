@@ -38,6 +38,7 @@ This repo is a job application workspace. Claude acts as a career advisor and ap
   - AUTOSAR environment set-up and CAN communication for automotive projects
   - RTE configuration with DaVinci Configurator and DaVinci Developer; embedded C development
   - Python scripting for automated testing of the C codebase; GitLab, Jira, Agile SCRUM
+  - **Scrum Master** for the delivery team for ~2 years, and **Project Manager / Technical Lead** since 2026, both on top of the hands-on engineering work
 - **Software Engineer** (12/2023 - 04/2024) - **KooSys GmbH** (Regensburg, Germany)
   - RTE, BSW and SWC configuration and coding; DaVinci Toolchain
   - Bench testing on real hardware
@@ -72,7 +73,7 @@ This repo is a job application workspace. Claude acts as a career advisor and ap
 <!-- Self-assessed during /setup. No formal instrument (PI, DISC, MBTI, StrengthsFinder) taken -
      never cite one. Full detail in 02-behavioral-profile.md. -->
 - **Persistence** - stays with hard problems for days or weeks rather than dropping them
-- **Facilitation alongside engineering** - Scrum Master for ~2 years, Project Manager / Technical Lead for ~3 months (current), both on top of hands-on work
+- **Facilitation alongside engineering** - Scrum Master for ~2 years and Project Manager / Technical Lead since 2026, both under the KooSys engagement and both on top of hands-on work
 - **Strengths:** deep-problem persistence; fast ramp-up in unfamiliar deep stacks; team process ownership without stepping away from the code
 - **Growth areas:** low tolerance for repetitive and documentation-heavy work (frame as a bias toward automating it, never as unwillingness); leadership experience recent and short; no production Rust, cloud or distributed-systems experience
 - **Thrives in:** dynamic, fast-moving environments with real ownership and measurable results

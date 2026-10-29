@@ -84,9 +84,10 @@ framing is itself a strong answer about ramp-up speed.]*
 "Experience outside embedded"
 
 ### 6. Scrum Master and Technical Lead alongside engineering (facilitation, ownership)
-**S:** *[fill in - which team, which employer/client, and what state was the process in when you took
-it over? "The team had no retrospectives" or "estimates were consistently off" is the kind of opening
-that makes this answer land.]*
+**S:** The KooSys GmbH delivery team, where you were already the hands-on engineer on the AUTOSAR
+work. *[fill in - what state was the process in when you took it over? "The team had no
+retrospectives" or "estimates were consistently off" is the kind of opening that makes this answer
+land.]*
 **T:** Run the SCRUM process as Scrum Master for roughly two years while continuing to deliver
 engineering work; more recently, take on Project Manager / Technical Lead responsibilities.
 **A:** *[fill in - which ceremonies you ran, how you handled blockers and estimation, what you changed
@@ -97,9 +98,10 @@ step up to Technical Lead" - which is itself a result worth stating.]*
 you improved how your team worked", "Do you want to go into management?"
 
 > **This one matters more than it looks.** Two years as Scrum Master is unusual for an embedded
-> engineer and it is currently **absent from the CV**. For postings that ask about collaboration,
-> mentoring, ownership or a "positive, ownership-driven team culture" it is the most differentiating
-> thing in the profile - and right now no recruiter reading the CV can see it.
+> engineer. It is now on the CV, inside the KooSys freelance entry, as of 2026-10-29. For postings
+> asking about collaboration, mentoring, ownership or a "positive, ownership-driven team culture"
+> it is the most differentiating thing in the profile, so lead with it there rather than leaving it
+> as the fifth bullet a reader reaches.
 
 <!-- Add more STAR examples as needed. Aim for 4-6 covering different competencies. -->
 
