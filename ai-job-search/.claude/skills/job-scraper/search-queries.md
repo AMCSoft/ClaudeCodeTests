@@ -119,6 +119,20 @@ site:it.indeed.com "sviluppatore C++" remoto
 site:infojobs.it "consulente tecnico" software embedded
 ```
 
+## Compensation Filter (apply before presenting results)
+
+Baseline: EUR 65-70k employee, EUR 110-120k freelance B2B. See `04-job-evaluation.md`'s
+Compensation Gate for the employer-type table. In short, when scanning scrape results:
+
+- **Drop** Italian engineering consultancies and staffing agencies unless the posting names a
+  figure at or above the floor. They are the single largest category in Italian scrape results
+  and the least able to pay this profile.
+- **Keep** trading and HFT firms, global tech hiring into EMEA at its own scale, and any
+  foreign employer hiring remote or on B2B contract.
+- **Say so when the money and the location conflict.** The best-paying C++ work is in trading
+  firms in Amsterdam, London and Dublin, and it is largely onsite. Do not quietly drop those
+  roles, and do not quietly ignore the remote-first preference. Present the trade-off.
+
 ## Location Filter
 
 Preference is **remote-first with occasional travel**, based in Fano (PU), Marche, Italy.

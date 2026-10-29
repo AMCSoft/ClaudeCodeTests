@@ -46,6 +46,37 @@ Judge the level comparison the same way you judge everything else in this framew
 
 **Worked example:** a candidate whose Languages table lists Spanish (Native) and English (B1/B2). A posting requiring "fluent Russian" → **FAIL**, Russian isn't declared at all. A posting requiring "fluent English" → **FLAG**, English is declared but "fluent" plausibly exceeds B1/B2 — score and draft the application, but tell the candidate this posting's bar may be a stretch and let them decide. A posting requiring "conversational English" or unspecified English → **PASS**, B1/B2 clears a "conversational" bar cleanly.
 
+## Compensation Gate - run before scoring (added 2026-10-29)
+
+The baseline is **EUR 65-70k as an employee, EUR 110-120k freelance B2B**. For this profile
+that figure is not a preference, it is a structural filter, and it must be applied *before*
+technical fit, not after.
+
+**Why it is a gate and not a dimension.** The Italian market for embedded and C/C++ roles,
+engineering consultancies especially, generally pays well under EUR 65k for five to six years
+of experience. A posting can be a perfect technical match and still be unable to reach the
+floor. Scoring it 75/100 on skills and discovering the compensation problem afterwards wastes
+the drafting work, which is exactly what happened with the Kalpa application on 2026-10-29:
+strong fit, documents drafted and compiled, then dismissed on pay.
+
+**Most postings state no salary**, so the gate is applied to the *employer*, not to the ad:
+
+| Employer type | Verdict |
+|---|---|
+| Italian engineering consultancy or staffing agency (Intecs, Capgemini Engineering, ADENTIS, SEGULA, Experis, Hays, Links, Prime Engineering, NTT DATA, WinTime, Zirak, Kalpa and similar) | **FAIL unless the posting states a figure at or above the floor.** Do not draft. |
+| Italian product company | **FLAG.** Possible but uncommon at this level; ask about range before drafting. |
+| Trading, HFT or quant firm | **PASS.** Pays far above the floor and wants exactly low-latency C++. |
+| Global tech company hiring into EMEA at its own scale (Elastic, Databricks, Cloudflare, MongoDB, Kraken, Nebius, Arista, Ericsson, Qualcomm) | **PASS.** |
+| Foreign (DACH, Nordics, UK, US) employer hiring remote, or B2B contract | **PASS.** This is how the current KooSys engagement already works. |
+
+**The standing tension to surface, every time.** The employers that clear the floor are
+concentrated in two places: trading firms clustered in Amsterdam, London, Dublin and New York,
+which are largely onsite, and remote-friendly global tech. The declared constraint is
+remote-first from Fano with occasional travel. So a high-paying onsite trading role and the
+location preference are in direct conflict, and that trade-off belongs in the report to the
+candidate rather than being silently resolved by either dropping the role or ignoring the
+constraint.
+
 ## Scoring Dimensions
 
 Evaluate each job posting against these five dimensions:
