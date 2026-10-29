@@ -17,6 +17,29 @@ framework_version: 1.2.0
    - **Never:** Claiming experience the candidate doesn't have; implying they worked in a domain they haven't.
    When a bullet falls in the "flag it" zone, present it to the user after drafting with: "This bullet is a stretch because X. Keep, soften, or drop?" If the evaluation experience match score is below 50, warn before proceeding to drafting that extensive reframing would be needed.
 
+## Candidate Preference: Name the Gaps (set 2026-10-29)
+
+**Declare missing requirements openly rather than leaving them for the reader to notice.**
+Confirmed preference. When a posting states a requirement the profile does not support
+(a language, a cloud platform, an observability stack, on-call experience), the letter
+names it in one short passage and pivots to the ramp-up track record, instead of staying
+silent and hoping it goes unspotted.
+
+How to do it without weakening the letter:
+- **One passage, not a theme.** Name the gaps once, plainly, then move on. A letter that
+  keeps apologising has stopped selling.
+- **Name, then pivot in the same breath.** "No production Rust yet; C and C++ at the level
+  where ownership and lifetimes are a default concern, which is why the model reads as
+  familiar" - the gap is stated and immediately answered.
+- **Never pre-emptively concede what was not asked for.** Only gaps the posting actually
+  states are worth naming. Volunteering unrelated weaknesses is not honesty, it is noise.
+- **This does not license apologetic phrasing.** Critical Rule 4 still holds: state the gap
+  as a fact, not as a confession. "I have not operated at this scale" is a fact.
+  "I'm afraid I'm probably not experienced enough" is a confession.
+- It also pairs with the reality that many postings, Constructor's included, explicitly
+  invite candidates who do not meet every qualification. Naming a gap and answering it
+  reads as judgment; concealing one reads as a surprise waiting for the interview.
+
 ## Tone
 - **Warm but direct.** Friendly and approachable, but confident without arrogance.
 - **Conversational professional.** Not stiff corporate-speak, not casual chat. Think: how a confident person talks in a good job interview.

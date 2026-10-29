@@ -27,6 +27,26 @@ Organized by **function**, not by exact job title. Each tier lists several plaus
 
 The most desired direction. A domain transfer from embedded: the systems fundamentals carry over, the cloud and distributed-operations experience does not yet exist, so expect these to score lower on Experience Match and lead with the transfer argument.
 
+> **Lesson from the Constructor evaluation (2026-10-29): filter on whose must-have C/C++ is.**
+> Most "backend at scale" employers run Python, Go or Java as the primary language and list
+> C/C++/Rust only as a nice-to-have - which puts this profile behind every candidate who has
+> the primary language in production. The postings worth time are the ones where **C, C++ or
+> Rust is the stated requirement**, not a bonus: performance engineering, latency-critical
+> services, database and storage internals, search-engine cores, trading and streaming
+> infrastructure, compilers and runtimes. When scanning a Priority 1 result, find the primary
+> language before anything else; if C/C++ sits under "nice to have" while Python or Go sits
+> under "required", score it honestly and expect a weak Experience Match.
+
+Query variants that bias toward C/C++/Rust as the requirement rather than the bonus:
+
+```
+site:linkedin.com/jobs "Systems Engineer" "C++" required remote
+site:linkedin.com/jobs "Performance Engineer" latency C++ remote
+site:linkedin.com/jobs "database internals" OR "storage engine" engineer C++ remote
+site:linkedin.com/jobs "low latency" engineer C++ OR Rust remote Europe
+site:remoteok.com "C++" OR Rust systems performance engineer
+```
+
 ```
 site:linkedin.com/jobs "Backend Engineer" Rust remote
 site:linkedin.com/jobs "Systems Engineer" C++ remote Europe
