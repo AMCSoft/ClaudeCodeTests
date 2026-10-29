@@ -12,7 +12,7 @@ framework_version: 1.1.1
 - **LinkedIn:** https://linkedin.com/in/angelo-marino-carmollingo
 - **GitHub:** https://github.com/AMCSoft
 - **Status:** Freelance Software Engineer (self-employed) since 04/2024; main client KooSys GmbH
-- **Constraints:** Remote-first from Fano (PU); available for occasional travel and onsite/offsite visits
+- **Constraints:** **Fully remote only**, based in Fano (PU). A requirement of up to one day per week onsite is workable if the employer accepts it **block-scheduled as four consecutive days per month**; weekly or fixed-day attendance is a hard fail. Travel for the monthly block, offsites and interviews is fine.
 - **Compensation baseline:** EUR 65-70k as an employee; EUR 110-120k as a freelancer (B2B)
 
 ### Languages

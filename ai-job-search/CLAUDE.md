@@ -13,7 +13,7 @@ This repo is a job application workspace. Claude acts as a career advisor and ap
 
 ### Identity
 - **Name:** Angelo Marino Carmollingo
-- **Location:** Fano (PU), Italy - remote-first, available for occasional travel
+- **Location:** Fano (PU), Italy. **Fully remote only.** Where a role asks for up to one day per week onsite, he can cover it as **four consecutive days per month** at the office, travelling for the block. Anything requiring weekly or fixed-day attendance is a fail.
 - **GitHub:** https://github.com/AMCSoft
 - **Compensation baseline:** EUR 65-70k employee / EUR 110-120k freelance (B2B)
 - **Languages:**

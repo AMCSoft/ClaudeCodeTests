@@ -137,13 +137,20 @@ Compensation Gate for the employer-type table. In short, when scanning scrape re
 
 Preference is **remote-first with occasional travel**, based in Fano (PU), Marche, Italy.
 
-- **Ideal:** fully remote (worldwide, EU, or Italy), with occasional onsite or offsite travel
-- **Acceptable:** remote within Italy; remote within the EU with quarterly or monthly travel
-- **Acceptable:** hybrid in Ancona, Pesaro, Rimini, Bologna (reachable from Fano without relocation)
-- **Borderline:** hybrid in Milan, Turin, Rome, Munich, Regensburg, Berlin - only if the onsite cadence is genuinely low, or the role justifies relocation
-- **Too far:** any role requiring full-time onsite presence outside commuting range of Fano, unless it is explicitly a relocation offer worth considering
+**Fully remote only** (hardened 2026-10-29). Based in Fano (PU), no relocation.
 
-Flag anything advertised as "remote" that in practice requires a fixed number of office days: that is hybrid, and it belongs in the borderline tier.
+- **Ideal:** fully remote, any country whose employer can engage someone resident in Italy
+- **Workable:** a role asking up to **one day per week onsite**, *if* the employer accepts it
+  block-scheduled as **four consecutive days per month**. Worth asking rather than assuming:
+  several employers who write "1 day a week" care about the total, not the cadence.
+- **Fail:** weekly or fixed-day office attendance, any hybrid requiring presence on set days,
+  anything needing relocation
+- Travel for the monthly block, team offsites and interviews is fine and should not be treated
+  as a negative.
+
+Anything advertised as "remote" that in practice requires fixed office days is hybrid: check
+the cadence before scoring it, and if the posting is silent, flag it as unverified rather than
+assuming full remote.
 
 ## Language Filter
 
