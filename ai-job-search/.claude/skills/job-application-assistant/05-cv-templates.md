@@ -75,7 +75,7 @@ Expected output: `Output written on main_<company>_<role>.pdf (2 pages, ...)`. A
 \address{Fano (PU), Italy}{}{}
 \phone[mobile]{+39 375 534 4587}
 \email{angelomarino.carmollingo@ingpec.eu}
-\extrainfo{\href{https://linkedin.com/in/angelo-marino-carmollingo}{LinkedIn}}
+\extrainfo{\href{https://linkedin.com/in/angelo-marino-carmollingo}{LinkedIn}, \href{https://github.com/AMCSoft}{GitHub}}
 
 \begin{document}
 \makecvtitle

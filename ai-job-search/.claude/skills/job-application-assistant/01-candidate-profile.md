@@ -10,9 +10,10 @@ framework_version: 1.1.1
 - **Phone:** +39 375 534 4587
 - **Email:** angelomarino.carmollingo@ingpec.eu
 - **LinkedIn:** https://linkedin.com/in/angelo-marino-carmollingo
-- **GitHub:** _(not listed on CV - add if you have a public profile worth linking)_
+- **GitHub:** https://github.com/AMCSoft
 - **Status:** Freelance Software Engineer (self-employed) since 04/2024; main client KooSys GmbH
-- **Constraints:** _(to confirm - remote / relocation / commute radius)_
+- **Constraints:** Remote-first from Fano (PU); available for occasional travel and onsite/offsite visits
+- **Compensation baseline:** EUR 65-70k as an employee; EUR 110-120k as a freelancer (B2B)
 
 ### Languages
 
@@ -20,7 +21,7 @@ framework_version: 1.1.1
 |----------|-------|-------|
 | Italian | Native | Mother tongue |
 | English | Professional working proficiency | CV self-rates "Excellent"; worked in English-speaking teams in Germany (Regensburg, Berlin) |
-| German | _(to confirm)_ | Two years based in Germany (Regensburg, Berlin) - confirm whether this is a working language or not |
+| German | A1.2 / A2.1 (elementary) | Two years based in Germany (Regensburg, Berlin), but not a working language. Declared so the Language Gate *flags* German-requiring postings rather than excluding them - do not claim working proficiency |
 
 ## Education
 
@@ -71,10 +72,21 @@ Ponte (BN), Italy
 - Desktop application development with Qt and QML
 - Automated testing with CppUnitTest
 
+## Leadership & Process Roles
+
+**Not currently on the CV - add them.** For an embedded engineer these are genuinely
+differentiating, and they are invisible to every recruiter reading the current document.
+
+- **Scrum Master** (approx. 2 years) - ran SCRUM ceremonies alongside hands-on engineering work
+- **Project Manager / Technical Lead** (approx. 3 months, current) - technical leadership and project
+  ownership on top of the engineering role
+- *To confirm: which employer/client each role sits under, and the exact periods, so they can be
+  placed correctly on the CV.*
+
 ## Independent Projects
-<!-- Nothing on the CV. Add freelance side work, open source, or personal projects here -
-     they matter for roles where the CV's domain (automotive/aerospace) differs from the target. -->
-- _(none recorded yet)_
+<!-- Nothing on the CV yet. GitHub profile: https://github.com/AMCSoft - if anything there is
+     presentable, it is the cheapest way to evidence the backend/Rust direction. -->
+- _(none recorded yet - check https://github.com/AMCSoft for work worth listing)_
 
 ## Technical Skills
 
@@ -106,6 +118,6 @@ Ponte (BN), Italy
 - _(none recorded)_
 
 ## References
-- _(none recorded yet - add referees from Intelligentia, DXC Luxoft or KooSys if you have them)_
+- _Obtainable on request - candidates: Intelligentia, DXC Luxoft, KooSys GmbH. Collect them before you need them: a referee asked in a hurry writes a worse letter._
 
 More references available upon request.

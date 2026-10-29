@@ -13,13 +13,15 @@ This repo is a job application workspace. Claude acts as a career advisor and ap
 
 ### Identity
 - **Name:** Angelo Marino Carmollingo
-- **Location:** Fano (PU), Italy (open to remote; relocation/commute radius *to be confirmed*)
+- **Location:** Fano (PU), Italy - remote-first, available for occasional travel
+- **GitHub:** https://github.com/AMCSoft
+- **Compensation baseline:** EUR 65-70k employee / EUR 110-120k freelance (B2B)
 - **Languages:**
   | Language | Level |
   |----------|-------|
   | Italian | Native |
   | English | Professional working proficiency (CV: "Excellent") |
-  | German | *To be confirmed* - two years based in Germany (Regensburg, Berlin) |
+  | German | A1.2 / A2.1 (elementary) - not a working language |
 - **CV language:** English or Italian, matched to the posting's language (cover letters always follow the posting)
 
 - **Status:** Freelance Software Engineer (self-employed) since 04/2024; main client KooSys GmbH
@@ -67,19 +69,20 @@ This repo is a job application workspace. Claude acts as a career advisor and ap
 - *(none recorded)*
 
 ### Behavioral Profile
-<!-- PENDING: not derivable from a CV. Fill via /setup --section behavioral or answer the
-     onboarding questions. The CV's own profile text offers only weak signal:
-     "I like hard problems and solving them even after struggling for days or weeks." -->
-- **Persistence** - self-described: stays with hard problems for days or weeks rather than dropping them
-- **Strengths:** *PENDING*
-- **Growth areas:** *PENDING*
-- **Thrives in:** *PENDING*
+<!-- Self-assessed during /setup. No formal instrument (PI, DISC, MBTI, StrengthsFinder) taken -
+     never cite one. Full detail in 02-behavioral-profile.md. -->
+- **Persistence** - stays with hard problems for days or weeks rather than dropping them
+- **Facilitation alongside engineering** - Scrum Master for ~2 years, Project Manager / Technical Lead for ~3 months (current), both on top of hands-on work
+- **Strengths:** deep-problem persistence; fast ramp-up in unfamiliar deep stacks; team process ownership without stepping away from the code
+- **Growth areas:** low tolerance for repetitive and documentation-heavy work (frame as a bias toward automating it, never as unwillingness); leadership experience recent and short; no production Rust, cloud or distributed-systems experience
+- **Thrives in:** dynamic, fast-moving environments with real ownership and measurable results
+- **Drained by:** repetitive, sterile tasks - documentation named explicitly; micromanagement; process without engineering payoff
 
 ### What Excites You
-- Hard problems that take days or weeks to crack - self-described on the CV, and the most consistent signal in it
+- Hard problems that take days or weeks to crack - the most consistent signal in both CV and self-assessment
 - Performance-critical and low-level work where correctness is measurable rather than a matter of taste
 - Owning a component end to end, as with the spacecraft filesystem thesis
-- *PENDING: confirm and extend - what would you want more of in the next role than you get now?*
+- Dynamic environments with changing problem sets and room to move
 
 ### Target Sectors
 Four directions in play, in priority order (set during /setup):
@@ -90,8 +93,10 @@ Four directions in play, in priority order (set during /setup):
 
 ### Deal-breakers
 - Roles requiring full-time onsite presence outside commuting range of Fano, unless framed as a relocation offer
-- Postings requiring German or another undeclared language as a job condition (excluded by the Language Gate until declared)
-- *PENDING: confirm the rest - on-call expectations? pure configuration/process work with no engineering? minimum rate or salary floor? company size or sector you would refuse?*
+- Roles requiring working-level German (A1.2/A2.1 only) - flagged by the Language Gate, not auto-excluded, but treat as a hard constraint in practice
+- Compensation below the baseline: EUR 65k employee / EUR 110k freelance B2B
+- Documentation-, certification- or ticket-driven roles where process work is the bulk of the job rather than a constraint on it
+- Micromanaged or approval-gated environments
 
 ## Repo Structure
 - `cv/` - LaTeX CV variants (moderncv template, banking style)

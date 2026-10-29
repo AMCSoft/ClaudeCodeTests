@@ -6,7 +6,7 @@
 
 The `site:` query templates below are the **WebSearch fallback** - for the Italian and remote boards that have no CLI, for company career pages, and for when a CLI fails. No Italian portal CLI is installed; `/add-portal` can scaffold one for InfoJobs or Indeed IT if the WebSearch fallback proves too thin.
 
-**Language scope:** queries are written in **English and Italian**, matching the declared Languages table in CLAUDE.md. German is *not* declared as a working language, so German-only postings are excluded by the Language Gate - if German is in fact usable, declare its level in CLAUDE.md first and then add a German query set here (the Regensburg and Berlin markets are large for embedded and automotive work).
+**Language scope:** queries are written in **English and Italian**, matching the working languages in CLAUDE.md. German is declared at **A1.2/A2.1 (elementary)**, so the Language Gate *flags* German-requiring postings rather than excluding them - but at that level a German-language role is not realistically workable, so treat the flag as near-disqualifying unless the posting says the working language is English. No German query set: searching in a language you cannot interview in wastes the scrape. Many Regensburg and Berlin embedded roles run in English - those surface through the English queries anyway.
 
 ## Search Sites
 
@@ -108,7 +108,7 @@ Flag anything advertised as "remote" that in practice requires a fixed number of
 
 ## Language Filter
 
-Working languages and levels live in CLAUDE.md's Languages table (Italian native, English professional working proficiency). Apply `04-job-evaluation.md`'s Language Gate: a posting requiring a language not declared there - **German included, for now** - is excluded before scoring; a posting requiring a higher level in Italian or English is flagged for judgment, not excluded. A posting merely *written* in another language, without requiring it on the job, is fine.
+Working languages: Italian (native), English (professional working proficiency), German (A1.2/A2.1, elementary). Apply `04-job-evaluation.md`'s Language Gate: a posting requiring a language not declared at all is excluded before scoring; a posting requiring a *higher* level than declared is flagged for judgment, not excluded. In practice that means **German-requiring postings surface with a flag** - read whether German is genuinely required on the job or just the language the ad happens to be in. A posting merely *written* in another language, without requiring it, is fine.
 
 ## Date Filter
 

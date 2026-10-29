@@ -83,6 +83,24 @@ framing is itself a strong answer about ramp-up speed.]*
 **Use for:** "Tell me about learning something new quickly", "Your earliest professional project",
 "Experience outside embedded"
 
+### 6. Scrum Master and Technical Lead alongside engineering (facilitation, ownership)
+**S:** *[fill in - which team, which employer/client, and what state was the process in when you took
+it over? "The team had no retrospectives" or "estimates were consistently off" is the kind of opening
+that makes this answer land.]*
+**T:** Run the SCRUM process as Scrum Master for roughly two years while continuing to deliver
+engineering work; more recently, take on Project Manager / Technical Lead responsibilities.
+**A:** *[fill in - which ceremonies you ran, how you handled blockers and estimation, what you changed
+rather than inherited. The strongest version names one concrete change you made to how the team worked.]*
+**R:** *[fill in - velocity, predictability, retention, fewer escaped defects, or simply "I was asked to
+step up to Technical Lead" - which is itself a result worth stating.]*
+**Use for:** "Tell me about leading a team", "How do you handle a blocked teammate", "Describe a time
+you improved how your team worked", "Do you want to go into management?"
+
+> **This one matters more than it looks.** Two years as Scrum Master is unusual for an embedded
+> engineer and it is currently **absent from the CV**. For postings that ask about collaboration,
+> mentoring, ownership or a "positive, ownership-driven team culture" it is the most differentiating
+> thing in the profile - and right now no recruiter reading the CV can see it.
+
 <!-- Add more STAR examples as needed. Aim for 4-6 covering different competencies. -->
 
 ## Common Tough Questions

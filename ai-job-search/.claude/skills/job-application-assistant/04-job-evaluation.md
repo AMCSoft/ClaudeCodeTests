@@ -61,7 +61,7 @@ How well do the required/preferred skills align with the candidate's capabilitie
 | 0-39 | Fundamental mismatch |
 
 **Strong match areas:** C (ISO-C99, embedded, AUTOSAR, flight-grade), C++ (C++14/C++17, STL), embedded Linux, Linux kernel and systemd, memory management in constrained environments, safety-critical development and validation, hardware bench testing, Git/GitLab, Agile/SCRUM
-**Moderate match areas:** Python (test automation, tooling), Bash, SQL and MongoDB, Qt/QML and OpenGL, concurrency and low-level performance work, CI pipelines (GitLab CI), JavaScript/React/Node (secondary, dated)
+**Moderate match areas:** Python (test automation, tooling), Bash, SQL and MongoDB, Qt/QML and OpenGL, concurrency and low-level performance work, CI pipelines (GitLab CI), **Agile/SCRUM facilitation (Scrum Master, ~2 years) and technical leadership (PM / Tech Lead, ~3 months)**, JavaScript/React/Node (secondary, dated)
 **Weak match areas:** Rust and Go (no production use), cloud platforms (AWS/GCP/Azure), Docker/Kubernetes operations, observability stacks (Prometheus/Grafana), distributed systems at scale, high-traffic backend operations, SRE/on-call practice, data engineering, ML/AI frameworks
 
 ### 2. Experience Match (0-100)
@@ -116,11 +116,12 @@ Does this role advance career goals and contain tasks that energize?
 
 **Motivation filter:** Evaluate not just whether you *can* do the tasks, but whether the tasks will *energize* you. Consider:
 - Tasks that energize: hard problems that take days or weeks to crack (self-described on CV); performance-critical and low-level code; debugging systems that cannot simply be stepped through; owning a component end to end
-- Tasks that drain: *PENDING - needs your input (e.g. heavy process/documentation overhead, pure configuration work, long meeting-driven cycles?)*
+- Tasks that drain: repetitive and sterile work, **documentation named explicitly**; process for its own sake; micromanagement and approval-gated work
+- **Weigh this deliberately against the skills score.** The aerospace/defense direction scores high on skills (flight-grade ISO-C99, PUS, validation) and low on motivation - it is the most documentation- and certification-heavy sector there is. A high Skill Match there should not be allowed to carry the overall score on its own.
 - Non-task factors: leadership style, department culture, company values, degree of autonomy
 
 **Life situation alignment:** Consider personal constraints:
-- **Security**: currently freelance (self-employed since 04/2024) with KooSys GmbH as main client - a permanent role trades rate for stability; *confirm which you are optimising for*
+- **Security**: currently freelance (self-employed since 04/2024) with KooSys GmbH as main client. Compensation baseline: **EUR 65-70k as an employee, EUR 110-120k freelance B2B**. Score a permanent offer below EUR 65k, or a contract below EUR 110k, as a fail on this dimension regardless of how interesting the work is - and note that the employee figure is the lower-risk side of the same trade, not a discount to be talked down.
 - **Flexibility**: remote-first from Fano (PU), Italy; available for occasional travel and onsite/offsite visits
 - **Professional development**: Rust, cloud infrastructure (AWS), observability tooling, and distributed systems - the skills that unlock the backend-at-scale direction
 

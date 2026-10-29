@@ -76,7 +76,7 @@ The font wrapper is mandatory — if you just move `\begin{itemize}` outside `\l
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %     TITLE NAME
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\namesection{}{\Huge{Angelo Marino Carmollingo}}{  \href{mailto:angelomarino.carmollingo@ingpec.eu}{angelomarino.carmollingo@ingpec.eu} | +39 375 534 4587 |  \urlstyle{same}\href{https://linkedin.com/in/angelo-marino-carmollingo}{LinkedIn}
+\namesection{}{\Huge{Angelo Marino Carmollingo}}{  \href{mailto:angelomarino.carmollingo@ingpec.eu}{angelomarino.carmollingo@ingpec.eu} | +39 375 534 4587 |  \urlstyle{same}\href{https://linkedin.com/in/angelo-marino-carmollingo}{LinkedIn} | \href{https://github.com/AMCSoft}{GitHub}
 }
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
