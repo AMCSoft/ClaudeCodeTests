@@ -67,7 +67,7 @@ shape in April 2024.
 back to Italy? Interviewers will ask, and the honest version is almost always the stronger answer.]*
 **A:** Continued delivering the same AUTOSAR work as an independent freelance engineer, with KooSys as
 the main client, working remotely from Italy and staying inside their Agile SCRUM process.
-**R:** Engagement has continued for over 18 months as their main freelance contributor on the project.
+**R:** Engagement has continued for 2 years and 6 months (April 2024 to date) as their main freelance contributor on the project.
 *[fill in anything further - scope growth, additional clients, rate progression.]*
 **Use for:** "Why did you leave KooSys?", "Why freelance?", "Why would you go back to a permanent
 role?", "How do you build trust remotely"
