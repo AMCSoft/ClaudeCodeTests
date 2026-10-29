@@ -11,7 +11,7 @@ framework_version: 1.0.0
 ## Overview
 Angelo Marino Carmollingo self-assesses as a **persistent deep-problem engineer with a facilitation
 habit**: energised by hard technical problems and by movement, drained by repetitive and sterile
-work. Two years as Scrum Master and three months as Project Manager / Technical Lead sit alongside
+work. Two years as Scrum Master and three months as Project Manager / Technical Lead (both under the KooSys engagement) sit alongside
 the hands-on engineering rather than replacing it - the profile is a senior individual contributor
 who also runs the process, not a manager stepping away from the code.
 

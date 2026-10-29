@@ -64,6 +64,11 @@ site:infojobs.it "sviluppatore backend" remoto
 
 The strongest match on paper: embedded Linux, kernel, systemd, memory management, C/C++.
 
+> **Read "Firmware Engineer" postings before treating them as matches.** The AUTOSAR work is
+> Basic Software (BSW); there is no bootloader or boot manager experience. Where the title
+> means embedded C on a device, it fits; where it means owning the boot chain or bare-metal
+> bring-up, it does not. The query below keeps the title because most employers use it loosely.
+
 ```
 site:linkedin.com/jobs "Embedded Software Engineer" Linux remote OR Italy
 site:linkedin.com/jobs "Embedded Linux Engineer" kernel remote

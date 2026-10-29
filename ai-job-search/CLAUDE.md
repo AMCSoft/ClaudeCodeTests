@@ -38,7 +38,7 @@ This repo is a job application workspace. Claude acts as a career advisor and ap
   - AUTOSAR environment set-up and CAN communication for automotive projects
   - RTE configuration with DaVinci Configurator and DaVinci Developer; embedded C development
   - Python scripting for automated testing of the C codebase; GitLab, Jira, Agile SCRUM
-  - **Scrum Master** for the delivery team for ~2 years, and **Project Manager / Technical Lead** since 2026, both on top of the hands-on engineering work
+  - **Scrum Master** for the delivery team for ~2 years, and **Project Manager / Technical Lead** for the past three months, both on top of the hands-on engineering work
 - **Software Engineer** (12/2023 - 04/2024) - **KooSys GmbH** (Regensburg, Germany)
   - RTE, BSW and SWC configuration and coding; DaVinci Toolchain
   - Bench testing on real hardware
@@ -58,7 +58,7 @@ This repo is a job application workspace. Claude acts as a career advisor and ap
 - **Primary:** C (ISO-C99, embedded, AUTOSAR, flight-grade), C++ (C++14/17, STL)
 - **Secondary:** Python, Bash, SQL, MongoDB, JavaScript (React.js, Node.js, Express.js)
 - **Domain:** Embedded systems and embedded Linux (kernel, systemd, memory management); automotive (AUTOSAR RTE/BSW/SWC, CAN, V2V); aerospace and defense (PUS, NVM filesystems, validation); safety-critical and resource-constrained development; 3D graphics and simulation
-- **Software:** Git/GitLab/GitHub, Jira, Agile/SCRUM, DaVinci Toolchain, CanTaTa, OsvALdo, Qt/QML, OpenGL, Linux/Windows/macOS, hardware bench testing
+- **Software:** Claude Code (daily development tool), Git/GitLab/GitHub, Jira, Agile/SCRUM, DaVinci Toolchain, CanTaTa, OsvALdo, Qt/QML, OpenGL, Linux/Windows/macOS, hardware bench testing. **No JTAG, oscilloscope or logic analyser experience** - never claim lab instrumentation.
 
 ### Certifications
 - *(none on CV)*
@@ -88,7 +88,7 @@ This repo is a job application workspace. Claude acts as a career advisor and ap
 ### Target Sectors
 Four directions in play, in priority order (set during /setup):
 1. **Backend / infrastructure at scale** - the desired pivot. Search and discovery, high-traffic platforms, performance-critical services. Expect a lower Experience Match score and lead with the domain-transfer argument.
-2. **Embedded / systems software** - the strongest match on paper: embedded Linux, kernel, firmware, memory management.
+2. **Embedded / systems software** - the strongest match on paper: embedded Linux, kernel, memory management. Note: *not* bootloader/boot-manager firmware, so a "Firmware Engineer" posting needs reading before it is treated as a match.
 3. **Automotive / AUTOSAR** - current specialisation and current billable work. Germany and northern Italy; remote contracts exist.
 4. **Aerospace / defense** - niche with few qualified competitors. Watch for clearance or citizenship requirements.
 

@@ -82,8 +82,8 @@ CV rather than kept as a separate section.
 
 - **Scrum Master** (approx. 2 years) - ran ceremonies, sprint planning and estimation for the
   delivery team while remaining a hands-on engineer
-- **Project Manager / Technical Lead** (since 2026, current) - technical leadership and project
-  ownership on top of the engineering role
+- **Project Manager / Technical Lead** (three months as of 2026-10-29, current) - technical
+  leadership and project ownership on top of the engineering role
 
 For an embedded engineer these are genuinely differentiating, and they were invisible on the CV
 until 2026-10-29, so no application sent before that date shows them.
@@ -108,9 +108,11 @@ until 2026-10-29, so no application sent before that date shows them.
 - Automotive software: AUTOSAR (RTE/BSW/SWC), CAN, DaVinci Configurator & Developer, V2V communication
 - Aerospace and defense software: PUS / ISO-C99, non-volatile memory filesystems, validation and documentation standards
 - Safety-critical and resource-constrained development
+- **Not firmware in the narrow sense.** The AUTOSAR work is Basic Software (BSW); he has never worked on bootloader or boot manager development. Do not claim "firmware development" or answer a bootloader requirement with the BSW experience.
 - 3D graphics and simulation (OpenGL, Qt/QML)
 
 ### Software & Tools
+- **Claude Code** - used for development work: refactoring, test generation, and automating the repetitive work around the C codebase (confirmed by the candidate 2026-10-29)
 - Git, GitLab, GitHub; Jira; Agile / SCRUM
 - DaVinci Toolchain; CanTaTa; OsvALdo
 - Linux, Embedded Linux, Windows, macOS
