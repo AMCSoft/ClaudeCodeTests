@@ -170,7 +170,8 @@ function roundLabel(round) {
 }
 
 // Punti della classifica generale in base al piazzamento nella giornata:
-// 1° 10, 2° 7, 3° (ex aequo) 5, dal 4° all'8° 3, tutti gli altri presenti 1.
+// 1° 10, 2° 7, 3° (ex aequo) 5, dal 5° all'8° 3, tutti gli altri presenti 1.
+// Con due terzi ex aequo il 4° posto non esiste: dopo i terzi si passa al 5°.
 function dayPoints(place) {
   if (place == null) return 0;
   if (place === 1) return 10;

@@ -22,7 +22,7 @@ Web app locale per gestire la **Fanum Fortunae XMas Cup**, torneo di **spada** a
 | 1° | 10 |
 | 2° | 7 |
 | 3° (ex aequo, entrambi) | 5 |
-| dal 4° all'8° | 3 |
+| dal 5° all'8° (i 4 perdenti dei quarti; il 4° posto non esiste) | 3 |
 | tutti gli altri presenti | 1 |
 | assente | 0 |
 
