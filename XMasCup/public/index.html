@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fanum Fortunae XMas Cup</title>
+  <link rel="icon" href="logo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Mountains+of+Christmas:wght@700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="sky" aria-hidden="true">
+    <div class="snow s1"></div>
+    <div class="snow s2"></div>
+    <div class="snow s3"></div>
+  </div>
+
+  <header class="topbar">
+    <div class="lights" aria-hidden="true"></div>
+    <a href="#/" class="brand">
+      <img src="logo.svg" alt="" class="brand-logo">
+      <span>
+        <span class="brand-title">Fanum Fortunae XMas Cup</span>
+        <span class="brand-sub">Torneo di spada a giornate · Christmas edition</span>
+      </span>
+    </a>
+    <nav class="mainnav">
+      <a href="#/" data-nav="home">🏆 Classifica</a>
+      <a href="#/iscritti" data-nav="iscritti">🎅 Iscritti</a>
+    </nav>
+  </header>
+
+  <main id="app" class="container"></main>
+
+  <dialog id="bout-dialog" class="dialog">
+    <form method="dialog" id="bout-form"></form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

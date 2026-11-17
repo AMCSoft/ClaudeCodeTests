@@ -1,0 +1,18 @@
+{
+  "name": "fanum-fortunae-xmas-cup",
+  "version": "1.0.0",
+  "description": "Web app locale per gestire la Fanum Fortunae XMas Cup: torneo di spada a più giornate con classifica generale a punti",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch server.js",
+    "test": "node --disable-warning=ExperimentalWarning --test"
+  },
+  "dependencies": {
+    "express": "^4.22.3"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=22.13"
+  }
+}
