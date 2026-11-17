@@ -178,20 +178,20 @@ function createApp(db) {
   function fencerInput(body) {
     const last_name = String(body.last_name ?? '').trim();
     const first_name = String(body.first_name ?? '').trim();
-    const club = String(body.club ?? '').trim();
     if (!last_name) fail('Il cognome è obbligatorio');
-    return { last_name, first_name, club };
+    return { last_name, first_name };
   }
 
-  // Formato: una riga per tiratore, "Cognome; Nome; Società" (separatori ; tab o ,)
+  // Formato: una riga per tiratore, "Cognome; Nome" (separatori ; tab o ,). Siamo tutti della
+  // Fanum Fortunae Scherma, quindi la società non si gestisce: eventuali colonne in più si ignorano.
   function parseBulk(text) {
     return String(text || '')
       .split(/\r?\n/)
       .map((l) => l.trim())
       .filter(Boolean)
       .map((l) => {
-        const [last_name = '', first_name = '', club = ''] = l.split(/\s*[;\t,]\s*/);
-        return fencerInput({ last_name, first_name, club });
+        const [last_name = '', first_name = ''] = l.split(/\s*[;\t,]\s*/);
+        return fencerInput({ last_name, first_name });
       });
   }
 
@@ -225,7 +225,7 @@ function createApp(db) {
 
   app.get('/api/tournament', route(() => state()));
 
-  const insFencer = db.prepare('INSERT INTO fencers (last_name, first_name, club) VALUES (?, ?, ?)');
+  const insFencer = db.prepare('INSERT INTO fencers (last_name, first_name) VALUES (?, ?)');
 
   app.post('/api/fencers', route((req) => {
     const list = req.body.bulk !== undefined ? parseBulk(req.body.bulk) : [fencerInput(req.body)];
@@ -234,7 +234,7 @@ function createApp(db) {
     const dayId = req.body.day_id ? getDay(req.body.day_id).id : null;
     if (dayId && hasPools(dayId)) fail('I gironi della giornata sono già stati generati: eliminali per cambiare i presenti');
     db.transaction(() => list.forEach((f) => {
-      const id = insFencer.run(f.last_name, f.first_name, f.club).lastInsertRowid;
+      const id = insFencer.run(f.last_name, f.first_name).lastInsertRowid;
       if (dayId) db.prepare('INSERT INTO day_fencers (day_id, fencer_id) VALUES (?, ?)').run(dayId, id);
     }))();
     return state(dayId);
@@ -244,8 +244,8 @@ function createApp(db) {
     const f = db.prepare('SELECT * FROM fencers WHERE id = ?').get(Number(req.params.id));
     if (!f) fail('Iscritto non trovato', 404);
     const d = fencerInput(req.body);
-    db.prepare('UPDATE fencers SET last_name = ?, first_name = ?, club = ? WHERE id = ?')
-      .run(d.last_name, d.first_name, d.club, f.id);
+    db.prepare('UPDATE fencers SET last_name = ?, first_name = ? WHERE id = ?')
+      .run(d.last_name, d.first_name, f.id);
     return state();
   }));
 

@@ -97,7 +97,7 @@ test('torneo a giornate: presenti, gironi, dirette, punti e classifica generale'
   let { data } = await call('GET', '/tournament');
   assert.equal(data.tournament.name, 'Fanum Fortunae XMas Cup');
 
-  const bulk = Array.from({ length: 12 }, (_, i) => `Cognome${String(i).padStart(2, '0')}; Nome${i}; Club${i % 3}`).join('\n');
+  const bulk = Array.from({ length: 12 }, (_, i) => `Cognome${String(i).padStart(2, '0')}; Nome${i}`).join('\n');
   ({ data } = await call('POST', '/fencers', { bulk }));
   const roster = data.tournament.fencers;
   assert.equal(roster.length, 12);
@@ -165,7 +165,7 @@ test('torneo a giornate: presenti, gironi, dirette, punti e classifica generale'
 
 test('correzioni nel tabellone', async (t) => {
   const call = client(t);
-  let { data } = await call('POST', '/fencers', { bulk: Array.from({ length: 8 }, (_, i) => `T${i}; N; C${i % 2}`).join('\n') });
+  let { data } = await call('POST', '/fencers', { bulk: Array.from({ length: 8 }, (_, i) => `T${i}; N${i}`).join('\n') });
   const ids = data.tournament.fencers.map((f) => f.id);
   ({ data } = await call('POST', '/days', {}));
   const d = data.day.id;

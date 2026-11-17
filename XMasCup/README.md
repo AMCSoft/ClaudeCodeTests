@@ -4,11 +4,11 @@ Web app locale per gestire la **Fanum Fortunae XMas Cup**, torneo di **spada** a
 
 ## Come funziona
 
-1. **Iscritti** (menu 🎅 Iscritti): all'inizio si inserisce l'elenco di tutti gli iscritti al torneo, uno alla volta o importando un elenco (`Cognome; Nome; Società`, una riga per tiratore, si può incollare da Excel).
+1. **Iscritti** (menu 🎅 Iscritti): all'inizio si inserisce l'elenco di tutti gli iscritti al torneo, uno alla volta o importando un elenco (`Cognome; Nome`, una riga per tiratore, si può incollare da Excel). La società non si indica: siamo tutti della Fanum Fortunae Scherma.
 2. **Nuova giornata** (dalla pagina principale): si crea la giornata con data ed eventualmente il luogo.
 3. **Presenti**: si spuntano gli iscritti presenti quel giorno (c'è la ricerca e i pulsanti Tutti/Nessuno). Se arriva qualcuno che non era in elenco lo si aggiunge al torneo e viene segnato subito presente.
 4. **Gironi e dirette** solo con i presenti, come nello Spooky Mosciolino:
-   - gironi casuali da massimo 7 tiratori (al più uno di differenza tra un girone e l'altro), separando il più possibile i tiratori della stessa società, ordine degli assalti FIE, assalti a 5 stoccate;
+   - gironi casuali da massimo 7 tiratori (al più uno di differenza tra un girone e l'altro), ordine degli assalti FIE, assalti a 5 stoccate;
    - classifica dopo i gironi (V/M, indice, stoccate date);
    - tabellone delle dirette a 15 stoccate con tutti i presenti, teste di serie ed esenti;
    - nella spada non c'è il pari: a punteggio pari si indica chi vince alla priorità;

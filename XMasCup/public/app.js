@@ -145,18 +145,18 @@ function viewHome(el) {
       ${top.length ? `<div class="podium mini">${[2, 1, 3].map((p) => {
         const who = top.filter((r) => r.rank === p);
         if (!who.length) return '';
-        return `<div class="step p${p}">${who.map((r) => `<div class="who">${esc(fencerName(r))}<div class="club">${esc(r.club)}</div></div>`).join('')}
+        return `<div class="step p${p}">${who.map((r) => `<div class="who">${esc(fencerName(r))}</div>`).join('')}
           <div class="block"><span>${medal(p)}</span><small>${who[0].total} pt</small></div></div>`;
       }).join('')}</div>` : ''}
       ${lb.length ? `
       <div class="table-wrap"><table class="lb">
-        <thead><tr><th class="num">Pos</th><th>Tiratore</th><th>Società</th>
+        <thead><tr><th class="num">Pos</th><th>Tiratore</th>
           ${days.map((d) => `<th class="num"><a href="#/giornata/${d.id}" title="${esc(fmtDate(d.date))}">G${d.number}</a></th>`).join('')}
           <th class="num">Pres.</th><th class="num">Punti</th></tr></thead>
         <tbody>${lb.map((r) => `
           <tr class="${r.presences ? '' : 'out'} ${r.total && r.rank <= 3 ? `top top${r.rank}` : ''}">
             <td class="num"><strong>${r.presences ? r.rank : ''}</strong> ${r.total ? medal(r.rank) : ''}</td>
-            <td>${esc(fencerName(r))}</td><td class="muted">${esc(r.club)}</td>
+            <td>${esc(fencerName(r))}</td>
             ${days.map((d) => cell(r, d)).join('')}
             <td class="num">${r.presences}</td>
             <td class="num total">${r.total}</td>
@@ -206,16 +206,15 @@ function viewRoster(el) {
     <div class="grid grid-fencers">
       <section class="panel">
         <h2>🎅 Iscritti al torneo (${fencers.length})</h2>
-        <p class="muted small">Elenco unico di tutti gli iscritti alla XMas Cup. In ogni giornata si scelgono i presenti tra questi nomi. Chi ha già tirato in una giornata non può essere eliminato, ma nome e società si possono sempre correggere.</p>
+        <p class="muted small">Elenco unico di tutti gli iscritti alla XMas Cup. In ogni giornata si scelgono i presenti tra questi nomi. Chi ha già tirato in una giornata non può essere eliminato, ma il nome si può sempre correggere.</p>
         ${fencers.length ? `
         <div class="table-wrap"><table>
-          <thead><tr><th>#</th><th>Cognome</th><th>Nome</th><th>Società</th><th class="num">Presenze</th><th></th></tr></thead>
+          <thead><tr><th>#</th><th>Cognome</th><th>Nome</th><th class="num">Presenze</th><th></th></tr></thead>
           <tbody>${fencers.map((f, i) => `
             <tr data-id="${f.id}">
               <td class="muted">${i + 1}</td>
               <td><input name="last_name" value="${esc(f.last_name)}" aria-label="Cognome"></td>
               <td><input name="first_name" value="${esc(f.first_name)}" aria-label="Nome"></td>
-              <td><input name="club" value="${esc(f.club)}" aria-label="Società"></td>
               <td class="num">${f.presences}</td>
               <td class="row" style="flex-wrap:nowrap">
                 <button class="btn secondary small" data-act="save" title="Salva">💾</button>
@@ -232,16 +231,14 @@ function viewRoster(el) {
               <div class="field"><label for="af-l">Cognome</label><input id="af-l" name="last_name" required></div>
               <div class="field"><label for="af-f">Nome</label><input id="af-f" name="first_name"></div>
             </div>
-            <div class="field"><label for="af-c">Società / Sala</label><input id="af-c" name="club" list="clubs"></div>
-            ${clubList()}
             <button class="btn">Aggiungi</button>
           </form>
         </section>
         <section class="panel">
           <h2>Importa elenco</h2>
-          <p class="muted small">Una riga per tiratore: <code>Cognome; Nome; Società</code> (vanno bene anche virgole o tabulazioni, quindi puoi incollare da Excel).</p>
+          <p class="muted small">Una riga per tiratore: <code>Cognome; Nome</code> (vanno bene anche virgole o tabulazioni, quindi puoi incollare da Excel).</p>
           <form id="bulk-fencers">
-            <textarea name="bulk" placeholder="Rossi; Mario; Scherma Fano&#10;Bianchi; Giulia; Fanum Fortunae"></textarea>
+            <textarea name="bulk" placeholder="Rossi; Mario&#10;Bianchi; Giulia"></textarea>
             <div style="margin-top:10px"><button class="btn secondary">Importa</button></div>
           </form>
         </section>
@@ -268,10 +265,6 @@ function viewRoster(el) {
       if (confirm('Eliminare questo iscritto dal torneo?') && await mutate('DELETE', `/api/fencers/${id}`, null, 'Eliminato')) D = null;
     });
   });
-}
-
-function clubList() {
-  return `<datalist id="clubs">${[...new Set(T.fencers.map((f) => f.club).filter(Boolean))].map((c) => `<option value="${esc(c)}">`).join('')}</datalist>`;
 }
 
 // ---------- Giornata ----------
@@ -365,15 +358,14 @@ function viewPresence(el) {
         ${locked ? '<p class="muted small">🔒 Gironi già generati: per cambiare i presenti elimina prima i gironi.</p>' : ''}
         ${roster.length ? `
         <div class="row" style="margin:12px 0">
-          <input type="search" id="filter" placeholder="🔍 Cerca per nome o società" style="flex:1 1 220px">
+          <input type="search" id="filter" placeholder="🔍 Cerca per nome" style="flex:1 1 220px">
           ${locked ? '' : `<button class="btn secondary small" id="all">Tutti</button>
           <button class="btn secondary small" id="none">Nessuno</button>`}
         </div>
         <div class="presence-list">${roster.map((f) => `
-          <label class="presence ${present.has(f.id) ? 'on' : ''}" data-q="${esc(`${f.last_name} ${f.first_name} ${f.club}`.toLowerCase())}">
+          <label class="presence ${present.has(f.id) ? 'on' : ''}" data-q="${esc(`${f.last_name} ${f.first_name}`.toLowerCase())}">
             <input type="checkbox" value="${f.id}" ${present.has(f.id) ? 'checked' : ''} ${locked ? 'disabled' : ''}>
             <span class="nm">${esc(fencerName(f))}</span>
-            <span class="muted small">${esc(f.club)}</span>
           </label>`).join('')}</div>
         ${locked ? '' : `<div class="row" style="margin-top:14px"><span class="muted small" id="dirty"></span><span class="spacer"></span>
           <button class="btn" id="save-presence">💾 Salva presenti</button>
@@ -386,8 +378,6 @@ function viewPresence(el) {
         <form id="add-present">
           <div class="field"><label for="ap-l">Cognome</label><input id="ap-l" name="last_name" required ${locked ? 'disabled' : ''}></div>
           <div class="field"><label for="ap-f">Nome</label><input id="ap-f" name="first_name" ${locked ? 'disabled' : ''}></div>
-          <div class="field"><label for="ap-c">Società / Sala</label><input id="ap-c" name="club" list="clubs" ${locked ? 'disabled' : ''}></div>
-          ${clubList()}
           <button class="btn" ${locked ? 'disabled' : ''}>Aggiungi e segna presente</button>
         </form>
       </section>
@@ -455,7 +445,7 @@ function viewPools(el) {
       <div class="row">
         <div style="flex: 1 1 420px">
           <h2>Gironi</h2>
-          <div class="muted small">Solo i presenti della giornata. Gironi da massimo 7 tiratori, con al più un tiratore di differenza tra un girone e l'altro. Assalti a ${D.day.pool_touches} stoccate. La composizione è casuale e separa il più possibile chi è della stessa società.</div>
+          <div class="muted small">Solo i presenti della giornata. Gironi da massimo 7 tiratori, con al più un tiratore di differenza tra un girone e l'altro. Assalti a ${D.day.pool_touches} stoccate. La composizione è casuale.</div>
         </div>
         <span class="spacer"></span>
         ${hasBracket ? '<span class="muted small">🔒 Tabellone generato: elimina il tabellone per modificare i gironi.</span>' : `
@@ -499,7 +489,7 @@ function poolCard(p, locked) {
         <thead><tr><th></th><th>Tiratore</th>${ms.map((m) => `<th>${m.position}</th>`).join('')}<th>V</th><th>Ind</th><th>TS</th><th>Pos</th></tr></thead>
         <tbody>${ms.map((a) => `
           <tr><th>${a.position}</th>
-            <td class="name">${esc(fencerName(a))}<div class="muted small">${esc(a.club)}</div></td>
+            <td class="name">${esc(fencerName(a))}</td>
             ${ms.map((b) => cell(a, b)).join('')}
             <td>${a.v}</td><td>${a.ind > 0 ? '+' : ''}${a.ind}</td><td>${a.ts}</td><td class="pos">${a.m ? a.pool_rank : ''}</td>
           </tr>`).join('')}</tbody>
@@ -585,11 +575,11 @@ function viewPoolRanking(el) {
       </div>
       ${D.poolsDone ? '' : '<p class="muted small">⏳ Classifica provvisoria: ci sono ancora assalti da disputare.</p>'}
       <div class="table-wrap"><table>
-        <thead><tr><th class="num">Pos</th><th>Tiratore</th><th>Società</th><th class="num">V</th><th class="num">M</th><th class="num">V/M</th><th class="num">TS</th><th class="num">TR</th><th class="num">Ind</th></tr></thead>
+        <thead><tr><th class="num">Pos</th><th>Tiratore</th><th class="num">V</th><th class="num">M</th><th class="num">V/M</th><th class="num">TS</th><th class="num">TR</th><th class="num">Ind</th></tr></thead>
         <tbody>${D.ranking.map((r) => `
           <tr class="${r.qualified ? '' : 'out'}">
             <td class="num"><strong>${r.rank}</strong></td>
-            <td>${esc(fencerName(r))}</td><td class="muted">${esc(r.club)}</td>
+            <td>${esc(fencerName(r))}</td>
             <td class="num">${r.v}</td><td class="num">${r.m}</td><td class="num">${r.vm.toFixed(3)}</td>
             <td class="num">${r.ts}</td><td class="num">${r.tr}</td><td class="num">${r.ind > 0 ? '+' : ''}${r.ind}</td>
           </tr>`).join('')}</tbody>
@@ -634,7 +624,7 @@ function viewBracket(el) {
         <span class="spacer"></span>
         <button class="btn danger" id="del-bracket">Elimina tabellone</button>
       </div>
-      ${champ ? `<div class="champion"><div class="trophy">🏆</div><h1>${esc(fencerName(champ))}</h1><div class="muted">${esc(champ.club)}</div>
+      ${champ ? `<div class="champion"><div class="trophy">🏆</div><h1>${esc(fencerName(champ))}</h1>
         <p><a class="btn" href="#/giornata/${D.day.id}/classifica">Classifica e punti della giornata</a></p></div>` : ''}
       <div class="bracket">${D.bracket.map((r) => `
         <div class="round"><h3>${esc(r.label)}</h3>
@@ -714,7 +704,7 @@ function viewDayFinal(el) {
   const at = (p) => fr.filter((r) => r.place === p);
   const step = (cls, p, list) => `
     <div class="step ${cls}">
-      ${list.map((r) => `<div class="who">${esc(fencerName(r))}<div class="club">${esc(r.club)}</div></div>`).join('')}
+      ${list.map((r) => `<div class="who">${esc(fencerName(r))}</div>`).join('')}
       <div class="block"><span>${p}</span><small>+${list[0]?.points ?? ''} pt</small></div>
     </div>`;
   el.innerHTML = `
@@ -723,8 +713,8 @@ function viewDayFinal(el) {
       <p class="muted small">${POINTS_LEGEND}</p>
       <div class="podium">${step('p2', 2, at(2))}${step('p1', 1, at(1))}${step('p3', 3, at(3))}</div>
       <div class="table-wrap"><table>
-        <thead><tr><th class="num">Pos</th><th>Tiratore</th><th>Società</th><th class="num">Testa di serie</th><th class="num">Punti</th></tr></thead>
-        <tbody>${fr.map((r) => `<tr><td class="num"><strong>${r.place}</strong> ${medal(r.place)}</td><td>${esc(fencerName(r))}</td><td class="muted">${esc(r.club)}</td>
+        <thead><tr><th class="num">Pos</th><th>Tiratore</th><th class="num">Testa di serie</th><th class="num">Punti</th></tr></thead>
+        <tbody>${fr.map((r) => `<tr><td class="num"><strong>${r.place}</strong> ${medal(r.place)}</td><td>${esc(fencerName(r))}</td>
           <td class="num">${D.ranking.findIndex((x) => x.id === r.id) + 1}</td>
           <td class="num"><span class="pts p${r.points}">+${r.points}</span></td></tr>`).join('')}</tbody>
       </table></div>

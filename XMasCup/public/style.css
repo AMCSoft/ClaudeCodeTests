@@ -165,7 +165,7 @@ h3 { font-size: 17px; }
   background: rgba(7, 18, 38, 0.6); border: 1px solid var(--line);
 }
 .presence .small { grid-column: 2; font-weight: 400; }
-.presence input { width: 18px; height: 18px; accent-color: var(--green); grid-row: span 2; }
+.presence input { width: 18px; height: 18px; accent-color: var(--green); }
 .presence.on { background: rgba(79, 209, 122, 0.12); border-color: rgba(79, 209, 122, 0.55); }
 .presence[hidden] { display: none; }
 
