@@ -22,6 +22,27 @@ python3 scanner.py --min-gap 5 --max-float 50 --min-rvol 2   # criteri più larg
 python3 scanner.py --json
 ```
 
+## Regole di giornata
+
+Lo scanner mostra sempre i segnali, ma segna **NESSUN INGRESSO** quando:
+
+- **Finestra oraria:** è fuori dalle 9:30–11:00 di New York (15:30–17:00 in Italia), oppure è
+  weekend. Si cambia con `--ora-inizio` e `--ora-fine`.
+- **Perdita massima giornaliera:** le operazioni chiuse oggi sommano −3% del capitale o peggio
+  (−3 € su 100 €). Si cambia con `--perdita-giorno`.
+
+Le operazioni chiuse si registrano nel diario (`diario.json`, solo in locale):
+
+```bash
+python3 diario.py aggiungi SJT -0.91            # simbolo e risultato in euro
+python3 diario.py aggiungi SJT 1.80 --nota "target 2R"
+python3 diario.py oggi
+python3 diario.py tutto                         # riepilogo per giorno, con cumulato
+```
+
+`--adesso "2026-11-17 10:15"` fissa l'ora (New York) per provare le regole. I dati scaricati
+restano comunque quelli live.
+
 Serve solo Python 3.9 o superiore, nessuna libreria da installare. I segnali vengono salvati in `segnali/`.
 
 ## Limiti da conoscere

@@ -230,6 +230,30 @@ def punteggio(s):
     return p
 
 
+def regole_giorno(a, adesso):
+    """(True se i nuovi ingressi sono bloccati, spiegazione). Finestra oraria + perdita giornaliera."""
+    import diario  # stesso cartella dello scanner
+
+    def hm(s):
+        h, m = s.split(":")
+        return adesso.replace(hour=int(h), minute=int(m), second=0, microsecond=0)
+
+    motivi = []
+    if adesso.weekday() >= 5:
+        motivi.append("oggi la borsa e' chiusa (weekend)")
+    elif not (hm(a.ora_inizio) <= adesso <= hm(a.ora_fine)):
+        motivi.append("fuori dalla finestra di ingresso %s-%s di New York" % (a.ora_inizio, a.ora_fine))
+
+    limite = a.capitale * a.perdita_giorno / 100
+    tot, n = diario.risultato_oggi(adesso)
+    if tot <= -limite:
+        motivi.append("perdita giornaliera raggiunta (%+.2f EUR su %d operazioni, limite -%.2f EUR)" % (tot, n, limite))
+    stato = "Oggi: %d operazioni registrate, %+.2f EUR (limite -%.2f EUR)." % (n, tot, limite)
+    if motivi:
+        return True, "; ".join(motivi) + ". " + stato
+    return False, "Ingressi consentiti. " + stato
+
+
 # ---------------------------------------------------------------- main
 
 def main(argv=None):
@@ -243,12 +267,18 @@ def main(argv=None):
     ap.add_argument("--max-float", type=float, default=20.0, help="max azioni in circolazione, milioni (default 20)")
     ap.add_argument("--max-candidati", type=int, default=25, help="quanti titoli approfondire (default 25)")
     ap.add_argument("--eurusd", type=float, default=None, help="cambio EUR/USD (default: BCE del giorno)")
+    ap.add_argument("--ora-inizio", default="09:30", help="primo ingresso consentito, ora di New York (default 09:30)")
+    ap.add_argument("--ora-fine", default="11:00", help="ultimo ingresso consentito, ora di New York (default 11:00)")
+    ap.add_argument("--perdita-giorno", type=float, default=3.0,
+                    help="perdita massima giornaliera, %% del capitale (default 3); legge diario.json")
+    ap.add_argument("--adesso", default=None, help="fissa l'ora, es. '2026-11-17 10:15' (New York), per prove")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--salva", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "segnali"),
                     help="cartella dove salvare i segnali in JSON ('' per non salvare)")
     a = ap.parse_args(argv)
 
-    adesso = dt.datetime.now(NY)
+    adesso = (dt.datetime.strptime(a.adesso, "%Y-%m-%d %H:%M").replace(tzinfo=NY)
+              if a.adesso else dt.datetime.now(NY))
     eurusd = a.eurusd or cambio_eur_usd() or 1.10
     rischio_eur = a.capitale * a.rischio / 100
     rischio_usd = rischio_eur * eurusd
@@ -256,6 +286,9 @@ def main(argv=None):
     log = (lambda *x: print(*x, file=sys.stderr)) if a.json else print
     log("Scansione delle %s (New York). Capitale %.2f EUR, rischio max %.2f EUR (%.2f USD, cambio %.4f)."
         % (adesso.strftime("%H:%M del %d/%m/%Y"), a.capitale, rischio_eur, rischio_usd, eurusd))
+
+    stop_giorno, motivo_stop = regole_giorno(a, adesso)
+    log(motivo_stop)
 
     tutti = universo()
     primo = [c for c in tutti
@@ -294,12 +327,16 @@ def main(argv=None):
         p["perdita_max_eur"] = round(p["perdita_max_usd"] / eurusd, 2) if p["perdita_max_usd"] else None
         p["controvalore_eur"] = round(p["controvalore_usd"] / eurusd, 2)
         p["entra_nel_capitale"] = p["controvalore_eur"] <= a.capitale
+        p["ingresso_consentito"] = (not stop_giorno and p["azioni"] > 0 and p["entra_nel_capitale"])
 
     risultato = {
         "ora_ny": adesso.isoformat(timespec="minutes"),
         "capitale_eur": a.capitale, "rischio_eur": rischio_eur, "eurusd": eurusd,
+        "ingressi_consentiti": not stop_giorno,
+        "regole_giorno": motivo_stop,
         "criteri": {"prezzo": [a.min_prezzo, a.max_prezzo], "min_var_pct": a.min_gap,
-                    "min_rvol": a.min_rvol, "max_azioni_mln": a.max_float},
+                    "min_rvol": a.min_rvol, "max_azioni_mln": a.max_float,
+                    "finestra_ny": [a.ora_inizio, a.ora_fine], "perdita_giorno_pct": a.perdita_giorno},
         "segnali": segnali,
         "scartati": [{"symbol": s, "motivo": m} for s, m in scartati],
         "avvertenza": "Solo studio. Non e' consulenza finanziaria. Dati gratuiti e non ufficiali, "
@@ -339,6 +376,8 @@ def stampa(r, scartati):
             print("   idea: ingresso sopra %.2f, stop %.2f, target 2R %.2f -> %d azioni (%.2f EUR), perdita max ~%.2f EUR%s"
                   % (p["ingresso"], p["stop"], p["target_2R"], p["azioni"], p["controvalore_eur"],
                      p["perdita_max_eur"], "" if p["entra_nel_capitale"] else "  [SUPERA IL CAPITALE]"))
+            if not r["ingressi_consentiti"]:
+                print("   NESSUN INGRESSO: %s" % r["regole_giorno"])
         else:
             print("   idea: lo stop e' troppo largo per il tuo rischio massimo, nessuna posizione possibile")
         print()

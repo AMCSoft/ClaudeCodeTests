@@ -1,1 +1,4 @@
 segnali/
+diario.json
+diario.json.tmp
+__pycache__/
