@@ -216,10 +216,10 @@ function viewRoster(el) {
               <td><input name="last_name" value="${esc(f.last_name)}" aria-label="Cognome"></td>
               <td><input name="first_name" value="${esc(f.first_name)}" aria-label="Nome"></td>
               <td class="num">${f.presences}</td>
-              <td class="row" style="flex-wrap:nowrap">
+              <td class="actions-cell"><div class="row-actions">
                 <button class="btn secondary small" data-act="save" title="Salva">💾</button>
                 ${f.locked ? '' : '<button class="btn danger small" data-act="del" title="Elimina">✕</button>'}
-              </td>
+              </div></td>
             </tr>`).join('')}</tbody>
         </table></div>` : '<div class="empty"><img src="logo.svg" alt=""><p>Nessun iscritto. Aggiungine qualcuno o importa un elenco.</p></div>'}
       </section>
