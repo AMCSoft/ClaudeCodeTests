@@ -23,7 +23,7 @@ const DAY_TABS = [
   ['classifica', 'Classifica giornata'],
 ];
 
-const POINTS_LEGEND = '1° 10 pt · 2° 7 pt · 3° ex aequo 5 pt · dal 5° all\'8° 3 pt · tutti gli altri presenti 1 pt';
+const POINTS_LEGEND = '1° 10 pt · 2° 7 pt · 3° ex aequo 5 pt · dal 5° in poi 3 pt';
 
 // ---------- Utilità ----------
 

@@ -170,15 +170,14 @@ function roundLabel(round) {
 }
 
 // Punti della classifica generale in base al piazzamento nella giornata:
-// 1° 10, 2° 7, 3° (ex aequo) 5, dal 5° all'8° 3, tutti gli altri presenti 1.
+// 1° 10, 2° 7, 3° (ex aequo) 5, dal 5° in poi 3 (tutti gli altri presenti).
 // Con due terzi ex aequo il 4° posto non esiste: dopo i terzi si passa al 5°.
 function dayPoints(place) {
   if (place == null) return 0;
   if (place === 1) return 10;
   if (place === 2) return 7;
   if (place === 3) return 5;
-  if (place <= 8) return 3;
-  return 1;
+  return 3;
 }
 
 // Tempi degli assalti (regolamento spada): gironi 1 periodo da 3 minuti,

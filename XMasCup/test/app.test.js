@@ -52,7 +52,7 @@ test('validazione dei punteggi', () => {
 });
 
 test('punti di giornata', () => {
-  assert.deepEqual([1, 2, 3, 5, 8, 9, 17].map(T.dayPoints), [10, 7, 5, 3, 3, 1, 1]);
+  assert.deepEqual([1, 2, 3, 5, 8, 9, 17].map(T.dayPoints), [10, 7, 5, 3, 3, 3, 3]);
   assert.equal(T.dayPoints(null), 0);
 });
 
@@ -127,7 +127,7 @@ test('torneo a giornate: presenti, gironi, dirette, punti e classifica generale'
   assert.equal(data.pools.flatMap((p) => p.members).length, 11, 'solo i presenti nei gironi');
   const fr = data.finalRanking;
   assert.deepEqual(fr.map((r) => r.place), [1, 2, 3, 3, 5, 5, 5, 5, 9, 9, 9]);
-  assert.deepEqual(fr.map((r) => r.points), [10, 7, 5, 5, 3, 3, 3, 3, 1, 1, 1]);
+  assert.deepEqual(fr.map((r) => r.points), [10, 7, 5, 5, 3, 3, 3, 3, 3, 3, 3]);
   assert.equal(fr[0].id, ids[0]);
 
   // Dopo i gironi i presenti sono bloccati; un tiratore che ha tirato non si può eliminare.
@@ -164,7 +164,7 @@ test('torneo a giornate: presenti, gironi, dirette, punti e classifica generale'
   assert.equal(row(ids[11]).presences, 0);
   // La somma dei punti è coerente con le due classifiche di giornata.
   const sum = lb.reduce((s, r) => s + r.total, 0);
-  assert.equal(sum, 10 + 7 + 5 + 5 + 3 * 4 + 1 * 3 + (10 + 7 + 5 + 5 + 3 + 3));
+  assert.equal(sum, 10 + 7 + 5 + 5 + 3 * 7 + (10 + 7 + 5 + 5 + 3 + 3));
 
   // Eliminando una giornata spariscono anche i suoi punti.
   ({ data } = await call('DELETE', `/days/${d2}`));

@@ -22,8 +22,7 @@ Web app locale per gestire la **Fanum Fortunae XMas Cup**, torneo di **spada** a
 | 1° | 10 |
 | 2° | 7 |
 | 3° (ex aequo, entrambi) | 5 |
-| dal 5° all'8° (i 4 perdenti dei quarti; il 4° posto non esiste) | 3 |
-| tutti gli altri presenti | 1 |
+| dal 5° in poi, tutti gli altri presenti (il 4° posto non esiste) | 3 |
 | assente | 0 |
 
 La **classifica generale** è la prima cosa visibile nella pagina principale: somma dei punti delle giornate concluse, con il dettaglio giornata per giornata e il numero di presenze. A parità di punti conta il miglior rendimento (più vittorie di giornata, poi più secondi posti, poi più terzi, ecc.). Una giornata conta solo quando la sua finale è stata disputata.

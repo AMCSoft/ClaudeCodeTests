@@ -163,7 +163,7 @@ function buildDay(S, dayId, now = Date.now(), sid = null) {
 function buildTournament(S, now = Date.now()) {
   const days = S.days.map((d) => buildDay(S, d.id, now));
   const rows = new Map(S.fencers.map((f) => [f.id, {
-    ...f, total: 0, presences: 0, results: {}, counts: { 10: 0, 7: 0, 5: 0, 3: 0, 1: 0 },
+    ...f, total: 0, presences: 0, results: {}, counts: { 10: 0, 7: 0, 5: 0, 3: 0 },
   }]));
 
   for (const d of days) {
@@ -182,7 +182,7 @@ function buildTournament(S, now = Date.now()) {
   }
 
   // Totale punti, poi miglior rendimento (vittorie, secondi posti, terzi, ...), poi nome.
-  const cmp = (a, b) => b.total - a.total || [10, 7, 5, 3, 1].reduce((acc, k) => acc || b.counts[k] - a.counts[k], 0);
+  const cmp = (a, b) => b.total - a.total || [10, 7, 5, 3].reduce((acc, k) => acc || b.counts[k] - a.counts[k], 0);
   const leaderboard = [...rows.values()].sort((a, b) => cmp(a, b) || byName(a, b));
   leaderboard.forEach((r, i) => {
     r.rank = i > 0 && cmp(leaderboard[i - 1], r) === 0 ? leaderboard[i - 1].rank : i + 1;
