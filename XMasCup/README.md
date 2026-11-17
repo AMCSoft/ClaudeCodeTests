@@ -53,5 +53,5 @@ npm test
 - `server.js`: API Express (anagrafica, giornate, presenti, gironi, tabellone, classifica generale)
 - `db.js`: schema SQLite (modulo `node:sqlite` integrato in Node)
 - `lib/tournament.js`: logica pura (gironi, ordine assalti, classifiche, teste di serie, punti)
-- `public/`: interfaccia (HTML/CSS/JS senza build) e logo `logo.svg`
+- `public/`: interfaccia (HTML/CSS/JS senza build) e logo `logo.svg` (logo della Fanum Fortunae Scherma nella ghirlanda natalizia)
 - `test/`: test con `node --test`
