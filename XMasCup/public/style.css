@@ -352,3 +352,28 @@ tr.out td { opacity: 0.55; }
   body { background: #fff; color: #000; }
   .panel { box-shadow: none; border-color: #ccc; background: #fff; }
 }
+
+/* ---------- Scorer: incontri in arbitraggio ---------- */
+.lock-chip {
+  display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700;
+  padding: 2px 8px; border-radius: 999px; background: rgba(143, 193, 255, 0.15); color: #cfe3ff;
+  border: 1px solid rgba(143, 193, 255, 0.45); white-space: nowrap;
+}
+.lock-chip strong { color: #fff; }
+.lock-chip.stale { background: rgba(255, 93, 108, 0.15); color: #ffc2c9; border-color: rgba(255, 93, 108, 0.5); }
+.bout.is-locked { background: rgba(143, 193, 255, 0.08); box-shadow: inset 3px 0 0 #8fc1ff; }
+.bout .lock-row { grid-column: 2 / -1; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.de.is-locked { border-color: rgba(143, 193, 255, 0.7); }
+.de-lock { padding: 4px 8px; border-top: 1px solid var(--line); }
+.live-dot { color: #cfe3ff; font-weight: 700; }
+.error-text { color: var(--red); }
+
+.steps { padding-left: 20px; }
+.steps li { margin-bottom: 4px; }
+.qr-grid { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; }
+.qr-card {
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px; width: 240px; text-align: center; word-break: break-all;
+}
+.qr { width: 190px; height: 190px; background: #fff; border-radius: 8px; padding: 6px; }
+.qr svg { width: 100%; height: 100%; display: block; }

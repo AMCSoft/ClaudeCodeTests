@@ -56,17 +56,27 @@ test('punti di giornata', () => {
   assert.equal(T.dayPoints(null), 0);
 });
 
-function client(t) {
-  const db = open(':memory:');
-  const server = createApp(db).listen(0);
-  t.after(() => server.close());
+// Con TEST_DATABASE_URL i test girano su Postgres (database azzerato), altrimenti su SQLite in memoria.
+async function setup(t, opts = {}) {
+  const url = process.env.TEST_DATABASE_URL;
+  const db = url ? await open({ url, reset: true }) : await open({ file: ':memory:' });
+  const server = createApp(db, opts).listen(0);
+  t.after(async () => {
+    server.close();
+    await db.close();
+  });
   const base = `http://127.0.0.1:${server.address().port}/api`;
-  return async (method, url, body) => {
+  const call = async (method, url, body, headers = {}) => {
     const res = await fetch(base + url, {
-      method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined,
+      method, headers: { 'Content-Type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined,
     });
     return { status: res.status, data: await res.json() };
   };
+  return { db, call };
+}
+
+async function client(t, opts) {
+  return (await setup(t, opts)).call;
 }
 
 // Gioca un'intera giornata: vince sempre il tiratore con l'id più basso.
@@ -93,7 +103,7 @@ async function playDay(call, dayId) {
 }
 
 test('torneo a giornate: presenti, gironi, dirette, punti e classifica generale', async (t) => {
-  const call = client(t);
+  const call = await client(t);
   let { data } = await call('GET', '/tournament');
   assert.equal(data.tournament.name, 'Fanum Fortunae XMas Cup');
 
@@ -164,7 +174,7 @@ test('torneo a giornate: presenti, gironi, dirette, punti e classifica generale'
 });
 
 test('correzioni nel tabellone', async (t) => {
-  const call = client(t);
+  const call = await client(t);
   let { data } = await call('POST', '/fencers', { bulk: Array.from({ length: 8 }, (_, i) => `T${i}; N${i}`).join('\n') });
   const ids = data.tournament.fencers.map((f) => f.id);
   ({ data } = await call('POST', '/days', {}));
@@ -184,4 +194,174 @@ test('correzioni nel tabellone', async (t) => {
   assert.equal(fixed.data.day.status, 'dirette');
   assert.equal(fixed.data.finalRanking, null);
   assert.ok(fixed.data.tournament.leaderboard.every((r) => r.total === 0));
+});
+
+// ---------- Scorer ----------
+
+async function dayWithPools(call, n = 5) {
+  let { data } = await call('POST', '/fencers', { bulk: Array.from({ length: n }, (_, i) => `S${i}; N${i}`).join('\n') });
+  const ids = data.tournament.fencers.map((f) => f.id);
+  ({ data } = await call('POST', '/days', {}));
+  const dayId = data.day.id;
+  await call('PUT', `/days/${dayId}/presence`, { fencer_ids: ids });
+  ({ data } = await call('POST', `/days/${dayId}/pools`, {}));
+  return { dayId, data };
+}
+
+const A = { scorer_id: 'scorer-aaaa-1111', scorer_name: 'Arbitro A' };
+const B = { scorer_id: 'scorer-bbbb-2222', scorer_name: 'Arbitro B' };
+
+test('scorer: un incontro può essere arbitrato da una sola persona e il risultato arriva in automatico', async (t) => {
+  const call = await client(t);
+  const { dayId } = await dayWithPools(call);
+
+  let r = await call('GET', `/scorer/days/${dayId}`);
+  assert.equal(r.status, 200);
+  const first = r.data.bouts[0];
+  assert.equal(first.kind, 'pool');
+  assert.equal(first.status, 'open');
+  assert.equal(first.max, 5);
+  assert.equal(first.timing.periods, 1);
+
+  // A prende l'incontro; B no.
+  r = await call('POST', `/scorer/bouts/pool/${first.id}/claim`, A);
+  assert.equal(r.status, 200, r.data.error);
+  assert.equal(r.data.bout.lock.mine, true);
+  assert.equal(r.data.saved, null);
+  r = await call('POST', `/scorer/bouts/pool/${first.id}/claim`, B);
+  assert.equal(r.status, 409);
+  assert.equal(r.data.locked, true);
+  assert.equal(r.data.stale, false);
+  assert.match(r.data.error, /Arbitro A/);
+  // Riprendere il proprio incontro va bene (es. pagina ricaricata).
+  assert.equal((await call('POST', `/scorer/bouts/pool/${first.id}/claim`, A)).status, 200);
+
+  // Due prese contemporanee sullo stesso incontro libero: ne vince una sola.
+  const second = (await call('GET', `/scorer/days/${dayId}`)).data.bouts[1];
+  const both = await Promise.all([A, B].map((who) => call('POST', `/scorer/bouts/pool/${second.id}/claim`, who)));
+  assert.deepEqual(both.map((x) => x.status).sort(), [200, 409]);
+  const winnerOfSecond = both[0].status === 200 ? A : B;
+  await call('POST', `/scorer/bouts/pool/${second.id}/release`, winnerOfSecond);
+
+  // Punteggio dal vivo visibile nell'app principale; l'organizzazione non può modificarlo.
+  r = await call('POST', `/scorer/bouts/pool/${first.id}/heartbeat`, { ...A, live: { fa: first.a.id, fb: first.b.id, score_a: 2, score_b: 1 } });
+  assert.equal(r.status, 200);
+  assert.equal((await call('POST', `/scorer/bouts/pool/${first.id}/heartbeat`, B)).status, 409);
+  let day = (await call('GET', `/days/${dayId}`)).data;
+  const shown = day.pools.flatMap((p) => p.bouts).find((b) => b.id === first.id);
+  assert.equal(shown.lock.name, 'Arbitro A');
+  assert.equal(shown.lock.live.score_a, 2);
+  assert.equal(shown.scorer_id, undefined, 'l\'id dello scorer non deve uscire dal server');
+  assert.equal((await call('PUT', `/pool-bouts/${first.id}`, { score_a: 5, score_b: 0 })).status, 409);
+
+  // B non può inviare il risultato; A sì.
+  assert.equal((await call('POST', `/scorer/bouts/pool/${first.id}/result`, { ...B, score_a: 5, score_b: 1 })).status, 409);
+  assert.equal((await call('POST', `/scorer/bouts/pool/${first.id}/result`, { ...A, score_a: 5, score_b: 6 })).status, 400);
+  assert.equal((await call('POST', `/scorer/bouts/pool/${first.id}/result`, { ...A, score_a: 3, score_b: 3 })).status, 400);
+  r = await call('POST', `/scorer/bouts/pool/${first.id}/result`, { ...A, score_a: 3, score_b: 3, winner_id: first.b.id });
+  assert.equal(r.status, 200, r.data.error);
+  day = (await call('GET', `/days/${dayId}`)).data;
+  const done = day.pools.flatMap((p) => p.bouts).find((b) => b.id === first.id);
+  assert.deepEqual([done.score_a, done.score_b, done.winner_id, done.lock], [3, 3, first.b.id, null]);
+  assert.equal((await call('POST', `/scorer/bouts/pool/${first.id}/claim`, B)).status, 409, 'incontro concluso');
+  assert.equal((await call('POST', `/scorer/bouts/pool/${first.id}/result`, { ...A, score_a: 5, score_b: 0 })).status, 409);
+});
+
+test('scorer: subentro a un arbitro disconnesso e sblocco dall\'organizzazione', async (t) => {
+  const { db, call } = await setup(t);
+  const { dayId } = await dayWithPools(call);
+  const bout = (await call('GET', `/scorer/days/${dayId}`)).data.bouts[0];
+  const url = `/scorer/bouts/pool/${bout.id}`;
+  await call('POST', `${url}/claim`, A);
+  const live = { fa: bout.a.id, fb: bout.b.id, score_a: 4, score_b: 2 };
+  await call('POST', `${url}/heartbeat`, { ...A, live });
+
+  // A smette di rispondere: B può subentrare solo chiedendolo esplicitamente.
+  await db.run('UPDATE pool_bouts SET seen_at = ? WHERE id = ?', [Date.now() - 10 * 60 * 1000, bout.id]);
+  let r = await call('POST', `${url}/claim`, B);
+  assert.equal(r.status, 409);
+  assert.equal(r.data.stale, true);
+  r = await call('POST', `${url}/claim`, { ...B, takeover: true });
+  assert.equal(r.status, 200, r.data.error);
+  assert.deepEqual([r.data.saved.score_a, r.data.saved.score_b], [4, 2], 'riparte dal punteggio salvato');
+  // A torna online ma non è più l'arbitro.
+  r = await call('POST', `${url}/heartbeat`, A);
+  assert.equal(r.status, 409);
+  assert.equal(r.data.lost, true);
+
+  // L'organizzazione sblocca: B perde l'incontro, che torna libero.
+  r = await call('POST', `/bouts/pool/${bout.id}/unlock`);
+  assert.equal(r.status, 200);
+  assert.equal((await call('POST', `${url}/heartbeat`, B)).status, 409);
+  const again = (await call('GET', `/scorer/days/${dayId}`)).data.bouts[0];
+  assert.equal(again.status, 'open');
+  r = await call('POST', `${url}/claim`, A);
+  assert.equal(r.data.saved.score_a, 4);
+
+  // Rilascio volontario: il punteggio resta salvato.
+  await call('POST', `${url}/release`, { ...A, live: { ...live, score_b: 3 } });
+  r = await call('POST', `${url}/claim`, B);
+  assert.equal(r.status, 200);
+  assert.equal(r.data.saved.score_b, 3);
+});
+
+test('scorer: dirette arbitrate dallo scorer, il vincitore avanza nel tabellone', async (t) => {
+  const call = await client(t);
+  const { dayId, data } = await dayWithPools(call, 4);
+  for (const b of data.pools.flatMap((p) => p.bouts)) {
+    await call('PUT', `/pool-bouts/${b.id}`, b.fencer_a < b.fencer_b ? { score_a: 5, score_b: 1 } : { score_a: 1, score_b: 5 });
+  }
+  // A gironi chiusi dallo scorer non si possono più prendere incontri dei gironi.
+  await call('POST', `/days/${dayId}/bracket`, {});
+  let list = (await call('GET', `/scorer/days/${dayId}`)).data.bouts;
+  assert.ok(list.filter((b) => b.kind === 'pool').every((b) => b.status === 'done'));
+  const semis = list.filter((b) => b.kind === 'de' && b.status === 'open');
+  assert.equal(semis.length, 2);
+  assert.equal(semis[0].max, 15);
+  assert.equal(semis[0].timing.periods, 3);
+  assert.equal(list.find((b) => b.group === 'Finale').status, 'waiting');
+
+  for (const s of semis) {
+    assert.equal((await call('POST', `/scorer/bouts/de/${s.id}/claim`, A)).status, 200);
+    const r = await call('POST', `/scorer/bouts/de/${s.id}/result`, { ...A, score_a: 15, score_b: 11 });
+    assert.equal(r.status, 200, r.data.error);
+  }
+  list = (await call('GET', `/scorer/days/${dayId}`)).data.bouts;
+  const final = list.find((b) => b.group === 'Finale');
+  assert.equal(final.status, 'open');
+  assert.deepEqual([final.a.id, final.b.id], semis.map((s) => s.a.id));
+
+  // Mentre la finale è in arbitraggio non si può cambiare il vincitore di una semifinale.
+  await call('POST', `/scorer/bouts/de/${final.id}/claim`, B);
+  const semi = (await call('GET', `/days/${dayId}`)).data.bracket.find((r) => r.round === 4).bouts[0];
+  assert.equal((await call('PUT', `/de-bouts/${semi.id}`, { score_a: 3, score_b: 15 })).status, 409);
+  const r = await call('POST', `/scorer/bouts/de/${final.id}/result`, { ...B, score_a: 9, score_b: 15 });
+  assert.equal(r.status, 200);
+  const day = (await call('GET', `/days/${dayId}`)).data;
+  assert.equal(day.day.status, 'conclusa');
+  assert.equal(day.finalRanking[0].id, final.b.id);
+});
+
+test('password dell\'organizzazione e PIN degli arbitri', async (t) => {
+  const call = await client(t, { adminPassword: 'segreto', scorerPin: '2412' });
+  const admin = { 'x-admin-key': 'segreto' };
+  assert.equal((await call('GET', '/tournament')).status, 200, 'la classifica resta pubblica');
+  assert.deepEqual((await call('GET', '/auth')).data, { admin: true, scorer: true });
+  let r = await call('POST', '/fencers', { last_name: 'Rossi' });
+  assert.equal(r.status, 401);
+  assert.equal(r.data.auth, 'admin');
+  assert.equal((await call('POST', '/fencers', { last_name: 'Rossi' }, { 'x-admin-key': 'sbagliata' })).status, 401);
+  assert.equal((await call('POST', '/auth/check', {}, admin)).status, 200);
+  await call('POST', '/fencers', { bulk: 'A; a\nB; b\nC; c' }, admin);
+  const ids = (await call('GET', '/tournament')).data.tournament.fencers.map((f) => f.id);
+  const dayId = (await call('POST', '/days', {}, admin)).data.day.id;
+  await call('PUT', `/days/${dayId}/presence`, { fencer_ids: ids }, admin);
+  await call('POST', `/days/${dayId}/pools`, {}, admin);
+  const bout = (await call('GET', `/scorer/days/${dayId}`)).data.bouts[0];
+  r = await call('POST', `/scorer/bouts/pool/${bout.id}/claim`, A);
+  assert.equal(r.status, 401);
+  assert.equal(r.data.auth, 'scorer');
+  assert.equal((await call('POST', `/scorer/bouts/pool/${bout.id}/claim`, A, { 'x-scorer-key': '2412' })).status, 200);
+  // Il PIN degli arbitri non apre l'amministrazione.
+  assert.equal((await call('POST', '/days', {}, { 'x-scorer-key': '2412' })).status, 401);
 });

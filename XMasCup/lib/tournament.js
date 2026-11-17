@@ -181,7 +181,16 @@ function dayPoints(place) {
   return 1;
 }
 
+// Tempi degli assalti (regolamento spada): gironi 1 periodo da 3 minuti,
+// dirette 3 periodi da 3 minuti con 1 minuto di pausa, minuto di priorità.
+const TIMING = {
+  pool: { periods: 1, periodMs: 3 * 60 * 1000, breakMs: 0 },
+  de: { periods: 3, periodMs: 3 * 60 * 1000, breakMs: 60 * 1000 },
+  priorityMs: 60 * 1000,
+};
+
 module.exports = {
+  TIMING,
   dayPoints,
   POOL_MAX_SIZE,
   BOUT_ORDERS,

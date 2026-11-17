@@ -1,0 +1,17 @@
+{
+  "name": "Fanum Fortunae XMas Cup · Scorer",
+  "short_name": "XMas Scorer",
+  "description": "Scorer per arbitrare gli incontri di spada della Fanum Fortunae XMas Cup",
+  "lang": "it",
+  "start_url": "/scorer/",
+  "scope": "/scorer/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#071226",
+  "theme_color": "#9a1528",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

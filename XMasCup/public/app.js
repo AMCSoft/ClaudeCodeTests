@@ -52,21 +52,87 @@ function toast(msg, isError = false) {
   toastTimer = setTimeout(() => { t.className = 'toast'; }, isError ? 4500 : 2200);
 }
 
-async function api(method, url, body) {
+// localStorage può mancare (navigazione privata): l'app funziona comunque.
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch { /* niente */ } },
+};
+const ADMIN_KEY = 'xmascup-admin-key';
+
+async function api(method, url, body, retry = true) {
+  const key = store.get(ADMIN_KEY);
   const res = await fetch(url, {
     method,
-    headers: body ? { 'Content-Type': 'application/json' } : {},
+    headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(key ? { 'x-admin-key': key } : {}) },
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
+  // Online le modifiche richiedono la password dell'organizzazione: la chiede e riprova.
+  if (res.status === 401 && data.auth === 'admin' && retry && await askPassword()) return api(method, url, body, false);
   if (!res.ok) throw new Error(data.error || 'Errore di rete');
   return data;
+}
+
+const authDialog = document.getElementById('auth-dialog');
+function askPassword() {
+  const form = authDialog.querySelector('form');
+  form.innerHTML = `
+    <h2>🔐 Password dell'organizzazione</h2>
+    <p class="muted small">Per modificare il torneo serve la password. Resta memorizzata su questo dispositivo.</p>
+    <div class="field"><label for="pw">Password</label><input id="pw" type="password" name="pw" autocomplete="current-password" required></div>
+    <p class="small error-text" hidden></p>
+    <div class="row" style="margin-top:16px"><span class="spacer"></span>
+      <button type="button" class="btn secondary" data-act="cancel">Annulla</button>
+      <button type="submit" class="btn">Entra</button></div>`;
+  return new Promise((resolve) => {
+    const done = (ok) => { authDialog.close(); resolve(ok); };
+    form.querySelector('[data-act=cancel]').onclick = () => done(false);
+    authDialog.oncancel = () => resolve(false);
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      const pw = form.pw.value;
+      const res = await fetch('/api/auth/check', { method: 'POST', headers: { 'x-admin-key': pw } });
+      if (res.ok) {
+        store.set(ADMIN_KEY, pw);
+        done(true);
+      } else {
+        const err = form.querySelector('.error-text');
+        err.hidden = false;
+        err.textContent = 'Password errata';
+        form.pw.select();
+      }
+    };
+    authDialog.showModal();
+    form.pw.focus();
+  });
 }
 
 function apply(data) {
   if (data.tournament) T = data.tournament;
   if (data.day) D = data;
 }
+
+// Aggiornamento automatico: i risultati inviati dagli arbitri compaiono da soli.
+// Non ridisegna mentre si sta scrivendo qualcosa, per non perdere i dati non salvati.
+let editing = false;
+app.addEventListener('input', () => { editing = true; });
+let lastPoll = '';
+async function poll() {
+  const route = parseRoute();
+  if (document.hidden || editing || dialog.open || authDialog.open || ['iscritti', 'arbitri'].includes(route.page)) return;
+  if (route.page === 'giornata' && route.tab === 'presenti') return;
+  try {
+    const data = await api('GET', route.page === 'giornata' ? `/api/days/${route.id}` : '/api/tournament', null, false);
+    const sig = JSON.stringify(data);
+    const current = JSON.stringify(route.page === 'giornata' ? { tournament: T, ...D } : { tournament: T });
+    if (sig === lastPoll || sig === current) { lastPoll = sig; return; }
+    lastPoll = sig;
+    if (editing || dialog.open || authDialog.open || parseRoute().page !== route.page) return;
+    apply(data);
+    render();
+  } catch { /* rete assente: riprova al prossimo giro */ }
+}
+setInterval(poll, 4000);
 
 // Esegue una modifica e ridisegna con i dati aggiornati.
 async function mutate(method, url, body, okMsg) {
@@ -88,6 +154,7 @@ function formData(form) {
 function parseRoute() {
   const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
   if (parts[0] === 'iscritti') return { page: 'iscritti' };
+  if (parts[0] === 'arbitri') return { page: 'arbitri' };
   if (parts[0] === 'giornata' && parts[1]) {
     const tab = DAY_TABS.some(([k]) => k === parts[2]) ? parts[2] : null;
     return { page: 'giornata', id: Number(parts[1]), tab };
@@ -104,6 +171,13 @@ function defaultTab(status) {
 
 async function render() {
   const route = parseRoute();
+  editing = false;
+  // Mantiene lo scorrimento orizzontale di tabellone e tabelle quando si ridisegna.
+  const keep = [...app.querySelectorAll('.bracket, .table-wrap')].map((e) => e.scrollLeft);
+  const restore = () => {
+    const now = [...app.querySelectorAll('.bracket, .table-wrap')];
+    if (now.length === keep.length) now.forEach((e, i) => { e.scrollLeft = keep[i]; });
+  };
   document.querySelectorAll('.mainnav a').forEach((a) => a.classList.toggle('active', a.dataset.nav === route.page));
   try {
     if (!T) apply(await api('GET', '/api/tournament'));
@@ -112,9 +186,11 @@ async function render() {
     app.innerHTML = `<div class="panel empty"><p>${esc(e.message)}</p><p><a href="#/">Torna alla classifica</a></p></div>`;
     return;
   }
-  if (route.page === 'iscritti') return viewRoster(app);
-  if (route.page === 'giornata') return viewDay(app, route.tab || defaultTab(D.day.status));
-  return viewHome(app);
+  if (route.page === 'iscritti') viewRoster(app);
+  else if (route.page === 'arbitri') await viewScorerInfo(app);
+  else if (route.page === 'giornata') viewDay(app, route.tab || defaultTab(D.day.status));
+  else viewHome(app);
+  restore();
 }
 
 // ---------- Home: classifica generale + giornate ----------
@@ -180,7 +256,7 @@ function viewHome(el) {
         <a class="day-card" href="#/giornata/${d.id}">
           <div class="row"><strong class="day-title">${dayTitle(d)}</strong><span class="spacer"></span><span class="badge ${d.status}">${STATUS_LABEL[d.status]}</span></div>
           <div class="muted small">${esc(fmtDate(d.date)) || 'Data da definire'}${d.location ? ` · ${esc(d.location)}` : ''}</div>
-          <div class="small">${d.present} presenti</div>
+          <div class="small">${d.present} presenti${d.live ? ` · <span class="live-dot">📱 ${d.live} ${d.live === 1 ? 'incontro' : 'incontri'} in arbitraggio</span>` : ''}</div>
           ${d.podium ? `<div class="day-podium small">${d.podium.map((r) => `<div>${medal(r.place)} ${esc(fencerName(r))}</div>`).join('')}</div>` : ''}
         </a>`).join('')}</div>`
       : '<div class="empty"><p>Nessuna giornata ancora. Crea la prima giornata, seleziona i presenti e genera i gironi.</p></div>'}
@@ -196,6 +272,85 @@ function viewHome(el) {
       toast(err.message, true);
     }
   });
+}
+
+// ---------- Arbitri: come aprire lo scorer ----------
+
+let qrLib;
+function loadQr() {
+  qrLib ||= new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js';
+    s.onload = () => resolve(window.qrcode);
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+  return qrLib;
+}
+
+async function viewScorerInfo(el) {
+  let cfg = { lan: [], pinRequired: false };
+  let auth = { admin: false, scorer: false };
+  try {
+    [cfg, auth] = await Promise.all([api('GET', '/api/scorer/config'), api('GET', '/api/auth')]);
+  } catch { /* mostra comunque la pagina */ }
+  const local = ['localhost', '127.0.0.1', '::1', '[::1]'].includes(location.hostname);
+  const own = `${location.origin}/scorer/`;
+  // In locale "localhost" funziona solo su questo computer: per i telefoni servono gli indirizzi di rete.
+  const urls = local ? [...cfg.lan, own] : [own];
+  const liveDays = T.days.filter((d) => d.live);
+  const logged = !!store.get(ADMIN_KEY);
+
+  el.innerHTML = `
+    <section class="panel">
+      <h1>📱 Scorer per gli arbitri</h1>
+      <p>Lo scorer è l'app con cui gli arbitri seguono gli incontri dal telefono o dal tablet: cronometro, stoccate, colpi doppi, cartellini e priorità. Alla fine dell'incontro il risultato arriva qui da solo.</p>
+      <ol class="steps">
+        <li>L'arbitro apre l'indirizzo (o inquadra il QR) e scrive il suo nome${cfg.pinRequired ? ' e il PIN degli arbitri' : ''}.</li>
+        <li>Sceglie la giornata e un incontro libero: da quel momento è suo e nessun altro può arbitrarlo.</li>
+        <li>A fine incontro conferma il punteggio: risultato, classifica e tabellone si aggiornano qui in automatico.</li>
+      </ol>
+      <p class="muted small">Sul telefono si può aggiungere alla schermata Home (menu del browser → "Aggiungi a schermata Home") e si usa come un'app.</p>
+      <div class="qr-grid">${urls.map((u) => `
+        <div class="qr-card">
+          <div class="qr" data-url="${esc(u)}"></div>
+          <a href="${esc(u)}" target="_blank" rel="noopener">${esc(u)}</a>
+          ${local && u === own ? '<div class="muted small">Solo da questo computer</div>' : ''}
+        </div>`).join('') || '<p class="muted">Nessun indirizzo di rete trovato: collega il computer alla rete Wi-Fi della palestra.</p>'}</div>
+      ${local && cfg.lan.length ? '<p class="muted small">I telefoni devono essere collegati alla stessa rete Wi-Fi di questo computer.</p>' : ''}
+    </section>
+
+    <section class="panel">
+      <h2>📡 Incontri in arbitraggio</h2>
+      ${liveDays.length ? `<ul>${liveDays.map((d) => `<li><a href="#/giornata/${d.id}">${dayTitle(d)}</a>: ${d.live} ${d.live === 1 ? 'incontro' : 'incontri'}</li>`).join('')}</ul>
+        <p class="muted small">Se il telefono di un arbitro si spegne, apri l'incontro e premi "Sblocca": chi lo riprende riparte dal punteggio salvato.</p>`
+        : '<p class="muted">Nessun incontro in arbitraggio in questo momento.</p>'}
+    </section>
+
+    <section class="panel">
+      <h2>🔐 Accessi</h2>
+      <p>${auth.scorer ? '✅ Gli arbitri devono inserire il PIN (impostato con la variabile <code>SCORER_PIN</code>).' : '⚠️ Nessun PIN per gli arbitri: chiunque apra lo scorer può arbitrare. Va bene in palestra; online imposta <code>SCORER_PIN</code>.'}</p>
+      <p>${auth.admin ? `✅ Le modifiche al torneo richiedono la password dell'organizzazione (<code>ADMIN_PASSWORD</code>). ${logged ? 'Su questo dispositivo sei collegato.' : 'Ti verrà chiesta alla prima modifica.'}`
+        : '⚠️ Nessuna password dell\'organizzazione: chiunque apra questa pagina può modificare il torneo. Va bene in locale; online imposta <code>ADMIN_PASSWORD</code>.'}</p>
+      ${logged ? '<button class="btn secondary" id="logout">Esci da questo dispositivo</button>' : ''}
+    </section>`;
+
+  el.querySelector('#logout')?.addEventListener('click', () => {
+    store.set(ADMIN_KEY, null);
+    toast('Password dimenticata su questo dispositivo');
+    render();
+  });
+  try {
+    const qrcode = await loadQr();
+    el.querySelectorAll('.qr').forEach((box) => {
+      const qr = qrcode(0, 'M');
+      qr.addData(box.dataset.url);
+      qr.make();
+      box.innerHTML = qr.createSvgTag({ cellSize: 5, margin: 2, scalable: true });
+    });
+  } catch {
+    el.querySelectorAll('.qr').forEach((box) => box.remove()); // senza internet niente QR, resta il link
+  }
 }
 
 // ---------- Anagrafica iscritti ----------
@@ -499,14 +654,21 @@ function poolCard(p, locked) {
     </section>`;
 }
 
-function poolBoutRow(b, byId, locked) {
+// Etichetta "in arbitraggio" con il punteggio dal vivo inviato dallo scorer.
+function lockChip(lock) {
+  const live = lock.live;
+  return `<span class="lock-chip ${lock.stale ? 'stale' : ''}" title="In arbitraggio dallo scorer">📱 ${esc(lock.name)}${live && live.score_a != null ? ` · <strong>${live.score_a}–${live.score_b}</strong>` : ''}${lock.stale ? ' · non risponde' : ''}</span>`;
+}
+
+function poolBoutRow(b, byId, closed) {
   const A = byId.get(b.fencer_a);
   const B = byId.get(b.fencer_b);
+  const locked = closed || !!b.lock;
   const done = b.winner_id != null;
   const tied = done && b.score_a === b.score_b;
   const max = D.day.pool_touches;
   return `
-    <div class="bout ${done ? 'done' : ''}" data-id="${b.id}">
+    <div class="bout ${done ? 'done' : ''} ${b.lock ? 'is-locked' : ''}" data-id="${b.id}">
       <span class="n">${b.bout_order}</span>
       <span class="fa ${b.winner_id === A.id ? 'win' : ''}">${A.position}. ${esc(fencerName(A))}</span>
       <input type="number" min="0" max="${max}" inputmode="numeric" name="sa" value="${b.score_a ?? ''}" aria-label="Stoccate ${esc(fencerName(A))}" ${locked ? 'disabled' : ''}>
@@ -517,6 +679,7 @@ function poolBoutRow(b, byId, locked) {
         <button class="btn small icon" data-act="save" title="Salva risultato">✓</button>
         ${done ? '<button class="btn danger small icon" data-act="clear" title="Cancella risultato">✕</button>' : ''}`}
       </span>
+      ${b.lock ? `<div class="lock-row">${lockChip(b.lock)}<button type="button" class="btn secondary small" data-act="unlock">🔓 Sblocca</button></div>` : ''}
       <div class="prio" ${tied ? '' : 'hidden'}>
         <label class="small">Parità: vincitore alla priorità
           <select name="winner" ${locked ? 'disabled' : ''}>
@@ -552,6 +715,12 @@ function wirePoolBout(row) {
   [sa, sb].forEach((i) => i.addEventListener('keydown', (e) => { if (e.key === 'Enter') save(); }));
   row.querySelector('[data-act=clear]')?.addEventListener('click', () =>
     mutate('PUT', `/api/pool-bouts/${row.dataset.id}`, { score_a: null, score_b: null }, 'Risultato cancellato'));
+  row.querySelector('[data-act=unlock]')?.addEventListener('click', () => unlockBout('pool', row.dataset.id));
+}
+
+function unlockBout(kind, id) {
+  if (!confirm('Sbloccare l\'incontro? L\'arbitro che lo sta seguendo non potrà più inviare il risultato; il punteggio salvato resta e chi lo riprende riparte da lì.')) return Promise.resolve(false);
+  return mutate('POST', `/api/bouts/${kind}/${id}/unlock`, {}, 'Incontro sbloccato');
 }
 
 // ---------- Classifica gironi ----------
@@ -630,7 +799,7 @@ function viewBracket(el) {
         <div class="round"><h3>${esc(r.label)}</h3>
           <div class="round-bouts">${r.bouts.map((b) => {
             const playable = !b.is_bye && b.fencer_a != null && b.fencer_b != null;
-            return `<div class="de ${playable ? '' : 'locked'}" ${playable ? `data-id="${b.id}" tabindex="0" role="button"` : ''}>${side(b, 'a')}${side(b, 'b')}</div>`;
+            return `<div class="de ${playable ? '' : 'locked'} ${b.lock ? 'is-locked' : ''}" ${playable ? `data-id="${b.id}" tabindex="0" role="button"` : ''}>${side(b, 'a')}${side(b, 'b')}${b.lock ? `<div class="de-lock">${lockChip(b.lock)}</div>` : ''}</div>`;
           }).join('')}</div>
         </div>`).join('')}</div>
     </section>`;
@@ -649,6 +818,23 @@ function openDeDialog(id, byId) {
   const b = D.bracket.flatMap((r) => r.bouts).find((x) => x.id === id);
   const A = byId.get(b.fencer_a);
   const B = byId.get(b.fencer_b);
+  if (b.lock) {
+    const live = b.lock.live;
+    dialogForm.innerHTML = `
+      <h2>${esc(D.bracket.find((r) => r.round === b.round).label)}</h2>
+      <p>${esc(fencerName(A))} – ${esc(fencerName(B))}</p>
+      <p>📱 In arbitraggio da <strong>${esc(b.lock.name)}</strong>${b.lock.stale ? ' (non risponde)' : ''}.
+        ${live && live.score_a != null ? `Punteggio dal vivo: <strong>${live.score_a}–${live.score_b}</strong>.` : ''}</p>
+      <p class="muted small">Il risultato arriverà in automatico alla fine dell'incontro. Se il telefono dell'arbitro si è spento, sblocca l'incontro: chi lo riprende riparte dal punteggio salvato.</p>
+      <div class="row" style="margin-top:16px"><span class="spacer"></span>
+        <button type="button" class="btn secondary" data-act="cancel">Chiudi</button>
+        <button type="button" class="btn danger" data-act="unlock">🔓 Sblocca</button></div>`;
+    dialogForm.querySelector('[data-act=cancel]').onclick = () => dialog.close();
+    dialogForm.querySelector('[data-act=unlock]').onclick = async () => { if (await unlockBout('de', id)) dialog.close(); };
+    dialogForm.onsubmit = (e) => e.preventDefault();
+    dialog.showModal();
+    return;
+  }
   const tied = b.winner_id != null && b.score_a === b.score_b;
   dialogForm.innerHTML = `
     <h2>${esc(D.bracket.find((r) => r.round === b.round).label)}</h2>
