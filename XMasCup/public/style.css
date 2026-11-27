@@ -32,7 +32,12 @@ body {
     radial-gradient(ellipse at 0% 110%, #0f3d2a 0%, transparent 50%),
     var(--bg);
   min-height: 100vh;
+  min-height: 100dvh;
   line-height: 1.45;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 a { color: var(--gold); }
@@ -97,6 +102,7 @@ a { color: var(--gold); }
 .brand-sub { display: block; color: #ffd9de; font-size: 14px; }
 .mainnav { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
 .mainnav a {
+  display: inline-flex; align-items: center; gap: 6px;
   color: #fff; text-decoration: none; font-weight: 800; padding: 8px 14px; border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.35); background: rgba(0, 0, 0, 0.12);
 }
@@ -154,7 +160,7 @@ td.actions-cell { width: 1%; white-space: nowrap; }
   border-top: 4px solid var(--orange); transition: transform 0.1s, border-color 0.15s;
 }
 .day-card:nth-child(even) { border-top-color: #1f8a4f; }
-.day-card:hover { transform: translateY(-2px); border-color: var(--gold); }
+@media (hover: hover) { .day-card:hover { transform: translateY(-2px); border-color: var(--gold); } }
 .day-title { font-size: 17px; }
 .day-podium { margin-top: 8px; display: grid; gap: 2px; }
 .day-head h1 { margin: 0; }
@@ -531,4 +537,93 @@ img, svg { max-width: 100%; }
   .opt { display: none; }
   .matrix td, .matrix th { padding: 4px 2px; }
   .matrix td.name { min-width: 70px; font-size: 11px; }
+}
+
+/* ---------- Ottimizzazioni per telefono ---------- */
+.tab .t-short { display: none; }
+@media (max-width: 720px) {
+  /* rispetta notch e barre di sistema quando l'app è installata */
+  .topbar { padding-top: calc(10px + env(safe-area-inset-top)); padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
+  .container { padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right));
+    padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+
+  /* menu principale come barra in basso, a portata di pollice */
+  .mainnav {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; margin: 0; width: auto;
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;
+    padding: 6px max(8px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+    background: rgba(9, 22, 46, 0.96); border-top: 1px solid var(--line);
+    box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.45);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  }
+  .mainnav a {
+    flex-direction: column; justify-content: center; gap: 2px; min-height: 52px; padding: 4px;
+    border: 0; border-radius: 12px; background: transparent; color: var(--muted); font-size: 12px; font-weight: 700;
+  }
+  .mainnav a .ico { font-size: 21px; line-height: 1; }
+  .mainnav a.active { background: rgba(226, 51, 71, 0.18); color: #fff; }
+  .mainnav a:hover { background: transparent; }
+  .mainnav a.active:hover { background: rgba(226, 51, 71, 0.18); }
+  .topbar { padding-bottom: 16px; }
+
+  /* schede della giornata sempre in vista mentre si scorre */
+  .tabs {
+    position: sticky; top: 0; z-index: 15; margin-top: 10px;
+    padding-top: env(safe-area-inset-top);
+    background: rgba(7, 18, 38, 0.94); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+    scroll-behavior: smooth;
+  }
+  .tab { padding: 13px 12px; }
+  .tab .t-long { display: none; }
+  .tab .t-short { display: inline; }
+  .bout .actions { min-width: 44px; }
+
+  /* niente zoom automatico di iOS quando si tocca un campo */
+  input, select, textarea { font-size: 16px; }
+  .bout input { font-size: 18px; font-weight: 700; min-height: 44px; }
+
+  /* bersagli di tocco di almeno 44 px */
+  .btn { min-height: 44px; padding: 10px 16px; }
+  .btn.small { min-height: 40px; padding: 8px 12px; }
+  .btn.icon { min-width: 44px; min-height: 40px; }
+  .day-head .btn { flex: 1 1 auto; }
+  .presence { padding: 12px; min-height: 48px; }
+  .presence input { width: 22px; height: 22px; }
+  .day-card { padding: 16px; }
+
+  /* matrice del girone: nome sempre visibile mentre si scorre in orizzontale */
+  .matrix thead th:first-child, .matrix tbody th { position: sticky; left: 0; z-index: 2; width: 26px; min-width: 26px; background: var(--bg-2); }
+  .matrix thead th:nth-child(2), .matrix td.name { position: sticky; left: 26px; z-index: 2; background: var(--bg-2); box-shadow: 2px 0 0 var(--line); }
+
+  /* finestre come pannello dal basso */
+  .dialog {
+    margin: auto auto 0; width: 100%; max-width: 100%; max-height: 88dvh; overflow: auto;
+    border-radius: 20px 20px 0 0; border-bottom: 0;
+  }
+  .dialog form { padding: 20px max(18px, env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left)); }
+  .dialog form > .row:last-child { gap: 8px; }
+  .dialog form > .row:last-child .spacer { display: none; }
+  .dialog form > .row:last-child .btn { flex: 1 1 0; }
+  .score-row input { min-height: 52px; font-size: 22px; }
+
+  /* notifiche sopra la barra del menu */
+  .toast { bottom: calc(80px + env(safe-area-inset-bottom)); }
+
+  /* animazioni più leggere: meno neve, niente sfocatura (costosa sui telefoni) */
+  .snow.s3 { display: none; }
+  .snow { will-change: transform; }
+}
+
+/* Telefono in orizzontale: barra superiore più bassa */
+@media (max-width: 920px) and (orientation: landscape) and (max-height: 500px) {
+  .brand-sub { display: none; }
+  .brand-logo { width: 40px; height: 44px; }
+  .brand-title { font-size: 19px; }
+}
+
+/* Schermi touch di qualsiasi misura (anche tablet e telefoni in orizzontale) */
+@media (pointer: coarse) {
+  input, select, textarea { font-size: 16px; }
+  .btn.small { min-height: 40px; }
+  .tab { padding-top: 12px; padding-bottom: 12px; }
 }

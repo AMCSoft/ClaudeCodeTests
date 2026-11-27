@@ -1,7 +1,7 @@
 // Service worker dello scorer: rende l'app installabile e la fa aprire anche con
 // rete instabile. Le pagine si prendono dalla rete quando possibile (così gli
 // aggiornamenti arrivano subito), altrimenti dalla copia salvata. Le API mai.
-const CACHE = 'xmas-scorer-v1';
+const CACHE = 'xmas-scorer-v2';
 const ASSETS = ['./', './index.html', './scorer.css', './scorer.js', './manifest.webmanifest', './icon-192.png', '../logo.svg'];
 
 self.addEventListener('install', (e) => {

@@ -16,11 +16,12 @@ const STATUS_LABEL = {
 };
 
 const DAY_TABS = [
-  ['presenti', 'Presenti'],
-  ['gironi', 'Gironi'],
-  ['classifica-gironi', 'Classifica gironi'],
-  ['tabellone', 'Tabellone dirette'],
-  ['classifica', 'Classifica giornata'],
+  // [chiave, nome, nome corto per il telefono]
+  ['presenti', 'Presenti', 'Presenti'],
+  ['gironi', 'Gironi', 'Gironi'],
+  ['classifica-gironi', 'Classifica gironi', 'Class. gironi'],
+  ['tabellone', 'Tabellone dirette', 'Tabellone'],
+  ['classifica', 'Classifica giornata', 'Classifica'],
 ];
 
 const POINTS_LEGEND = '1° 10 pt · 2° 7 pt · 3° ex aequo 5 pt · dal 5° in poi 3 pt';
@@ -191,6 +192,15 @@ async function render() {
   else if (route.page === 'giornata') viewDay(app, route.tab || defaultTab(D.day.status));
   else viewHome(app);
   restore();
+  centerActiveTab();
+}
+
+// Su telefono le schede scorrono in orizzontale: quella aperta resta sempre visibile.
+function centerActiveTab() {
+  const tabs = app.querySelector('.tabs');
+  const active = tabs?.querySelector('.tab.active');
+  if (!tabs || !active || tabs.scrollWidth <= tabs.clientWidth) return;
+  tabs.scrollLeft = active.offsetLeft - (tabs.clientWidth - active.offsetWidth) / 2;
 }
 
 // ---------- Home: classifica generale + giornate ----------
@@ -462,7 +472,7 @@ function viewDay(el, tab) {
       <button class="btn secondary small" id="edit-day">✏️ Modifica</button>
       <button class="btn danger small" id="del-day">Elimina giornata</button>
     </div>
-    <nav class="tabs">${DAY_TABS.map(([k, l]) => `<a class="tab ${k === tab ? 'active' : ''}" href="#/giornata/${d.id}/${k}">${l}</a>`).join('')}</nav>
+    <nav class="tabs">${DAY_TABS.map(([k, l, short]) => `<a class="tab ${k === tab ? 'active' : ''}" href="#/giornata/${d.id}/${k}"><span class="t-long">${l}</span><span class="t-short">${short}</span></a>`).join('')}</nav>
     <div id="view"></div>`;
 
   el.querySelector('#edit-day').addEventListener('click', () => openDayDialog());
@@ -687,9 +697,9 @@ function poolBoutRow(b, byId, closed) {
     <div class="bout ${done ? 'done' : ''} ${b.lock ? 'is-locked' : ''}" data-id="${b.id}">
       <span class="n">${b.bout_order}</span>
       <span class="fa ${b.winner_id === A.id ? 'win' : ''}">${A.position}. ${esc(fencerName(A))}</span>
-      <input type="number" min="0" max="${max}" inputmode="numeric" name="sa" value="${b.score_a ?? ''}" aria-label="Stoccate ${esc(fencerName(A))}" ${locked ? 'disabled' : ''}>
+      <input type="number" min="0" max="${max}" inputmode="numeric" enterkeyhint="next" name="sa" value="${b.score_a ?? ''}" aria-label="Stoccate ${esc(fencerName(A))}" ${locked ? 'disabled' : ''}>
       <span class="muted dash">–</span>
-      <input type="number" min="0" max="${max}" inputmode="numeric" name="sb" value="${b.score_b ?? ''}" aria-label="Stoccate ${esc(fencerName(B))}" ${locked ? 'disabled' : ''}>
+      <input type="number" min="0" max="${max}" inputmode="numeric" enterkeyhint="done" name="sb" value="${b.score_b ?? ''}" aria-label="Stoccate ${esc(fencerName(B))}" ${locked ? 'disabled' : ''}>
       <span class="fb ${b.winner_id === B.id ? 'win' : ''}">${esc(fencerName(B))} .${B.position}</span>
       <span class="row actions" style="flex-wrap:nowrap">${locked ? '' : `
         <button class="btn small icon" data-act="save" title="Salva risultato">✓</button>
@@ -728,7 +738,9 @@ function wirePoolBout(row) {
     }, 'Risultato salvato');
   };
   row.querySelector('[data-act=save]')?.addEventListener('click', save);
-  [sa, sb].forEach((i) => i.addEventListener('keydown', (e) => { if (e.key === 'Enter') save(); }));
+  // Invio sul primo punteggio passa al secondo (comodo con la tastiera del telefono), sul secondo salva.
+  sa.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); if (sb.value === '') sb.focus(); else save(); } });
+  sb.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } });
   row.querySelector('[data-act=clear]')?.addEventListener('click', () =>
     mutate('PUT', `/api/pool-bouts/${row.dataset.id}`, { score_a: null, score_b: null }, 'Risultato cancellato'));
   row.querySelector('[data-act=unlock]')?.addEventListener('click', () => unlockBout('pool', row.dataset.id));
@@ -855,8 +867,8 @@ function openDeDialog(id, byId) {
   dialogForm.innerHTML = `
     <h2>${esc(D.bracket.find((r) => r.round === b.round).label)}</h2>
     <p class="muted small">Assalto a ${D.day.de_touches} stoccate</p>
-    <div class="score-row"><label for="dd-a">(${b.seed_a}) ${esc(fencerName(A))}</label><input id="dd-a" type="number" min="0" name="sa" value="${b.score_a ?? ''}" required></div>
-    <div class="score-row"><label for="dd-b">(${b.seed_b}) ${esc(fencerName(B))}</label><input id="dd-b" type="number" min="0" name="sb" value="${b.score_b ?? ''}" required></div>
+    <div class="score-row"><label for="dd-a">(${b.seed_a}) ${esc(fencerName(A))}</label><input id="dd-a" type="number" min="0" inputmode="numeric" enterkeyhint="next" name="sa" value="${b.score_a ?? ''}" required></div>
+    <div class="score-row"><label for="dd-b">(${b.seed_b}) ${esc(fencerName(B))}</label><input id="dd-b" type="number" min="0" inputmode="numeric" enterkeyhint="done" name="sb" value="${b.score_b ?? ''}" required></div>
     <div class="field prio" ${tied ? '' : 'hidden'}>
       <label for="dd-w">Parità: vincitore alla priorità</label>
       <select id="dd-w" name="winner">
@@ -877,6 +889,7 @@ function openDeDialog(id, byId) {
   const togglePrio = () => { prio.hidden = !(sa.value !== '' && sa.value === sb.value); };
   sa.addEventListener('input', togglePrio);
   sb.addEventListener('input', togglePrio);
+  sa.addEventListener('keydown', (e) => { if (e.key === 'Enter' && sb.value === '') { e.preventDefault(); sb.focus(); } });
   dialogForm.querySelector('[data-act=cancel]').onclick = () => dialog.close();
   const clear = dialogForm.querySelector('[data-act=clear]');
   if (clear) clear.onclick = async () => {

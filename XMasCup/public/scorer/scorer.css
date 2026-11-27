@@ -28,6 +28,9 @@ body {
   min-height: 100dvh;
   line-height: 1.4;
   overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  touch-action: manipulation;
 }
 button, input { font: inherit; }
 a { color: var(--gold); }
@@ -236,3 +239,16 @@ input:focus { outline: 2px solid var(--gold); border-color: transparent; }
 .toast:not(.show) { visibility: hidden; }
 .toast.show { transform: translateX(-50%) translateY(0); }
 .toast.error { border-color: var(--danger); color: #ffd0d8; }
+
+/* ---------- Ottimizzazioni per telefono ---------- */
+/* Durante l'assalto niente selezione del testo né menu con la pressione lunga. */
+.bout-screen, .bout-screen button, .hit, .mini button, .clock, .chip {
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+}
+/* notch e bordi arrotondati quando il telefono è in orizzontale */
+.bar { padding-left: max(10px, env(safe-area-inset-left)); padding-right: max(10px, env(safe-area-inset-right)); }
+.content { padding-left: max(14px, env(safe-area-inset-left)); padding-right: max(14px, env(safe-area-inset-right)); }
+.fencers { padding-left: max(8px, env(safe-area-inset-left)); padding-right: max(8px, env(safe-area-inset-right)); }
+.controls { padding-left: max(8px, env(safe-area-inset-left)); padding-right: max(8px, env(safe-area-inset-right)); }
+.mini button { min-height: 40px; }
+.chip { min-height: 40px; }

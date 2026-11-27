@@ -2,7 +2,14 @@
 <html lang="it">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#9a1528">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="XMas Cup">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="scorer/icon-192.png">
   <title>Fanum Fortunae XMas Cup</title>
   <link rel="icon" href="logo.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -20,16 +27,16 @@
   <header class="topbar">
     <div class="lights" aria-hidden="true"></div>
     <a href="#/" class="brand">
-      <img src="logo.svg" alt="" class="brand-logo">
+      <img src="logo.svg" alt="" class="brand-logo" width="72" height="78" decoding="async">
       <span>
         <span class="brand-title">Fanum Fortunae XMas Cup</span>
         <span class="brand-sub">Torneo di spada a giornate · Christmas edition</span>
       </span>
     </a>
-    <nav class="mainnav">
-      <a href="#/" data-nav="home">🏆 Classifica</a>
-      <a href="#/iscritti" data-nav="iscritti">🎅 Iscritti</a>
-      <a href="#/arbitri" data-nav="arbitri">📱 Arbitri</a>
+    <nav class="mainnav" aria-label="Menu principale">
+      <a href="#/" data-nav="home"><span class="ico" aria-hidden="true">🏆</span><span>Classifica</span></a>
+      <a href="#/iscritti" data-nav="iscritti"><span class="ico" aria-hidden="true">🎅</span><span>Iscritti</span></a>
+      <a href="#/arbitri" data-nav="arbitri"><span class="ico" aria-hidden="true">📱</span><span>Arbitri</span></a>
     </nav>
   </header>
 
