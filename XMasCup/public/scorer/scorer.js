@@ -558,6 +558,8 @@ function card(i, kind) {
 
 function toggleClock() {
   if (!B || B.phase === 'ended' || B.phase === 'draw') return;
+  // Tempo a zero (es. dopo "Annulla" sullo scadere): toccando si passa alla fase successiva.
+  if (!B.running && B.remaining <= 0) return timeUp();
   if (B.running) stopClock(); else startClock();
   save();
   sendLive();
@@ -704,6 +706,7 @@ function phaseLabel() {
   if (B.phase === 'break') return 'Pausa · 1 minuto';
   if (B.phase === 'priority') return `Minuto di priorità · ${esc(nameOf(B.priority))}`;
   if (B.phase === 'draw') return 'Parità allo scadere';
+  if (!B.running && B.remaining <= 0) return 'Tempo scaduto · tocca per proseguire';
   return B.running ? 'Tocca per fermare' : 'Tocca per avviare';
 }
 
