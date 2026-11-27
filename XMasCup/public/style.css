@@ -16,8 +16,8 @@
   --silver: #d5deea;
   --bronze: #d28a4f;
   --radius: 14px;
-  --font: 'Nunito', system-ui, sans-serif;
-  --spooky: 'Mountains of Christmas', 'Nunito', cursive;
+  --font: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --spooky: 'Space Grotesk', system-ui, sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -93,7 +93,7 @@ a { color: var(--gold); }
 }
 .brand { display: flex; align-items: center; gap: 14px; text-decoration: none; color: #fff; }
 .brand-logo { width: 72px; height: 78px; filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.45)); }
-.brand-title { display: block; font-family: var(--spooky); font-weight: 700; font-size: 36px; letter-spacing: 0.5px; color: #fff; text-shadow: 0 2px 0 #6b0e1b, 0 0 18px rgba(255, 220, 140, 0.35); line-height: 1.1; }
+.brand-title { display: block; font-family: var(--spooky); font-weight: 700; font-size: 32px; letter-spacing: -0.5px; color: #fff; text-shadow: 0 2px 0 #6b0e1b, 0 0 18px rgba(255, 220, 140, 0.35); line-height: 1.1; }
 .brand-sub { display: block; color: #ffd9de; font-size: 14px; }
 .mainnav { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
 .mainnav a {
@@ -106,7 +106,7 @@ a { color: var(--gold); }
 .container { position: relative; z-index: 1; max-width: 1640px; margin: 0 auto; padding: 28px 16px 80px; }
 
 h1, h2, h3 { margin: 0 0 12px; }
-h1 { font-family: var(--spooky); font-weight: 700; font-size: 40px; color: var(--gold); }
+h1 { font-family: var(--spooky); font-weight: 700; font-size: 34px; letter-spacing: -0.5px; line-height: 1.15; color: var(--gold); }
 h2 { font-size: 22px; }
 h3 { font-size: 17px; }
 
@@ -125,7 +125,7 @@ h3 { font-size: 17px; }
 .grid-fencers td { vertical-align: middle; }
 td.actions-cell { width: 1%; white-space: nowrap; }
 .row-actions { display: flex; gap: 8px; align-items: center; }
-@media (max-width: 980px) { .grid-fencers { grid-template-columns: 1fr; } }
+@media (max-width: 980px) { .grid-fencers { grid-template-columns: minmax(0, 1fr); } }
 
 .muted { color: var(--muted); }
 .small { font-size: 13px; }
@@ -377,3 +377,158 @@ tr.out td { opacity: 0.55; }
 }
 .qr { width: 190px; height: 190px; background: #fff; border-radius: 8px; padding: 6px; }
 .qr svg { width: 100%; height: 100%; display: block; }
+
+/* ---------- Responsive ---------- */
+.new-day { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.new-day input[type=date] { width: auto; }
+.new-day input[name=location] { width: 200px; }
+.lb-cards { display: none; }
+.tabs { scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { white-space: nowrap; }
+.champion .btn { white-space: normal; }
+img, svg { max-width: 100%; }
+
+/* Tablet */
+@media (max-width: 980px) {
+  .container { padding: 20px 14px 60px; }
+  .topbar { padding: 14px 16px 20px; gap: 12px; }
+  .brand-logo { width: 60px; height: 65px; }
+  .brand-title { font-size: 26px; }
+}
+
+/* Telefono */
+@media (max-width: 720px) {
+  .container { padding: 16px 12px 48px; }
+  .panel { padding: 16px 14px; border-radius: 12px; margin-bottom: 14px; }
+  h1 { font-size: 26px; }
+  h2 { font-size: 19px; }
+
+  /* barra in alto compatta, menu su una riga a tutta larghezza */
+  .topbar { padding: 10px 12px 18px; gap: 10px; }
+  .brand { gap: 10px; min-width: 0; }
+  .brand-logo { width: 46px; height: 50px; }
+  .brand-title { font-size: 21px; }
+  .brand-sub { font-size: 12px; }
+  .mainnav { margin-left: 0; width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .mainnav a { text-align: center; padding: 8px 4px; font-size: 13px; white-space: nowrap; }
+
+  /* schede della giornata su una riga, scorrevoli col dito */
+  .tabs { flex-wrap: nowrap; overflow-x: auto; margin: 12px -12px 14px; padding: 0 12px; gap: 2px; }
+  .tab { padding: 10px 10px; font-size: 14px; }
+  .day-head { gap: 8px; }
+  .day-head h1 { font-size: 26px; }
+  .day-head .spacer { display: none; }
+
+  /* nuova giornata: campi a tutta larghezza */
+  .new-day { width: 100%; }
+  .new-day > * { flex: 1 1 140px; }
+  .new-day input[type=date], .new-day input[name=location] { width: 100%; }
+  .new-day .btn { flex-basis: 100%; }
+
+  /* classifica generale: elenco invece della tabella */
+  .lb-table { display: none; }
+  .lb-cards { display: grid; gap: 6px; list-style: none; margin: 0 0 12px; padding: 0; }
+  .lb-cards li {
+    display: grid; grid-template-columns: 44px 1fr auto; gap: 10px; align-items: center;
+    padding: 10px 12px; border-radius: 12px; background: rgba(7, 18, 38, 0.55); border: 1px solid var(--line);
+  }
+  .lb-cards li.top1 { background: rgba(245, 192, 74, 0.13); border-color: rgba(245, 192, 74, 0.5); }
+  .lb-cards li.top2 { background: rgba(213, 222, 234, 0.08); }
+  .lb-cards li.top3 { background: rgba(210, 138, 79, 0.11); }
+  .lb-cards li.out { opacity: 0.55; }
+  .lb-pos { font-weight: 700; font-size: 18px; text-align: center; line-height: 1.1; display: flex; flex-direction: column; align-items: center; }
+  .lb-pos small { font-size: 16px; }
+  .lb-main { min-width: 0; display: grid; gap: 6px; }
+  .lb-name { font-weight: 700; overflow-wrap: anywhere; }
+  .lb-days { display: flex; flex-wrap: wrap; gap: 4px; }
+  .dchip {
+    display: inline-flex; align-items: center; gap: 4px; text-decoration: none; color: var(--text);
+    font-size: 12px; padding: 2px 4px 2px 6px; border-radius: 8px; background: var(--panel-2);
+  }
+  .dchip small { color: var(--muted); font-size: 11px; }
+  .dchip .pts { min-width: 22px; padding: 0 4px; font-size: 12px; text-align: center; }
+  .lb-total { font-size: 24px; font-weight: 700; color: var(--gold); text-align: right; line-height: 1; }
+  .lb-total small { display: block; font-size: 11px; color: var(--muted); font-weight: 500; }
+
+  /* iscritti: ogni riga diventa una scheda */
+  .roster thead { display: none; }
+  .roster, .roster tbody { display: block; }
+  .roster tr {
+    display: grid; grid-template-columns: 28px minmax(0, 1fr) minmax(0, 1fr); gap: 8px; align-items: center;
+    padding: 10px 0; border-bottom: 1px solid var(--line);
+  }
+  .roster td { padding: 0; border: 0; }
+  .grid-fencers .roster td input { min-width: 0; }
+  .roster td.pres { grid-column: 2; text-align: left; color: var(--muted); font-size: 13px; }
+  .roster td.pres::before { content: attr(data-label) ': '; }
+  .roster td.actions-cell { grid-column: 3; width: auto; justify-self: end; }
+
+  /* gironi: matrice compatta */
+  .matrix { font-size: 12px; }
+  .matrix td, .matrix th { padding: 5px 3px; }
+  .matrix td.name { white-space: normal; min-width: 84px; max-width: 120px; line-height: 1.2; }
+
+  /* assalti dei gironi: un tiratore per riga con il suo punteggio */
+  .bout {
+    grid-template-columns: 22px minmax(0, 1fr) 56px auto;
+    grid-template-areas: "n fa sa act" "n fb sb act" "lock lock lock lock" "prio prio prio prio";
+    gap: 6px 8px; padding: 8px;
+  }
+  .bout .n { grid-area: n; align-self: center; display: block; }
+  .bout .fa { grid-area: fa; text-align: left; }
+  .bout .fb { grid-area: fb; }
+  .bout input[name=sa] { grid-area: sa; }
+  .bout input[name=sb] { grid-area: sb; }
+  .bout .dash { display: none; }
+  .bout .actions { grid-area: act; flex-direction: column; align-self: center; grid-column: auto; justify-self: auto; }
+  .bout .lock-row { grid-row: 3; grid-column: 1 / -1; }
+  .bout .prio { grid-row: 4; grid-column: 1 / -1; }
+  .bout .prio label { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; }
+  .bout input { padding: 8px 4px; }
+
+  .champion { padding: 10px 0; }
+  .champion h1 { font-size: 26px; }
+
+  /* tabelle normali: meno spazio tra le colonne */
+  th, td { padding: 7px 6px; }
+  table { font-size: 13px; }
+
+  .podium { gap: 8px; }
+  .step { width: auto; flex: 1 1 0; min-width: 0; }
+  .step .who { font-size: 13px; overflow-wrap: anywhere; }
+  .qr-card { width: 100%; }
+  .dialog form { padding: 18px; }
+  .score-row { grid-template-columns: minmax(0, 1fr) 70px; }
+  .toast { left: 12px; right: 12px; transform: translateY(140px); max-width: none; }
+  .toast.show { transform: translateY(0); }
+}
+
+@media (max-width: 380px) {
+  .brand-sub { display: none; }
+  .brand-title { font-size: 19px; }
+  .roster tr { grid-template-columns: 22px minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
+  .bout { grid-template-columns: 18px minmax(0, 1fr) 48px auto; }
+}
+
+/* Tabellone: affiancato finché ci sta, poi i turni uno sotto l'altro. */
+@media (max-width: 1280px) {
+  .bracket { gap: 14px; }
+  .round { min-width: 180px; flex: 1 1 0; }
+  .de .side { grid-template-columns: 22px minmax(0, 1fr) 26px; gap: 4px; }
+  .de .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+@media (max-width: 1024px) {
+  .bracket { flex-direction: column; gap: 18px; overflow: visible; padding: 4px 0; }
+  .round { min-width: 0; }
+  .round h3 { text-align: left; }
+  .round-bouts { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+  .de .nm { white-space: normal; }
+}
+
+/* Telefoni piccoli: si nascondono le colonne secondarie (TS, TR, M). */
+@media (max-width: 400px) {
+  .opt { display: none; }
+  .matrix td, .matrix th { padding: 4px 2px; }
+  .matrix td.name { min-width: 70px; font-size: 11px; }
+}

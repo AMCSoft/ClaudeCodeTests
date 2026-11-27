@@ -210,6 +210,13 @@ function viewHome(el) {
     return `<td class="num" title="${x.place}° classificato"><span class="pts p${x.points}">${x.points}</span></td>`;
   };
 
+  // Su telefono la classifica diventa un elenco: ogni giornata è un piccolo riquadro.
+  const chip = (r, d) => {
+    const x = r.results[d.id];
+    const val = !x ? '<span class="muted">–</span>' : x.pending ? '⏳' : `<span class="pts p${x.points}">${x.points}</span>`;
+    return `<a class="dchip" href="#/giornata/${d.id}" title="${x && !x.pending ? `${x.place}° classificato` : ''}"><small>G${d.number}</small>${val}</a>`;
+  };
+
   el.innerHTML = `
     <section class="panel leaderboard">
       <div class="row">
@@ -225,7 +232,7 @@ function viewHome(el) {
           <div class="block"><span>${medal(p)}</span><small>${who[0].total} pt</small></div></div>`;
       }).join('')}</div>` : ''}
       ${lb.length ? `
-      <div class="table-wrap"><table class="lb">
+      <div class="table-wrap lb-table"><table class="lb">
         <thead><tr><th class="num">Pos</th><th>Tiratore</th>
           ${days.map((d) => `<th class="num"><a href="#/giornata/${d.id}" title="${esc(fmtDate(d.date))}">G${d.number}</a></th>`).join('')}
           <th class="num">Pres.</th><th class="num">Punti</th></tr></thead>
@@ -238,6 +245,15 @@ function viewHome(el) {
             <td class="num total">${r.total}</td>
           </tr>`).join('')}</tbody>
       </table></div>
+      <ol class="lb-cards">${lb.map((r) => `
+        <li class="${r.presences ? '' : 'out'} ${r.total && r.rank <= 3 ? `top${r.rank}` : ''}">
+          <span class="lb-pos">${r.presences ? r.rank : '–'}<small>${r.total ? medal(r.rank) : ''}</small></span>
+          <span class="lb-main">
+            <span class="lb-name">${esc(fencerName(r))}</span>
+            <span class="lb-days">${days.map((d) => chip(r, d)).join('')}</span>
+          </span>
+          <span class="lb-total">${r.total}<small>pt</small></span>
+        </li>`).join('')}</ol>
       <p class="muted small">A parità di punti conta il miglior rendimento: più vittorie di giornata, poi più secondi posti, poi più terzi, e così via. ⏳ = giornata in corso, – = assente.</p>`
       : `<div class="empty"><img src="logo.svg" alt=""><p>Nessun iscritto al torneo. <a href="#/iscritti">Inserisci l'elenco degli iscritti</a> per cominciare.</p></div>`}
     </section>
@@ -246,9 +262,9 @@ function viewHome(el) {
       <div class="row">
         <h2>🎁 Giornate</h2>
         <span class="spacer"></span>
-        <form id="new-day" class="row">
-          <input type="date" name="date" value="${today}" aria-label="Data della giornata" style="width:auto">
-          <input name="location" placeholder="Luogo (facoltativo)" aria-label="Luogo" style="width:200px">
+        <form id="new-day" class="new-day">
+          <input type="date" name="date" value="${today}" aria-label="Data della giornata">
+          <input name="location" placeholder="Luogo (facoltativo)" aria-label="Luogo">
           <button class="btn" ${T.fencers.length < 2 ? 'disabled title="Servono almeno 2 iscritti"' : ''}>＋ Nuova giornata</button>
         </form>
       </div>
@@ -363,14 +379,14 @@ function viewRoster(el) {
         <h2>🎅 Iscritti al torneo (${fencers.length})</h2>
         <p class="muted small">Elenco unico di tutti gli iscritti alla XMas Cup. In ogni giornata si scelgono i presenti tra questi nomi. Chi ha già tirato in una giornata non può essere eliminato, ma il nome si può sempre correggere.</p>
         ${fencers.length ? `
-        <div class="table-wrap"><table>
+        <div class="table-wrap"><table class="roster">
           <thead><tr><th>#</th><th>Cognome</th><th>Nome</th><th class="num">Presenze</th><th></th></tr></thead>
           <tbody>${fencers.map((f, i) => `
             <tr data-id="${f.id}">
               <td class="muted">${i + 1}</td>
               <td><input name="last_name" value="${esc(f.last_name)}" aria-label="Cognome"></td>
               <td><input name="first_name" value="${esc(f.first_name)}" aria-label="Nome"></td>
-              <td class="num">${f.presences}</td>
+              <td class="num pres" data-label="Presenze">${f.presences}</td>
               <td class="actions-cell"><div class="row-actions">
                 <button class="btn secondary small" data-act="save" title="Salva">💾</button>
                 ${f.locked ? '' : '<button class="btn danger small" data-act="del" title="Elimina">✕</button>'}
@@ -641,12 +657,12 @@ function poolCard(p, locked) {
         ${p.done ? '<span class="badge ok">Concluso</span>' : `<span class="muted small">${p.bouts.filter((b) => b.winner_id != null).length}/${p.bouts.length} assalti</span>`}</div>
       <div class="pool-body">
       <div class="table-wrap"><table class="matrix">
-        <thead><tr><th></th><th>Tiratore</th>${ms.map((m) => `<th>${m.position}</th>`).join('')}<th>V</th><th>Ind</th><th>TS</th><th>Pos</th></tr></thead>
+        <thead><tr><th></th><th>Tiratore</th>${ms.map((m) => `<th>${m.position}</th>`).join('')}<th>V</th><th>Ind</th><th class="opt">TS</th><th>Pos</th></tr></thead>
         <tbody>${ms.map((a) => `
           <tr><th>${a.position}</th>
             <td class="name">${esc(fencerName(a))}</td>
             ${ms.map((b) => cell(a, b)).join('')}
-            <td>${a.v}</td><td>${a.ind > 0 ? '+' : ''}${a.ind}</td><td>${a.ts}</td><td class="pos">${a.m ? a.pool_rank : ''}</td>
+            <td>${a.v}</td><td>${a.ind > 0 ? '+' : ''}${a.ind}</td><td class="opt">${a.ts}</td><td class="pos">${a.m ? a.pool_rank : ''}</td>
           </tr>`).join('')}</tbody>
       </table></div>
       <div class="bouts">${p.bouts.map((b) => poolBoutRow(b, byId, locked)).join('')}</div>
@@ -672,9 +688,9 @@ function poolBoutRow(b, byId, closed) {
       <span class="n">${b.bout_order}</span>
       <span class="fa ${b.winner_id === A.id ? 'win' : ''}">${A.position}. ${esc(fencerName(A))}</span>
       <input type="number" min="0" max="${max}" inputmode="numeric" name="sa" value="${b.score_a ?? ''}" aria-label="Stoccate ${esc(fencerName(A))}" ${locked ? 'disabled' : ''}>
-      <span class="muted">–</span>
+      <span class="muted dash">–</span>
       <input type="number" min="0" max="${max}" inputmode="numeric" name="sb" value="${b.score_b ?? ''}" aria-label="Stoccate ${esc(fencerName(B))}" ${locked ? 'disabled' : ''}>
-      <span class="${b.winner_id === B.id ? 'win' : ''}">${esc(fencerName(B))} .${B.position}</span>
+      <span class="fb ${b.winner_id === B.id ? 'win' : ''}">${esc(fencerName(B))} .${B.position}</span>
       <span class="row actions" style="flex-wrap:nowrap">${locked ? '' : `
         <button class="btn small icon" data-act="save" title="Salva risultato">✓</button>
         ${done ? '<button class="btn danger small icon" data-act="clear" title="Cancella risultato">✕</button>' : ''}`}
@@ -744,13 +760,13 @@ function viewPoolRanking(el) {
       </div>
       ${D.poolsDone ? '' : '<p class="muted small">⏳ Classifica provvisoria: ci sono ancora assalti da disputare.</p>'}
       <div class="table-wrap"><table>
-        <thead><tr><th class="num">Pos</th><th>Tiratore</th><th class="num">V</th><th class="num">M</th><th class="num">V/M</th><th class="num">TS</th><th class="num">TR</th><th class="num">Ind</th></tr></thead>
+        <thead><tr><th class="num">Pos</th><th>Tiratore</th><th class="num">V</th><th class="num opt">M</th><th class="num">V/M</th><th class="num opt">TS</th><th class="num opt">TR</th><th class="num">Ind</th></tr></thead>
         <tbody>${D.ranking.map((r) => `
           <tr class="${r.qualified ? '' : 'out'}">
             <td class="num"><strong>${r.rank}</strong></td>
             <td>${esc(fencerName(r))}</td>
-            <td class="num">${r.v}</td><td class="num">${r.m}</td><td class="num">${r.vm.toFixed(3)}</td>
-            <td class="num">${r.ts}</td><td class="num">${r.tr}</td><td class="num">${r.ind > 0 ? '+' : ''}${r.ind}</td>
+            <td class="num">${r.v}</td><td class="num opt">${r.m}</td><td class="num">${r.vm.toFixed(3)}</td>
+            <td class="num opt">${r.ts}</td><td class="num opt">${r.tr}</td><td class="num">${r.ind > 0 ? '+' : ''}${r.ind}</td>
           </tr>`).join('')}</tbody>
       </table></div>
     </section>`;

@@ -14,8 +14,8 @@
   --gold: #f5c04a;
   --ice: #8fc1ff;
   --danger: #ff5d6c;
-  --font: 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --title: 'Mountains of Christmas', 'Nunito', cursive;
+  --font: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --title: 'Space Grotesk', system-ui, sans-serif;
   color-scheme: dark;
 }
 
@@ -113,7 +113,7 @@ h3.group { margin: 18px 4px 8px; font-size: 14px; text-transform: uppercase; let
 /* ---------- Configurazione ---------- */
 .setup { min-height: 100dvh; padding: 30px 18px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
 .setup-logo { width: 150px; height: 164px; filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.5)); }
-.setup h1 { font-family: var(--title); color: var(--gold); font-size: 34px; margin: 10px 0 0; line-height: 1.1; }
+.setup h1 { font-family: var(--title); color: var(--gold); font-size: clamp(24px, 7vw, 32px); font-weight: 700; letter-spacing: -0.5px; margin: 10px 0 0; line-height: 1.15; }
 .setup .lead { color: var(--muted); margin: 4px 0 20px; }
 .setup form { width: min(380px, 100%); text-align: left; }
 label { display: block; font-size: 13px; font-weight: 800; color: var(--muted); margin: 10px 0 4px; }
