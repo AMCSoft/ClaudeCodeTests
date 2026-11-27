@@ -85,7 +85,17 @@ h3.group { margin: 18px 4px 8px; font-size: 14px; text-transform: uppercase; let
 .pill.hot { background: var(--gold); color: #3a2600; border-color: var(--gold); }
 .pill.ok { color: var(--green-2); border-color: rgba(34, 184, 98, 0.5); }
 
-.filters { display: flex; gap: 8px; margin-bottom: 4px; }
+.filters {
+  display: flex; gap: 8px; margin: 0 -14px 4px; padding: 2px 14px 6px;
+  overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.filters::-webkit-scrollbar { display: none; }
+.filters .chip { flex: 0 0 auto; white-space: nowrap; }
+.chip .count {
+  display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 4px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12); font-size: 12px; text-align: center;
+}
+.chip.on .count { background: rgba(154, 21, 40, 0.15); }
 .chip {
   border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 999px;
   padding: 8px 14px; font-weight: 700; cursor: pointer;

@@ -30,7 +30,7 @@ let CFG = { name: 'Fanum Fortunae XMas Cup', pinRequired: false };
 let B = null; // incontro in corso (stato completo, salvato anche sul dispositivo)
 let online = true;
 let listData = null;
-let listFilter = 'todo';
+let listFilter = 'all'; // 'all' oppure il nome del girone/turno scelto
 
 // ---------- Utilità ----------
 
@@ -322,14 +322,21 @@ function drawList() {
     if (!seen.has(b.group)) { seen.add(b.group); next.add(`${b.kind}${b.id}`); }
   });
 
-  const visible = bouts.filter((b) => listFilter === 'all' || ['open', 'locked', 'waiting'].includes(b.status));
-  const groups = [];
-  for (const b of visible) {
-    let g = groups.find((x) => x.name === b.group);
-    if (!g) groups.push((g = { name: b.group, bouts: [] }));
+  // Solo gli assalti da arbitrare: liberi, quello che sto arbitrando io e quelli
+  // lasciati da un arbitro che non risponde più (si possono riprendere).
+  // Quelli in corso con un altro arbitro, conclusi o in attesa dei tiratori non si vedono.
+  const toReferee = (b) => b.status === 'open' || (b.status === 'locked' && (b.lock?.mine || b.lock?.stale));
+  const available = bouts.filter(toReferee);
+  const allGroups = [];
+  for (const b of available) {
+    let g = allGroups.find((x) => x.name === b.group);
+    if (!g) allGroups.push((g = { name: b.group, bouts: [] }));
     g.bouts.push(b);
   }
-  const todo = bouts.filter((b) => ['open', 'locked', 'waiting'].includes(b.status)).length;
+  // Il girone scelto non ha più assalti da arbitrare: si torna a "Tutti".
+  if (listFilter !== 'all' && !allGroups.some((g) => g.name === listFilter)) listFilter = 'all';
+  const groups = listFilter === 'all' ? allGroups : allGroups.filter((g) => g.name === listFilter);
+  const pending = bouts.filter((b) => ['open', 'locked', 'waiting'].includes(b.status)).length;
 
   const name = (s, extra) => (s ? `${extra ? `<span class="tag">${extra}</span>` : ''}${esc(s.name)}` : '<span class="muted">da definire</span>');
   const boutCard = (b) => {
@@ -366,12 +373,15 @@ function drawList() {
   root.innerHTML = `
     ${header(`Giornata ${day.number}`, esc(fmtDate(day.date)), '#/')}
     <div class="content">
-      <div class="filters">
-        <button class="chip ${listFilter === 'todo' ? 'on' : ''}" data-filter="todo">Da arbitrare (${todo})</button>
-        <button class="chip ${listFilter === 'all' ? 'on' : ''}" data-filter="all">Tutti (${bouts.length})</button>
-      </div>
+      ${allGroups.length ? `
+      <div class="filters" role="tablist" aria-label="Filtra per girone">
+        <button class="chip ${listFilter === 'all' ? 'on' : ''}" data-filter="all">Tutti <span class="count">${available.length}</span></button>
+        ${allGroups.map((g) => `<button class="chip ${listFilter === g.name ? 'on' : ''}" data-filter="${esc(g.name)}">${esc(g.name)} <span class="count">${g.bouts.length}</span></button>`).join('')}
+      </div>` : ''}
       ${groups.length ? groups.map((g) => `<h3 class="group">${esc(g.name)}</h3>${g.bouts.map(boutCard).join('')}`).join('')
-        : `<div class="card center muted">${bouts.length ? '🎉 Nessun incontro da arbitrare: sono tutti conclusi o in attesa dell\'organizzazione.' : 'Nessun incontro: l\'organizzazione non ha ancora generato i gironi.'}</div>`}
+        : `<div class="card center muted">${!bouts.length ? 'Nessun incontro: l\'organizzazione non ha ancora generato i gironi.'
+          : pending ? '⏳ In questo momento non ci sono assalti liberi: gli altri sono già in arbitraggio o aspettano i vincitori del turno prima. La lista si aggiorna da sola.'
+          : '🎉 Tutti gli assalti di questa giornata sono conclusi.'}</div>`}
     </div>`;
   wireHeader();
   window.scrollTo(0, scroll);
