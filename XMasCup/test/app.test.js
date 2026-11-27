@@ -342,6 +342,116 @@ test('scorer: dirette arbitrate dallo scorer, il vincitore avanza nel tabellone'
   assert.equal(day.finalRanking[0].id, final.b.id);
 });
 
+test('ritiro nei gironi: assalti annullati, fuori dalle dirette, reintegro', async (t) => {
+  const call = await client(t);
+  const { dayId, data } = await dayWithPools(call, 6);
+  const ids = data.fencers.map((f) => f.id);
+  const out = ids[0];
+  const bouts = data.pools.flatMap((p) => p.bouts);
+  // Un assalto del ritirato già disputato e uno in arbitraggio.
+  const played = bouts.find((b) => b.fencer_a === out || b.fencer_b === out);
+  await call('PUT', `/pool-bouts/${played.id}`, { score_a: 5, score_b: 0 });
+  const busy = bouts.find((b) => b.id !== played.id && (b.fencer_a === out || b.fencer_b === out));
+  assert.equal((await call('POST', `/scorer/bouts/pool/${busy.id}/claim`, A)).status, 200);
+
+  let r = await call('POST', `/days/${dayId}/withdraw`, { fencer_id: out });
+  assert.equal(r.status, 200, r.data.error);
+  let d = r.data;
+  assert.equal(d.fencers.find((f) => f.id === out).withdrawn, 'gironi');
+  const mine = d.pools.flatMap((p) => p.bouts).filter((b) => b.fencer_a === out || b.fencer_b === out);
+  assert.ok(mine.every((b) => b.annulled && !b.lock));
+  // L'assalto già disputato non conta più per l'avversario.
+  const opp = played.fencer_a === out ? played.fencer_b : played.fencer_a;
+  assert.equal(d.ranking.find((x) => x.id === opp).m, 0);
+  assert.equal(d.ranking.at(-1).id, out);
+  // Lo scorer perde l'incontro annullato e non lo vede più tra quelli da arbitrare.
+  assert.equal((await call('POST', `/scorer/bouts/pool/${busy.id}/heartbeat`, A)).status, 409);
+  assert.equal((await call('POST', `/scorer/bouts/pool/${busy.id}/claim`, A)).status, 409);
+  assert.equal((await call('PUT', `/pool-bouts/${busy.id}`, { score_a: 5, score_b: 1 })).status, 400);
+  const list = (await call('GET', `/scorer/days/${dayId}`)).data.bouts;
+  assert.ok(list.filter((b) => b.a.id === out || b.b.id === out).every((b) => b.status === 'annulled'));
+
+  // Reintegro e nuovo ritiro: tutto torna come prima.
+  r = await call('DELETE', `/days/${dayId}/withdraw/${out}`);
+  assert.equal(r.status, 200, r.data.error);
+  assert.equal(r.data.ranking.find((x) => x.id === opp).m, 1);
+  await call('POST', `/days/${dayId}/withdraw`, { fencer_id: out });
+
+  // Si completano gli altri assalti: i gironi risultano conclusi senza quelli annullati.
+  d = (await call('GET', `/days/${dayId}`)).data;
+  for (const b of d.pools.flatMap((p) => p.bouts).filter((x) => !x.annulled && x.winner_id == null)) {
+    r = await call('PUT', `/pool-bouts/${b.id}`, b.fencer_a < b.fencer_b ? { score_a: 5, score_b: 1 } : { score_a: 1, score_b: 5 });
+    assert.equal(r.status, 200, r.data.error);
+  }
+  assert.equal(r.data.day.status, 'gironi_conclusi');
+  r = await call('POST', `/days/${dayId}/bracket`, {});
+  assert.equal(r.status, 200, r.data.error);
+  const inBracket = new Set(r.data.bracket.flatMap((x) => x.bouts).flatMap((b) => [b.fencer_a, b.fencer_b]));
+  assert.ok(!inBracket.has(out), 'il ritirato non entra nel tabellone');
+  assert.equal(r.data.fencers.find((f) => f.id === out).seed, null);
+  // Dopo il tabellone non si reintegra più chi si è ritirato nei gironi.
+  assert.equal((await call('DELETE', `/days/${dayId}/withdraw/${out}`)).status, 400);
+
+  // Fine giornata: il ritirato è ultimo e prende i punti di presenza.
+  for (let g = 0; g < 10 && r.data.day.status !== 'conclusa'; g++) {
+    for (const b of r.data.bracket.flatMap((x) => x.bouts).filter((x) => !x.is_bye && x.winner_id == null && x.fencer_a && x.fencer_b)) {
+      r = await call('PUT', `/de-bouts/${b.id}`, { score_a: 15, score_b: 3 });
+    }
+  }
+  const last = r.data.finalRanking.at(-1);
+  assert.equal(last.id, out);
+  assert.equal(last.withdrawn, 'gironi');
+  assert.equal(last.place, 6);
+});
+
+test('ritiro nelle dirette: R nel tabellone, l\'avversario avanza', async (t) => {
+  const call = await client(t);
+  const { dayId, data } = await dayWithPools(call, 4);
+  for (const b of data.pools.flatMap((p) => p.bouts)) {
+    await call('PUT', `/pool-bouts/${b.id}`, b.fencer_a < b.fencer_b ? { score_a: 5, score_b: 1 } : { score_a: 1, score_b: 5 });
+  }
+  let d = (await call('POST', `/days/${dayId}/bracket`, {})).data;
+  const [s1, s2] = d.bracket.find((x) => x.round === 4).bouts;
+  // Il tiratore della seconda semifinale è in arbitraggio quando si ritira.
+  assert.equal((await call('POST', `/scorer/bouts/de/${s2.id}/claim`, A)).status, 200);
+  let r = await call('POST', `/days/${dayId}/withdraw`, { fencer_id: s2.fencer_b });
+  assert.equal(r.status, 200, r.data.error);
+  let semi = r.data.bracket.find((x) => x.round === 4).bouts[1];
+  assert.equal(semi.forfeit, s2.fencer_b);
+  assert.equal(semi.winner_id, s2.fencer_a);
+  assert.equal(semi.lock, null);
+  assert.equal(r.data.bracket.find((x) => x.round === 2).bouts[0].fencer_b, s2.fencer_a);
+  assert.equal((await call('POST', `/scorer/bouts/de/${s2.id}/heartbeat`, A)).status, 409);
+  assert.equal((await call('PUT', `/de-bouts/${s2.id}`, { score_a: 15, score_b: 2 })).status, 400);
+  const sc = (await call('GET', `/scorer/days/${dayId}`)).data.bouts.find((b) => b.id === s2.id && b.kind === 'de');
+  assert.equal(sc.status, 'done');
+  assert.equal(sc.result.score_b, 'R');
+  // Chi è già eliminato non può ritirarsi.
+  assert.equal((await call('POST', `/days/${dayId}/withdraw`, { fencer_id: s2.fencer_b })).status, 400);
+
+  // Reintegro: la semifinale torna da disputare.
+  r = await call('DELETE', `/days/${dayId}/withdraw/${s2.fencer_b}`);
+  assert.equal(r.status, 200, r.data.error);
+  semi = r.data.bracket.find((x) => x.round === 4).bouts[1];
+  assert.equal(semi.winner_id, null);
+  assert.equal(semi.forfeit, null);
+
+  // Ritiro di chi aspetta l'avversario: perde la finale appena l'avversario è deciso.
+  r = await call('PUT', `/de-bouts/${s1.id}`, { score_a: 15, score_b: 4 });
+  r = await call('POST', `/days/${dayId}/withdraw`, { fencer_id: s1.fencer_a });
+  assert.equal(r.status, 200, r.data.error);
+  assert.equal(r.data.bracket.find((x) => x.round === 2).bouts[0].winner_id, null);
+  r = await call('PUT', `/de-bouts/${s2.id}`, { score_a: 15, score_b: 7 });
+  assert.equal(r.status, 200, r.data.error);
+  const final = r.data.bracket.find((x) => x.round === 2).bouts[0];
+  assert.equal(final.forfeit, s1.fencer_a);
+  assert.equal(final.winner_id, s2.fencer_a);
+  assert.equal(r.data.day.status, 'conclusa');
+  const fr = r.data.finalRanking;
+  assert.equal(fr[0].id, s2.fencer_a);
+  assert.deepEqual([fr[1].id, fr[1].place, fr[1].points, fr[1].withdrawn], [s1.fencer_a, 2, 7, 'dirette']);
+});
+
 test('password dell\'organizzazione e PIN degli arbitri', async (t) => {
   const call = await client(t, { adminPassword: 'segreto', scorerPin: '2412' });
   const admin = { 'x-admin-key': 'segreto' };

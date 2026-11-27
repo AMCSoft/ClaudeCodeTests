@@ -76,13 +76,21 @@ function publicBout(b, now, sid) {
   return { ...rest, lock: lockInfo(b, now, sid) };
 }
 
-function poolRanking(d, fencers, bouts) {
-  const stats = T.computePoolStats(fencers, bouts);
+// Classifica dopo i gironi. Chi si è ritirato durante i gironi (out) ha gli assalti
+// annullati: non conta nella classifica degli altri, non passa alle dirette e finisce in fondo.
+function poolRanking(d, fencers, bouts, out = new Set()) {
+  const isOut = (b) => out.has(b.fencer_a) || out.has(b.fencer_b);
+  const stats = T.computePoolStats(fencers.filter((f) => !out.has(f.id)), bouts.filter((b) => !isOut(b)));
   const ranked = T.rankStats([...stats.values()], byName);
   const q = T.qualifiedCount(ranked.length, d.qualify_percent);
   ranked.forEach((s, i) => { s.qualified = i < q; });
-  return ranked;
+  const gone = fencers.filter((f) => out.has(f.id)).map((f) => ({
+    ...f, v: 0, m: 0, ts: 0, tr: 0, ind: 0, vm: 0, rank: ranked.length + 1, qualified: false,
+  }));
+  return [...ranked, ...gone];
 }
+
+const EMPTY_STATS = { v: 0, m: 0, ts: 0, tr: 0, ind: 0, vm: 0 };
 
 // Classifica della giornata (null finché la finale non è disputata), con i punti assegnati.
 function finalRanking(deBouts, ranking) {
@@ -110,7 +118,12 @@ function buildDay(S, dayId, now = Date.now(), sid = null) {
   const index = S.days.findIndex((x) => x.id === Number(dayId));
   if (index < 0) fail('Giornata non trovata', 404);
   const d = S.days[index];
-  const present = new Set(S.dayFencers.filter((x) => x.day_id === d.id).map((x) => x.fencer_id));
+  const df = S.dayFencers.filter((x) => x.day_id === d.id);
+  const present = new Set(df.map((x) => x.fencer_id));
+  // Ritirati: 'gironi' (assalti annullati, fuori dalle dirette) o 'dirette' (perde l'assalto per ritiro).
+  const withdrawn = new Map(df.filter((x) => x.withdrawn).map((x) => [x.fencer_id, x.withdrawn]));
+  const poolOut = new Set([...withdrawn].filter(([, w]) => w === 'gironi').map(([id]) => id));
+  const annulled = (b) => poolOut.has(b.fencer_a) || poolOut.has(b.fencer_b);
   const fencers = S.fencers.filter((f) => present.has(f.id)).sort(byName);
   const pools = S.pools.filter((p) => p.day_id === d.id);
   const poolNumber = new Map(pools.map((p) => [p.id, p.number]));
@@ -119,24 +132,28 @@ function buildDay(S, dayId, now = Date.now(), sid = null) {
   const deBouts = S.deBouts.filter((b) => b.day_id === d.id);
   const members = S.members.filter((m) => poolNumber.has(m.pool_id));
 
-  const ranking = pools.length ? poolRanking(d, fencers, poolBouts) : [];
-  const seedOf = new Map(ranking.map((r, i) => [r.id, i + 1]));
+  const ranking = pools.length ? poolRanking(d, fencers, poolBouts, poolOut) : [];
+  ranking.forEach((r) => { r.withdrawn = withdrawn.get(r.id) ?? null; });
+  const seedOf = new Map(ranking.filter((r) => !poolOut.has(r.id)).map((r, i) => [r.id, i + 1]));
 
   const poolsOut = pools.map((p) => {
     const ms = members.filter((m) => m.pool_id === p.id).map((m) => ({ ...S.fencerById.get(m.fencer_id), position: m.position }));
     const bouts = poolBouts.filter((b) => b.pool_id === p.id);
-    const local = T.computePoolStats(ms, bouts);
+    const valid = bouts.filter((b) => !annulled(b));
+    const local = T.computePoolStats(ms.filter((m) => !poolOut.has(m.id)), valid);
     const localRank = new Map(T.rankStats([...local.values()]).map((s) => [s.id, s.rank]));
     return {
       ...p,
-      members: ms.map((m) => ({ ...m, ...local.get(m.id), pool_rank: localRank.get(m.id) })),
-      bouts: bouts.map((b) => publicBout(b, now, sid)),
-      done: bouts.every((b) => b.winner_id != null),
+      members: ms.map((m) => ({
+        ...m, ...EMPTY_STATS, ...local.get(m.id), pool_rank: localRank.get(m.id) ?? null, withdrawn: withdrawn.get(m.id) ?? null,
+      })),
+      bouts: bouts.map((b) => ({ ...publicBout(b, now, sid), annulled: annulled(b) })),
+      done: valid.every((b) => b.winner_id != null),
     };
   });
 
-  const poolsDone = pools.length > 0 && poolBouts.every((b) => b.winner_id != null);
-  const final = finalRanking(deBouts, ranking);
+  const poolsDone = pools.length > 0 && poolBouts.every((b) => b.winner_id != null || annulled(b));
+  const final = finalRanking(deBouts, ranking)?.map((r) => ({ ...r, withdrawn: withdrawn.get(r.id) ?? null })) ?? null;
   let status = 'presenze';
   if (pools.length) status = poolsDone ? 'gironi_conclusi' : 'gironi';
   if (deBouts.length) status = final ? 'conclusa' : 'dirette';
@@ -150,7 +167,7 @@ function buildDay(S, dayId, now = Date.now(), sid = null) {
 
   return {
     day: { ...d, number: index + 1, status },
-    fencers: fencers.map((f) => ({ ...f, seed: seedOf.get(f.id) ?? null })),
+    fencers: fencers.map((f) => ({ ...f, seed: seedOf.get(f.id) ?? null, withdrawn: withdrawn.get(f.id) ?? null })),
     pools: poolsOut,
     poolsDone,
     ranking,
@@ -206,7 +223,12 @@ function buildTournament(S, now = Date.now()) {
 function scorerBouts(S, dayId, now, sid) {
   const D = buildDay(S, dayId, now, sid);
   const side = (id, extra) => (id == null ? null : { id, name: fencerName(S.fencerById.get(id)), ...extra });
-  const result = (b) => (b.winner_id == null ? null : { score_a: b.score_a, score_b: b.score_b, winner_id: b.winner_id });
+  // Assalto vinto per ritiro: al posto del punteggio di chi si è ritirato compare "R".
+  const result = (b) => (b.winner_id == null ? null : {
+    score_a: b.forfeit != null && b.forfeit === b.fencer_a ? 'R' : b.score_a ?? '–',
+    score_b: b.forfeit != null && b.forfeit === b.fencer_b ? 'R' : b.score_b ?? '–',
+    winner_id: b.winner_id,
+  });
   const closed = D.bracket.length > 0;
   const out = [];
   for (const p of D.pools) {
@@ -216,7 +238,7 @@ function scorerBouts(S, dayId, now, sid) {
         kind: 'pool', id: b.id, group: `Girone ${p.number}`, label: `Girone ${p.number} · Assalto ${b.bout_order}`, order: b.bout_order,
         a: side(b.fencer_a, { position: pos.get(b.fencer_a) }), b: side(b.fencer_b, { position: pos.get(b.fencer_b) }),
         max: D.day.pool_touches, timing: { ...T.TIMING.pool, priorityMs: T.TIMING.priorityMs },
-        status: b.winner_id != null ? 'done' : closed ? 'closed' : b.lock ? 'locked' : 'open',
+        status: b.annulled ? 'annulled' : b.winner_id != null ? 'done' : closed ? 'closed' : b.lock ? 'locked' : 'open',
         lock: b.lock, result: result(b),
       });
     }
@@ -263,6 +285,8 @@ function createApp(db, opts = {}) {
     q.all(`SELECT pb.* FROM pool_bouts pb JOIN pools p ON p.id = pb.pool_id
            WHERE p.day_id = ? ORDER BY p.number, pb.bout_order`, [did]);
   const hasPools = async (q, did) => !!(await q.get('SELECT 1 AS x FROM pools WHERE day_id = ?', [did]));
+  const poolWithdrawn = async (q, did) =>
+    new Set((await q.all(`SELECT fencer_id FROM day_fencers WHERE day_id = ? AND withdrawn = 'gironi'`, [did])).map((r) => r.fencer_id));
   const hasBracket = async (q, did) => !!(await q.get('SELECT 1 AS x FROM de_bouts WHERE day_id = ?', [did]));
 
   // ---------- Autorizzazioni ----------
@@ -352,7 +376,11 @@ function createApp(db, opts = {}) {
                              JOIN pools p ON p.id = pb.pool_id WHERE pb.id = ?`, [Number(id)]);
       if (!b) fail('Incontro non trovato: forse i gironi sono stati rigenerati', 404);
       const day = await getDay(q, b.day_id);
-      const closed = (await hasBracket(q, day.id)) ? 'Il tabellone è già stato generato: i risultati dei gironi sono chiusi' : null;
+      const out = await q.get(`SELECT 1 AS x FROM day_fencers WHERE day_id = ? AND withdrawn = 'gironi' AND fencer_id IN (?, ?)`,
+        [day.id, b.fencer_a, b.fencer_b]);
+      let closed = null;
+      if (await hasBracket(q, day.id)) closed = 'Il tabellone è già stato generato: i risultati dei gironi sono chiusi';
+      else if (out) closed = 'Assalto annullato: uno dei due tiratori si è ritirato';
       return { kind, table: 'pool_bouts', b, day, max: day.pool_touches, closed };
     }
     if (kind === 'de') {
@@ -361,6 +389,7 @@ function createApp(db, opts = {}) {
       const day = await getDay(q, b.day_id);
       let closed = null;
       if (b.is_bye) closed = 'Questo è un passaggio diretto (esente), non c\'è un risultato da inserire';
+      else if (b.forfeit != null) closed = 'Assalto vinto per ritiro: per modificarlo reintegra prima il tiratore ritirato';
       else if (b.fencer_a == null || b.fencer_b == null) closed = 'L\'assalto non ha ancora entrambi i tiratori';
       return { kind, table: 'de_bouts', b, day, max: day.de_touches, closed };
     }
@@ -377,6 +406,23 @@ function createApp(db, opts = {}) {
     const seed = fencerId == null ? null : (fencerId === bout.fencer_a ? bout.seed_a : bout.seed_b);
     await q.run(`UPDATE de_bouts SET fencer_${slot} = ?, seed_${slot} = ?, live = NULL WHERE day_id = ? AND round = ? AND position = ?`,
       [fencerId, seed, bout.day_id, bout.round / 2, Math.floor(bout.position / 2)]);
+  }
+
+  // Un tiratore ritirato nelle dirette perde per ritiro ("R") l'assalto in cui si trova,
+  // anche quello in cui arriverà l'avversario quando sarà deciso, e l'altro avanza.
+  async function resolveForfeits(q, dayId) {
+    for (;;) {
+      const out = new Set((await q.all('SELECT fencer_id FROM day_fencers WHERE day_id = ? AND withdrawn IS NOT NULL', [dayId])).map((r) => r.fencer_id));
+      if (!out.size) return;
+      const b = (await q.all('SELECT * FROM de_bouts WHERE day_id = ? AND winner_id IS NULL AND fencer_a IS NOT NULL AND fencer_b IS NOT NULL', [dayId]))
+        .find((x) => out.has(x.fencer_a) || out.has(x.fencer_b));
+      if (!b) return;
+      const loser = out.has(b.fencer_a) ? b.fencer_a : b.fencer_b;
+      const winner = loser === b.fencer_a ? b.fencer_b : b.fencer_a;
+      await q.run(`UPDATE de_bouts SET score_a = NULL, score_b = NULL, winner_id = ?, forfeit = ?, ${CLEAR_LOCK}, live = NULL WHERE id = ?`,
+        [winner, loser, b.id]);
+      await advance(q, b, winner);
+    }
   }
 
   // Scrive (o cancella, con s = null) il risultato di un incontro. Dall'organizzazione
@@ -415,7 +461,10 @@ function createApp(db, opts = {}) {
       `UPDATE ${table} SET score_a = ?, score_b = ?, winner_id = ?, ${CLEAR_LOCK}, live = NULL WHERE id = ?${sid ? ' AND scorer_id = ?' : ''}`,
       [s.scoreA, s.scoreB, winner, b.id, ...(sid ? [sid] : [])]);
     if (!r.changes) fail('Non hai più in carico questo incontro', 409, { lost: true });
-    if (ctx.kind === 'de' && winner !== b.winner_id) await advance(q, b, winner);
+    if (ctx.kind === 'de' && winner !== b.winner_id) {
+      await advance(q, b, winner);
+      await resolveForfeits(q, b.day_id);
+    }
   }
 
   // ---------- Torneo e anagrafica ----------
@@ -507,6 +556,7 @@ function createApp(db, opts = {}) {
     }
     await db.tx(async (t) => {
       await t.run('DELETE FROM pools WHERE day_id = ?', [day.id]);
+      await t.run('UPDATE day_fencers SET withdrawn = NULL WHERE day_id = ?', [day.id]);
       for (const [i, members] of pools.entries()) {
         const { id: poolId } = await t.get('INSERT INTO pools (day_id, number) VALUES (?, ?) RETURNING id', [day.id, i + 1]);
         for (const [pos, f] of members.entries()) {
@@ -524,7 +574,10 @@ function createApp(db, opts = {}) {
   app.delete('/api/days/:id/pools', route(async (req) => {
     const day = await getDay(db, req.params.id);
     if (await hasBracket(db, day.id)) fail('Il tabellone è già stato generato: eliminalo prima di eliminare i gironi');
-    await db.run('DELETE FROM pools WHERE day_id = ?', [day.id]);
+    await db.tx(async (t) => {
+      await t.run('DELETE FROM pools WHERE day_id = ?', [day.id]);
+      await t.run('UPDATE day_fencers SET withdrawn = NULL WHERE day_id = ?', [day.id]);
+    });
     return state(day.id);
   }));
 
@@ -537,6 +590,59 @@ function createApp(db, opts = {}) {
     return state(dayId);
   }));
 
+  // ---------- Ritiri ----------
+
+  // Ritiro durante i gironi: i suoi assalti sono annullati e non passa alle dirette.
+  // Ritiro durante le dirette: perde per ritiro ("R") l'assalto in corso e l'avversario avanza.
+  app.post('/api/days/:id/withdraw', route(async (req) => {
+    const day = await getDay(db, req.params.id);
+    const fid = Number(req.body.fencer_id);
+    await db.tx(async (t) => {
+      const row = await t.get('SELECT * FROM day_fencers WHERE day_id = ? AND fencer_id = ?', [day.id, fid]);
+      if (!row) fail('Il tiratore non è tra i presenti di questa giornata');
+      if (row.withdrawn) fail('Il tiratore risulta già ritirato');
+      if (!(await hasPools(t, day.id))) fail('I gironi non sono ancora stati generati: basta togliere la spunta dai presenti');
+      if (await hasBracket(t, day.id)) {
+        const bouts = await t.all('SELECT * FROM de_bouts WHERE day_id = ? AND (fencer_a = ? OR fencer_b = ?)', [day.id, fid, fid]);
+        if (!bouts.length) fail('Il tiratore non è nel tabellone delle dirette');
+        if (bouts.some((b) => b.winner_id != null && b.winner_id !== fid)) fail('Il tiratore è già stato eliminato nelle dirette');
+        if (bouts.some((b) => b.round === 2 && b.winner_id != null)) fail('La giornata è già conclusa');
+        await t.run(`UPDATE day_fencers SET withdrawn = 'dirette' WHERE day_id = ? AND fencer_id = ?`, [day.id, fid]);
+        await resolveForfeits(t, day.id);
+      } else {
+        const active = await t.get('SELECT COUNT(*) AS n FROM day_fencers WHERE day_id = ? AND withdrawn IS NULL', [day.id]);
+        if (Number(active.n) <= 2) fail('Con questo ritiro resterebbe un solo tiratore in gara');
+        await t.run(`UPDATE day_fencers SET withdrawn = 'gironi' WHERE day_id = ? AND fencer_id = ?`, [day.id, fid]);
+        // Chi stava arbitrando un suo assalto lo perde: l'assalto è annullato.
+        await t.run(`UPDATE pool_bouts SET ${CLEAR_LOCK}, live = NULL
+                     WHERE (fencer_a = ? OR fencer_b = ?) AND pool_id IN (SELECT id FROM pools WHERE day_id = ?)`, [fid, fid, day.id]);
+      }
+    });
+    return state(day.id);
+  }));
+
+  // Annulla il ritiro (es. inserito per errore).
+  app.delete('/api/days/:id/withdraw/:fid', route(async (req) => {
+    const day = await getDay(db, req.params.id);
+    const fid = Number(req.params.fid);
+    await db.tx(async (t) => {
+      const row = await t.get('SELECT * FROM day_fencers WHERE day_id = ? AND fencer_id = ?', [day.id, fid]);
+      if (!row?.withdrawn) fail('Il tiratore non risulta ritirato');
+      if (row.withdrawn === 'gironi' && await hasBracket(t, day.id)) {
+        fail('Il tabellone è già stato generato senza questo tiratore: per reintegrarlo elimina prima il tabellone');
+      }
+      for (const b of await t.all('SELECT * FROM de_bouts WHERE day_id = ? AND forfeit = ? ORDER BY round', [day.id, fid])) {
+        const next = await nextBout(t, b);
+        if (next?.winner_id != null) fail('Il turno successivo è già stato disputato: cancella prima quel risultato');
+        if (next?.scorer_id) fail(`Il turno successivo è in arbitraggio da ${next.scorer_name}: sbloccalo prima`, 409);
+        await t.run('UPDATE de_bouts SET score_a = NULL, score_b = NULL, winner_id = NULL, forfeit = NULL WHERE id = ?', [b.id]);
+        await advance(t, b, null);
+      }
+      await t.run('UPDATE day_fencers SET withdrawn = NULL WHERE day_id = ? AND fencer_id = ?', [day.id, fid]);
+    });
+    return state(day.id);
+  }));
+
   // ---------- Tabellone dirette ----------
 
   app.post('/api/days/:id/bracket', route(async (req) => {
@@ -546,8 +652,11 @@ function createApp(db, opts = {}) {
       if (await hasBracket(t, id)) fail('Il tabellone è già stato generato');
       if (!(await hasPools(t, id))) fail('Genera prima i gironi');
       const bouts = await getPoolBouts(t, id);
-      if (bouts.some((b) => b.winner_id == null)) fail('Completa tutti gli assalti dei gironi prima di generare il tabellone');
-      const qualified = poolRanking(day, await getPresent(t, id), bouts).filter((r) => r.qualified);
+      const out = await poolWithdrawn(t, id);
+      if (bouts.some((b) => b.winner_id == null && !out.has(b.fencer_a) && !out.has(b.fencer_b))) {
+        fail('Completa tutti gli assalti dei gironi prima di generare il tabellone');
+      }
+      const qualified = poolRanking(day, await getPresent(t, id), bouts, out).filter((r) => r.qualified);
       if (qualified.length < 2) fail('Servono almeno 2 qualificati per il tabellone');
 
       const size = T.bracketSize(qualified.length);
@@ -580,7 +689,11 @@ function createApp(db, opts = {}) {
 
   app.delete('/api/days/:id/bracket', route(async (req) => {
     const day = await getDay(db, req.params.id);
-    await db.run('DELETE FROM de_bouts WHERE day_id = ?', [day.id]);
+    await db.tx(async (t) => {
+      await t.run('DELETE FROM de_bouts WHERE day_id = ?', [day.id]);
+      // Chi si era ritirato durante le dirette torna in gara se il tabellone si rigenera.
+      await t.run(`UPDATE day_fencers SET withdrawn = NULL WHERE day_id = ? AND withdrawn = 'dirette'`, [day.id]);
+    });
     return state(day.id);
   }));
 
@@ -670,7 +783,8 @@ function createApp(db, opts = {}) {
     const r = await db.run(`UPDATE ${ctx.table} SET seen_at = ?${live ? ', live = ?' : ''} WHERE id = ? AND scorer_id = ? AND winner_id IS NULL`,
       [Date.now(), ...(live ? [live] : []), ctx.b.id, sid]);
     if (!r.changes) {
-      fail(ctx.b.winner_id != null ? 'Il risultato di questo incontro è già stato inserito'
+      fail(ctx.b.forfeit != null || (ctx.kind === 'pool' && ctx.closed) ? ctx.closed
+        : ctx.b.winner_id != null ? 'Il risultato di questo incontro è già stato inserito'
         : 'Questo incontro non è più in carico a te: è stato sbloccato dall\'organizzazione o preso da un altro arbitro', 409, { lost: true });
     }
     return { ok: true };

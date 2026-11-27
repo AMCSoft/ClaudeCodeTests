@@ -14,6 +14,14 @@ const LOCK_COLUMNS = [
   ['live', 'TEXT'],
 ];
 
+// Colonne aggiunte dopo la prima versione: ritiro di un tiratore nella giornata
+// ('gironi' o 'dirette') e assalto di diretta vinto per ritiro (id di chi si è ritirato).
+const EXTRA_COLUMNS = {
+  pool_bouts: LOCK_COLUMNS,
+  de_bouts: [...LOCK_COLUMNS, ['forfeit', 'INTEGER']],
+  day_fencers: [['withdrawn', 'TEXT']],
+};
+
 const TABLES = ['de_bouts', 'pool_bouts', 'pool_members', 'pools', 'day_fencers', 'days', 'fencers'];
 
 function schema(dialect) {
@@ -37,6 +45,7 @@ function schema(dialect) {
     CREATE TABLE IF NOT EXISTS day_fencers (
       day_id INTEGER NOT NULL REFERENCES days(id) ON DELETE CASCADE,
       fencer_id INTEGER NOT NULL REFERENCES fencers(id) ON DELETE CASCADE,
+      withdrawn TEXT,
       PRIMARY KEY (day_id, fencer_id)
     );
     CREATE TABLE IF NOT EXISTS pools (
@@ -74,6 +83,7 @@ function schema(dialect) {
       score_b INTEGER,
       winner_id INTEGER,
       is_bye INTEGER NOT NULL DEFAULT 0,
+      forfeit INTEGER,
       ${lock},
       UNIQUE (day_id, round, position)
     );
@@ -157,13 +167,13 @@ async function migrate(db, { reset = false } = {}) {
     for (const t of TABLES) await db.exec(`DROP TABLE IF EXISTS ${t}${db.dialect === 'pg' ? ' CASCADE' : ''}`);
   }
   await db.exec(schema(db.dialect));
-  // Database creati prima dello scorer: aggiunge le colonne dell'arbitraggio.
-  for (const table of ['pool_bouts', 'de_bouts']) {
+  // Database creati con una versione precedente: aggiunge le colonne mancanti.
+  for (const [table, cols] of Object.entries(EXTRA_COLUMNS)) {
     if (db.dialect === 'pg') {
-      await db.exec(LOCK_COLUMNS.map(([c, t]) => `ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${c} ${t}`).join(';\n'));
+      await db.exec(cols.map(([c, t]) => `ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${c} ${t}`).join(';\n'));
     } else {
       const have = new Set((await db.all(`PRAGMA table_info(${table})`)).map((r) => r.name));
-      for (const [c, t] of LOCK_COLUMNS) if (!have.has(c)) await db.exec(`ALTER TABLE ${table} ADD COLUMN ${c} ${t}`);
+      for (const [c, t] of cols) if (!have.has(c)) await db.exec(`ALTER TABLE ${table} ADD COLUMN ${c} ${t}`);
     }
   }
 }

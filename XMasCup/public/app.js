@@ -469,6 +469,7 @@ function viewDay(el, tab) {
       <span class="badge ${d.status}">${STATUS_LABEL[d.status]}</span>
       <span class="muted">${esc(fmtDate(d.date))}${d.location ? ` · ${esc(d.location)}` : ''} · ${D.fencers.length} presenti</span>
       <span class="spacer"></span>
+      ${D.pools.length ? `<button class="btn secondary small" id="withdraw">🏳️ Ritiri${D.fencers.some((f) => f.withdrawn) ? ` (${D.fencers.filter((f) => f.withdrawn).length})` : ''}</button>` : ''}
       <button class="btn secondary small" id="edit-day">✏️ Modifica</button>
       <button class="btn danger small" id="del-day">Elimina giornata</button>
     </div>
@@ -476,6 +477,7 @@ function viewDay(el, tab) {
     <div id="view"></div>`;
 
   el.querySelector('#edit-day').addEventListener('click', () => openDayDialog());
+  el.querySelector('#withdraw')?.addEventListener('click', () => openWithdrawDialog());
   el.querySelector('#del-day').addEventListener('click', async () => {
     if (!confirm(`Eliminare la ${dayTitle(d)} con presenti, gironi, dirette e punti assegnati?`)) return;
     try {
@@ -503,6 +505,56 @@ function openDayDialog() {
   dialogForm.onsubmit = async (e) => {
     e.preventDefault();
     if (await mutate('PUT', `/api/days/${d.id}`, formData(dialogForm), 'Giornata aggiornata')) dialog.close();
+  };
+  dialog.showModal();
+}
+
+// Ritiro di un atleta dalla giornata. Nei gironi i suoi assalti si annullano e non
+// passa alle dirette; nelle dirette perde per ritiro ("R") e l'avversario avanza.
+function openWithdrawDialog() {
+  const hasBracket = D.bracket.length > 0;
+  const deBouts = D.bracket.flatMap((r) => r.bouts);
+  const finished = D.day.status === 'conclusa';
+  // Chi può ancora ritirarsi: nei gironi tutti i presenti, nelle dirette solo chi è ancora in gara.
+  const alive = (f) => {
+    if (f.withdrawn) return false;
+    if (!hasBracket) return true;
+    const mine = deBouts.filter((b) => b.fencer_a === f.id || b.fencer_b === f.id);
+    return mine.length > 0 && !mine.some((b) => b.winner_id != null && b.winner_id !== f.id);
+  };
+  const candidates = finished ? [] : D.fencers.filter(alive);
+  const gone = D.fencers.filter((f) => f.withdrawn);
+  dialogForm.innerHTML = `
+    <h2>🏳️ Ritiri</h2>
+    <p class="muted small">${hasBracket
+      ? 'Nelle dirette chi si ritira perde per ritiro: nel tabellone compare <strong>R</strong> e l\'avversario passa al turno successivo. Mantiene il piazzamento del turno in cui si ritira.'
+      : 'Nei gironi chi si ritira ha tutti gli assalti annullati (anche quelli già disputati), non entra nella classifica dei gironi e non passa alle dirette. In classifica di giornata finisce in fondo.'}</p>
+    ${candidates.length ? `
+      <div class="field"><label for="wd-f">Atleta che si ritira</label>
+        <select id="wd-f" name="fencer"><option value="">— scegli —</option>
+          ${candidates.map((f) => `<option value="${f.id}">${esc(fencerName(f))}</option>`).join('')}</select></div>`
+      : `<p class="muted small">${finished ? 'La giornata è conclusa: non ci sono più ritiri da registrare.' : 'Nessun atleta può ritirarsi in questo momento.'}</p>`}
+    ${gone.length ? `<h3>Ritirati</h3><div class="withdrawn-list">${gone.map((f) => `
+      <div class="row"><span><span class="rbadge">R</span> ${esc(fencerName(f))} <span class="muted small">· ${f.withdrawn === 'gironi' ? 'nei gironi' : 'nelle dirette'}</span></span>
+        <span class="spacer"></span><button type="button" class="btn secondary small" data-undo="${f.id}">Reintegra</button></div>`).join('')}</div>` : ''}
+    <div class="row" style="margin-top:16px"><span class="spacer"></span>
+      <button type="button" class="btn secondary" data-act="cancel">Chiudi</button>
+      ${candidates.length ? '<button type="submit" class="btn danger">Ritira</button>' : ''}</div>`;
+  dialogForm.querySelector('[data-act=cancel]').onclick = () => dialog.close();
+  dialogForm.querySelectorAll('[data-undo]').forEach((btn) => {
+    btn.onclick = async () => {
+      if (await mutate('DELETE', `/api/days/${D.day.id}/withdraw/${btn.dataset.undo}`, null, 'Atleta reintegrato')) dialog.close();
+    };
+  });
+  dialogForm.onsubmit = async (e) => {
+    e.preventDefault();
+    const id = Number(dialogForm.querySelector('[name=fencer]')?.value);
+    if (!id) return toast('Scegli l\'atleta che si ritira', true);
+    const f = D.fencers.find((x) => x.id === id);
+    const what = hasBracket ? 'perderà per ritiro l\'assalto di diretta e l\'avversario passerà il turno'
+      : 'avrà tutti gli assalti dei gironi annullati e non passerà alle dirette';
+    if (!confirm(`Ritirare ${fencerName(f)}? ${what[0].toUpperCase()}${what.slice(1)}.`)) return;
+    if (await mutate('POST', `/api/days/${D.day.id}/withdraw`, { fencer_id: id }, `${fencerName(f)} ritirato`)) dialog.close();
   };
   dialog.showModal();
 }
@@ -655,6 +707,7 @@ function poolCard(p, locked) {
   const cell = (a, b) => {
     if (a.id === b.id) return '<td class="self"></td>';
     const bout = p.bouts.find((x) => (x.fencer_a === a.id && x.fencer_b === b.id) || (x.fencer_a === b.id && x.fencer_b === a.id));
+    if (bout?.annulled) return '<td class="annulled" title="Annullato per ritiro">–</td>';
     if (!bout || bout.winner_id == null) return '<td></td>';
     const mine = bout.fencer_a === a.id ? bout.score_a : bout.score_b;
     // Vittoria a stoccate piene: solo V; vittoria a tempo: V + stoccate; sconfitta: solo le stoccate date.
@@ -664,15 +717,15 @@ function poolCard(p, locked) {
   return `
     <section class="panel">
       <div class="row"><h3>Girone ${p.number}</h3><span class="spacer"></span>
-        ${p.done ? '<span class="badge ok">Concluso</span>' : `<span class="muted small">${p.bouts.filter((b) => b.winner_id != null).length}/${p.bouts.length} assalti</span>`}</div>
+        ${p.done ? '<span class="badge ok">Concluso</span>' : `<span class="muted small">${p.bouts.filter((b) => b.winner_id != null && !b.annulled).length}/${p.bouts.filter((b) => !b.annulled).length} assalti</span>`}</div>
       <div class="pool-body">
       <div class="table-wrap"><table class="matrix">
         <thead><tr><th></th><th>Tiratore</th>${ms.map((m) => `<th>${m.position}</th>`).join('')}<th>V</th><th>Ind</th><th class="opt">TS</th><th>Pos</th></tr></thead>
         <tbody>${ms.map((a) => `
-          <tr><th>${a.position}</th>
-            <td class="name">${esc(fencerName(a))}</td>
+          <tr class="${a.withdrawn ? 'withdrawn' : ''}"><th>${a.position}</th>
+            <td class="name">${esc(fencerName(a))}${a.withdrawn ? ' <span class="rbadge" title="Ritirato">R</span>' : ''}</td>
             ${ms.map((b) => cell(a, b)).join('')}
-            <td>${a.v}</td><td>${a.ind > 0 ? '+' : ''}${a.ind}</td><td class="opt">${a.ts}</td><td class="pos">${a.m ? a.pool_rank : ''}</td>
+            <td>${a.v}</td><td>${a.ind > 0 ? '+' : ''}${a.ind}</td><td class="opt">${a.ts}</td><td class="pos">${a.withdrawn ? 'R' : a.m ? a.pool_rank : ''}</td>
           </tr>`).join('')}</tbody>
       </table></div>
       <div class="bouts">${p.bouts.map((b) => poolBoutRow(b, byId, locked)).join('')}</div>
@@ -693,6 +746,16 @@ function poolBoutRow(b, byId, closed) {
   const done = b.winner_id != null;
   const tied = done && b.score_a === b.score_b;
   const max = D.day.pool_touches;
+  if (b.annulled) {
+    const r = (f) => (f.withdrawn ? ' <span class="rbadge" title="Ritirato">R</span>' : '');
+    return `
+    <div class="bout annulled">
+      <span class="n">${b.bout_order}</span>
+      <span class="fa">${A.position}. ${esc(fencerName(A))}${r(A)}</span>
+      <span class="annulled-note">Annullato · ritiro</span>
+      <span class="fb">${esc(fencerName(B))} .${B.position}${r(B)}</span>
+    </div>`;
+  }
   return `
     <div class="bout ${done ? 'done' : ''} ${b.lock ? 'is-locked' : ''}" data-id="${b.id}">
       <span class="n">${b.bout_order}</span>
@@ -775,8 +838,8 @@ function viewPoolRanking(el) {
         <thead><tr><th class="num">Pos</th><th>Tiratore</th><th class="num">V</th><th class="num opt">M</th><th class="num">V/M</th><th class="num opt">TS</th><th class="num opt">TR</th><th class="num">Ind</th></tr></thead>
         <tbody>${D.ranking.map((r) => `
           <tr class="${r.qualified ? '' : 'out'}">
-            <td class="num"><strong>${r.rank}</strong></td>
-            <td>${esc(fencerName(r))}</td>
+            <td class="num"><strong>${r.withdrawn === 'gironi' ? 'R' : r.rank}</strong></td>
+            <td>${esc(fencerName(r))}${r.withdrawn ? ` <span class="rbadge" title="Ritirato ${r.withdrawn === 'gironi' ? 'nei gironi' : 'nelle dirette'}">R</span>` : ''}</td>
             <td class="num">${r.v}</td><td class="num opt">${r.m}</td><td class="num">${r.vm.toFixed(3)}</td>
             <td class="num opt">${r.ts}</td><td class="num opt">${r.tr}</td><td class="num">${r.ind > 0 ? '+' : ''}${r.ind}</td>
           </tr>`).join('')}</tbody>
@@ -806,10 +869,11 @@ function viewBracket(el) {
     const f = byId.get(fid);
     const score = b[`score_${who}`];
     const cls = b.winner_id == null || fid == null ? '' : b.winner_id === fid ? 'winner' : 'loser';
+    const forfeit = b.forfeit != null && b.forfeit === fid;
     return `<div class="side ${cls}">
       <span class="seed">${f ? b[`seed_${who}`] ?? '' : ''}</span>
       <span class="nm">${f ? esc(fencerName(f)) : b.is_bye ? '<span class="bye">esente</span>' : '<span class="tbd">da definire</span>'}</span>
-      <span class="score">${score ?? ''}</span>
+      <span class="score ${forfeit ? 'r' : ''}" ${forfeit ? 'title="Ritirato"' : ''}>${forfeit ? 'R' : score ?? ''}</span>
     </div>`;
   };
 
@@ -826,7 +890,7 @@ function viewBracket(el) {
       <div class="bracket">${D.bracket.map((r) => `
         <div class="round"><h3>${esc(r.label)}</h3>
           <div class="round-bouts">${r.bouts.map((b) => {
-            const playable = !b.is_bye && b.fencer_a != null && b.fencer_b != null;
+            const playable = !b.is_bye && b.forfeit == null && b.fencer_a != null && b.fencer_b != null;
             return `<div class="de ${playable ? '' : 'locked'} ${b.lock ? 'is-locked' : ''}" ${playable ? `data-id="${b.id}" tabindex="0" role="button"` : ''}>${side(b, 'a')}${side(b, 'b')}${b.lock ? `<div class="de-lock">${lockChip(b.lock)}</div>` : ''}</div>`;
           }).join('')}</div>
         </div>`).join('')}</div>
@@ -929,7 +993,7 @@ function viewDayFinal(el) {
       <div class="podium">${step('p2', 2, at(2))}${step('p1', 1, at(1))}${step('p3', 3, at(3))}</div>
       <div class="table-wrap"><table>
         <thead><tr><th class="num">Pos</th><th>Tiratore</th><th class="num">Testa di serie</th><th class="num">Punti</th></tr></thead>
-        <tbody>${fr.map((r) => `<tr><td class="num"><strong>${r.place}</strong> ${medal(r.place)}</td><td>${esc(fencerName(r))}</td>
+        <tbody>${fr.map((r) => `<tr><td class="num"><strong>${r.place}</strong> ${medal(r.place)}</td><td>${esc(fencerName(r))}${r.withdrawn ? ` <span class="rbadge" title="Ritirato ${r.withdrawn === 'gironi' ? 'nei gironi' : 'nelle dirette'}">R</span>` : ''}</td>
           <td class="num">${D.ranking.findIndex((x) => x.id === r.id) + 1}</td>
           <td class="num"><span class="pts p${r.points}">+${r.points}</span></td></tr>`).join('')}</tbody>
       </table></div>

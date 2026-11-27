@@ -13,6 +13,10 @@ Web app locale per gestire la **Fanum Fortunae XMas Cup**, torneo di **spada** a
    - tabellone delle dirette a 15 stoccate con tutti i presenti, teste di serie ed esenti;
    - nella spada non c'è il pari: a punteggio pari si indica chi vince alla priorità;
    - correzioni possibili finché il turno successivo non è disputato.
+   - **ritiri** (pulsante 🏳️ Ritiri nella giornata):
+     - nei gironi: tutti gli assalti dell'atleta si annullano (anche quelli già disputati), non conta nella classifica dei gironi, non passa alle dirette e chiude in fondo alla classifica della giornata;
+     - nelle dirette: perde per ritiro, nel tabellone compare **R** e l'avversario passa il turno (anche se l'avversario non è ancora deciso, appena lo è); mantiene il piazzamento del turno in cui si ritira;
+     - chi si ritira resta presente e prende comunque i punti del suo piazzamento; un ritiro inserito per errore si annulla con "Reintegra".
 5. **Classifica della giornata**: podio con due terzi ex aequo, poi 5°, 9°, ecc., con i punti guadagnati.
 
 ## Punti per la classifica generale
