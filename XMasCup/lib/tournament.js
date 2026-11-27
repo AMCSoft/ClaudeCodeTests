@@ -181,10 +181,11 @@ function dayPoints(place) {
 }
 
 // Tempi degli assalti (regolamento spada): gironi 1 periodo da 3 minuti,
-// dirette 3 periodi da 3 minuti con 1 minuto di pausa, minuto di priorità.
+// dirette 3 periodi da 3 minuti con 1 minuto di pausa e passività, minuto di priorità.
 const TIMING = {
   pool: { periods: 1, periodMs: 3 * 60 * 1000, breakMs: 0 },
-  de: { periods: 3, periodMs: 3 * 60 * 1000, breakMs: 60 * 1000 },
+  // Passività (solo dirette): 1 minuto di combattimento senza stoccate.
+  de: { periods: 3, periodMs: 3 * 60 * 1000, breakMs: 60 * 1000, passivityMs: 60 * 1000 },
   priorityMs: 60 * 1000,
 };
 

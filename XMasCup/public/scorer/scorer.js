@@ -412,9 +412,11 @@ function newState(bout) {
   return {
     kind: bout.kind, id: bout.id, dayId: listData?.day.id ?? null,
     label: bout.label, max: bout.max, timing: bout.timing,
-    a: { id: bout.a.id, name: bout.a.name }, b: { id: bout.b.id, name: bout.b.name },
+    a: { id: bout.a.id, name: bout.a.name, seed: bout.a.seed ?? null }, b: { id: bout.b.id, name: bout.b.name, seed: bout.b.seed ?? null },
     score: [0, 0], cards: [{ y: 0, r: 0 }, { y: 0, r: 0 }],
     period: 1, phase: 'fight', remaining: bout.timing.periodMs, running: false, endsAt: null,
+    // Passività: tempo del cronometro all'ultima stoccata (o inizio periodo), cartellini P dati.
+    passiveFrom: bout.timing.periodMs, pRed: false, pBlack: null,
     priority: null, winner: null, reason: null, swapped: false, history: [],
   };
 }
@@ -429,6 +431,8 @@ function startBout(bout, saved) {
     if (['fight', 'break', 'draw', 'priority'].includes(saved.phase)) B.phase = saved.phase;
     if (typeof saved.remaining === 'number') B.remaining = saved.remaining;
     if (saved.priority === 0 || saved.priority === 1) B.priority = saved.priority;
+    if (typeof saved.passive === 'number') B.passiveFrom = B.remaining + saved.passive;
+    if (saved.pRed) B.pRed = true;
     toast(`Ripreso dal punteggio salvato: ${B.score[0]}–${B.score[1]}`);
   }
   save();
@@ -503,6 +507,7 @@ function touch(i) {
   act(() => {
     stopClock();
     B.score[i]++;
+    resetPassivity();
     checkEnd(i);
   });
 }
@@ -519,6 +524,7 @@ function double() {
     stopClock();
     B.score[0]++;
     B.score[1]++;
+    resetPassivity();
     if (B.score[0] >= B.max) endBout(0, 'touches');
     else if (B.score[1] >= B.max) endBout(1, 'touches');
   });
@@ -551,9 +557,54 @@ function card(i, kind) {
     }
     c.r++;
     B.score[1 - i]++;
+    resetPassivity();
     checkEnd(1 - i);
     settleDraw();
   });
+}
+
+// ---------- Passività (solo nelle dirette) ----------
+// Dopo 1 minuto di combattimento senza stoccate: cartellino rosso P a entrambi e una
+// stoccata a testa. Al minuto successivo senza stoccate: cartellino nero P e sconfitta
+// con il punteggio attuale per chi è in svantaggio o, a parità, per chi era peggio
+// piazzato dopo i gironi. Il conteggio riparte a ogni stoccata e a ogni nuovo periodo.
+const passivityOn = () => !!B.timing.passivityMs && B.phase === 'fight';
+const passiveElapsed = () => Math.max(0, B.passiveFrom - remainingNow());
+
+function resetPassivity() {
+  B.passiveFrom = B.remaining;
+}
+
+function passivity() {
+  act(() => {
+    stopClock();
+    resetPassivity();
+    if (!B.pRed) {
+      B.pRed = true;
+      // Sul pari a un passo dalla fine (es. 14–14) le due stoccate si annullano a vicenda.
+      if (!(tied() && B.score[0] === B.max - 1)) {
+        B.score[0]++;
+        B.score[1]++;
+      }
+      if (B.score[0] >= B.max) endBout(0, 'touches');
+      else if (B.score[1] >= B.max) endBout(1, 'touches');
+      return;
+    }
+    let loser;
+    if (B.score[0] !== B.score[1]) loser = B.score[0] < B.score[1] ? 0 : 1;
+    else loser = (B.a.seed ?? 0) > (B.b.seed ?? 0) ? 0 : 1; // testa di serie più bassa = peggio piazzato
+    B.pBlack = loser;
+    endBout(1 - loser, 'passivity');
+  });
+  beep(2);
+  navigator.vibrate?.([200, 100, 200]);
+  toast(B.phase === 'ended' && B.reason === 'passivity' ? `Cartellino nero per passività a ${nameOf(B.pBlack)}` : 'Passività: cartellino rosso P a entrambi, una stoccata a testa');
+}
+
+function passiveText() {
+  if (!B.timing.passivityMs || B.phase !== 'fight') return '';
+  const left = Math.max(0, B.timing.passivityMs - passiveElapsed());
+  return `${B.pRed ? 'Prossima passività: <strong>nero P</strong>' : 'Passività'} tra ${fmtTime(left)}`;
 }
 
 function toggleClock() {
@@ -575,6 +626,7 @@ function timeUp() {
       B.period++;
       B.phase = 'fight';
       B.remaining = B.timing.periodMs;
+      B.passiveFrom = B.remaining; // ogni periodo il conteggio riparte da zero
     } else if (B.phase === 'priority') {
       endBout(B.priority, 'priority-time');
     } else if (B.period < B.timing.periods) {
@@ -597,6 +649,7 @@ function skipBreak() {
     B.period++;
     B.phase = 'fight';
     B.remaining = B.timing.periodMs;
+    B.passiveFrom = B.remaining;
   });
 }
 
@@ -613,8 +666,14 @@ setInterval(() => {
   if (!B || !B.running) return;
   const ms = remainingNow();
   if (ms <= 0) return timeUp();
+  if (passivityOn() && passiveElapsed() >= B.timing.passivityMs) return passivity();
   const t = root.querySelector('.clock .time');
   if (t) t.textContent = fmtTime(ms);
+  const pv = root.querySelector('.passive');
+  if (pv) {
+    pv.innerHTML = passiveText();
+    pv.classList.toggle('soon', B.timing.passivityMs - passiveElapsed() <= 15000);
+  }
 }, 100);
 
 // ---------- Collegamento con il server ----------
@@ -623,6 +682,7 @@ function liveState() {
   return {
     fa: B.a.id, fb: B.b.id, score_a: B.score[0], score_b: B.score[1], cards: B.cards,
     period: B.period, phase: B.phase, remaining: Math.round(remainingNow()), priority: B.priority, running: B.running,
+    passive: Math.round(passiveElapsed()), pRed: B.pRed,
   };
 }
 
@@ -720,7 +780,7 @@ function viewBout() {
     return `
       <section class="fencer ${pos} ${B.priority === i ? 'has-priority' : ''}">
         <div class="fname">${esc(f.name)}${B.priority === i ? ' <span class="prio-badge" title="Priorità">P</span>' : ''}</div>
-        <div class="cards-shown">${c.y ? '<span class="cardi yellow"></span>' : ''}${'<span class="cardi red"></span>'.repeat(c.r)}</div>
+        <div class="cards-shown">${c.y ? '<span class="cardi yellow"></span>' : ''}${'<span class="cardi red"></span>'.repeat(c.r)}${B.pRed ? '<span class="cardi red p" title="Rosso per passività">P</span>' : ''}</div>
         <div class="score">${B.score[i]}</div>
         <button class="hit" data-act="touch" data-i="${i}" ${fighting() ? '' : 'disabled'} aria-label="Stoccata a ${esc(f.name)}">+1</button>
         <div class="mini">
@@ -743,6 +803,7 @@ function viewBout() {
           <span class="time">${fmtTime(remainingNow())}</span>
           <span class="phase-label">${phaseLabel()}</span>
         </button>
+        ${passivityOn() ? `<div class="passive ${B.timing.passivityMs - passiveElapsed() <= 15000 ? 'soon' : ''}">${passiveText()}</div>` : ''}
         ${B.phase === 'break' ? '<button class="btn secondary" data-act="skip-break">Salta la pausa</button>' : ''}
         ${B.phase === 'draw' ? '<button class="btn big" data-act="draw">🎲 Sorteggia la priorità</button>' : ''}
       </div>
@@ -781,7 +842,10 @@ function openMenu() {
       const v = prompt('Tempo rimanente (minuti:secondi)', fmtTime(B.remaining).includes(':') ? fmtTime(B.remaining) : `0:${String(Math.ceil(B.remaining / 1000)).padStart(2, '0')}`);
       const m = v && v.trim().match(/^(\d{1,2})(?::(\d{1,2}))?$/);
       if (!m) return render();
-      act(() => { B.remaining = (m[2] == null ? Number(m[1]) : Number(m[1]) * 60 + Number(m[2])) * 1000; });
+      act(() => {
+        B.remaining = (m[2] == null ? Number(m[1]) : Number(m[1]) * 60 + Number(m[2])) * 1000;
+        B.passiveFrom = B.remaining;
+      });
     },
     finish: () => {
       closeSheet();
@@ -798,6 +862,7 @@ const REASON = {
   'priority-touch': (w) => `Stoccata nel minuto di priorità: vince ${esc(nameOf(w))}`,
   'priority-time': (w) => `Fine del minuto di priorità: vince ${esc(nameOf(w))} che aveva la priorità`,
   manual: () => 'Incontro terminato dall\'arbitro',
+  passivity: (w) => `Cartellino nero per passività a ${esc(nameOf(1 - w))}${tied() ? ' (a parità perde chi era peggio piazzato dopo i gironi)' : ''}: vince ${esc(nameOf(w))}`,
 };
 
 function viewEnd() {
@@ -817,6 +882,7 @@ function viewEnd() {
           ${order.map((i, k) => `
             <div class="final-side ${k === 0 ? 'left' : 'right'} ${B.winner === i ? 'win' : ''}">
               <div class="fname">${esc(f(i).name)}</div>
+              ${B.pRed || B.pBlack === i ? `<div class="cards-shown">${B.pRed ? '<span class="cardi red p" title="Rosso per passività">P</span>' : ''}${B.pBlack === i ? '<span class="cardi black p" title="Nero per passività">P</span>' : ''}</div>` : ''}
               <div class="score">${B.score[i]}</div>
               ${B.winner === i ? '<div class="crown">🏆 Vince</div>' : ''}
             </div>`).join('')}

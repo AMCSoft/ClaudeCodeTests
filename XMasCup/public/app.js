@@ -17,11 +17,11 @@ const STATUS_LABEL = {
 
 const DAY_TABS = [
   // [chiave, nome, nome corto per il telefono]
-  ['presenti', 'Presenti', 'Presenti'],
-  ['gironi', 'Gironi', 'Gironi'],
-  ['classifica-gironi', 'Classifica gironi', 'Class. gironi'],
-  ['tabellone', 'Tabellone dirette', 'Tabellone'],
-  ['classifica', 'Classifica giornata', 'Classifica'],
+  ['presenti', 'Presenti', 'Presenti', '👥'],
+  ['gironi', 'Gironi', 'Gironi', '⚔️'],
+  ['classifica-gironi', 'Classifica gironi', 'Class. gironi', '📊'],
+  ['tabellone', 'Tabellone dirette', 'Tabellone', '🗡️'],
+  ['classifica', 'Classifica giornata', 'Classifica', '🏅'],
 ];
 
 const POINTS_LEGEND = '1° 10 pt · 2° 7 pt · 3° ex aequo 5 pt · dal 5° in poi 3 pt';
@@ -467,13 +467,13 @@ function viewDay(el, tab) {
     <div class="row day-head">
       <h1>${dayTitle(d)}</h1>
       <span class="badge ${d.status}">${STATUS_LABEL[d.status]}</span>
-      <span class="muted">${esc(fmtDate(d.date))}${d.location ? ` · ${esc(d.location)}` : ''} · ${D.fencers.length} presenti</span>
+      <span class="day-meta">${d.date ? `<span>📅 ${esc(fmtDate(d.date))}</span>` : ''}${d.location ? `<span>📍 ${esc(d.location)}</span>` : ''}<span>👥 ${D.fencers.length} presenti</span></span>
       <span class="spacer"></span>
       ${D.pools.length ? `<button class="btn secondary small" id="withdraw">🏳️ Ritiri${D.fencers.some((f) => f.withdrawn) ? ` (${D.fencers.filter((f) => f.withdrawn).length})` : ''}</button>` : ''}
       <button class="btn secondary small" id="edit-day">✏️ Modifica</button>
       <button class="btn danger small" id="del-day">Elimina giornata</button>
     </div>
-    <nav class="tabs">${DAY_TABS.map(([k, l, short]) => `<a class="tab ${k === tab ? 'active' : ''}" href="#/giornata/${d.id}/${k}"><span class="t-long">${l}</span><span class="t-short">${short}</span></a>`).join('')}</nav>
+    <nav class="tabs">${DAY_TABS.map(([k, l, short, icon]) => `<a class="tab ${k === tab ? 'active' : ''}" href="#/giornata/${d.id}/${k}"><span class="ti" aria-hidden="true">${icon}</span><span class="t-long">${l}</span><span class="t-short">${short}</span></a>`).join('')}</nav>
     <div id="view"></div>`;
 
   el.querySelector('#edit-day').addEventListener('click', () => openDayDialog());
@@ -854,6 +854,13 @@ function viewPoolRanking(el) {
 
 // ---------- Tabellone ----------
 
+// Il tabellone si disegna come nei tornei veri: un turno per colonna, ogni assalto
+// centrato tra i due da cui arrivano i tiratori e linee che li collegano.
+function bracketMetrics() {
+  const phone = window.matchMedia('(max-width: 720px)').matches;
+  return phone ? { W: 172, H: 62, GAP: 14, COL: 34 } : { W: 232, H: 68, GAP: 18, COL: 56 };
+}
+
 function viewBracket(el) {
   if (!D.bracket.length) {
     el.innerHTML = `<div class="panel empty"><img src="logo.svg" alt="">
@@ -861,8 +868,18 @@ function viewBracket(el) {
     return;
   }
   const byId = new Map(D.fencers.map((f) => [f.id, f]));
-  const final = D.bracket.find((r) => r.round === 2)?.bouts[0];
+  const rounds = D.bracket.slice().sort((a, b) => b.round - a.round);
+  const final = rounds.at(-1).bouts[0];
   const champ = final?.winner_id ? byId.get(final.winner_id) : null;
+  const { W, H, GAP, COL } = bracketMetrics();
+  const SLOT = H + GAP;
+  const first = rounds[0].bouts.length;
+  const height = Math.max(first * SLOT, 180);
+  const colX = (k) => k * (W + COL);
+  const centerY = (k, i) => SLOT * 2 ** k * (i + 0.5);
+  const width = colX(rounds.length) + W;
+  const played = D.bracket.flatMap((r) => r.bouts).filter((b) => !b.is_bye && b.winner_id != null).length;
+  const total = D.bracket.flatMap((r) => r.bouts).filter((b) => !b.is_bye).length;
 
   const side = (b, who) => {
     const fid = b[`fencer_${who}`];
@@ -872,28 +889,61 @@ function viewBracket(el) {
     const forfeit = b.forfeit != null && b.forfeit === fid;
     return `<div class="side ${cls}">
       <span class="seed">${f ? b[`seed_${who}`] ?? '' : ''}</span>
-      <span class="nm">${f ? esc(fencerName(f)) : b.is_bye ? '<span class="bye">esente</span>' : '<span class="tbd">da definire</span>'}</span>
+      <span class="nm">${f ? esc(fencerName(f)) : '<span class="tbd">da definire</span>'}</span>
       <span class="score ${forfeit ? 'r' : ''}" ${forfeit ? 'title="Ritirato"' : ''}>${forfeit ? 'R' : score ?? ''}</span>
     </div>`;
   };
 
+  // Linee: dall'assalto al punto di mezzo, poi verso l'assalto del turno dopo (o il campione).
+  const lines = [];
+  rounds.forEach((r, k) => r.bouts.forEach((b) => {
+    if (b.is_bye && k === 0) return;
+    const x1 = colX(k) + W;
+    const y1 = centerY(k, b.position);
+    const last = k === rounds.length - 1;
+    const x2 = colX(k + 1);
+    const y2 = last ? y1 : centerY(k + 1, Math.floor(b.position / 2));
+    const xm = x1 + COL / 2;
+    lines.push(`<path class="${b.winner_id != null ? 'done' : ''}" d="M${x1} ${y1} H${xm} V${y2} H${x2}"/>`);
+  }));
+
+  const cards = rounds.map((r, k) => r.bouts.map((b) => {
+    if (b.is_bye && k === 0) return '';
+    const playable = !b.is_bye && b.forfeit == null && b.fencer_a != null && b.fencer_b != null;
+    const live = b.lock?.live;
+    const state = b.winner_id != null ? 'done' : b.lock ? 'live' : playable ? 'ready' : 'wait';
+    return `<div class="de ${state} ${playable ? '' : 'locked'} ${b.lock ? 'is-locked' : ''}" style="left:${colX(k)}px;top:${centerY(k, b.position) - H / 2}px;width:${W}px;height:${H}px"
+      ${playable ? `data-id="${b.id}" tabindex="0" role="button" aria-label="${esc(r.label)}: inserisci o correggi il risultato"` : ''}>
+      ${side(b, 'a')}${side(b, 'b')}
+      ${b.lock ? `<span class="de-live" title="In arbitraggio da ${esc(b.lock.name)}">📱 ${live && live.score_a != null ? `${live.score_a}–${live.score_b}` : 'live'}</span>` : ''}
+    </div>`;
+  }).join('')).join('');
+
+  const champCard = `<div class="champ-card ${champ ? 'won' : ''}" style="left:${colX(rounds.length)}px;top:${centerY(rounds.length - 1, 0) - 48}px;width:${W}px">
+      <div class="trophy">🏆</div>
+      <div class="champ-name">${champ ? esc(fencerName(champ)) : 'Campione'}</div>
+      <div class="champ-sub">${champ ? `vince la ${dayTitle(D.day)}` : 'da decidere'}</div>
+    </div>`;
+
   el.innerHTML = `
-    <section class="panel">
+    <section class="panel bracket-panel">
       <div class="row">
         <div><h2>Tabellone delle dirette</h2>
-          <div class="muted small">Assalti a ${D.day.de_touches} stoccate. Clicca un assalto per inserire o correggere il risultato.</div></div>
+          <div class="muted small">Assalti a ${D.day.de_touches} stoccate · ${played}/${total} disputati. Tocca un assalto per inserire o correggere il risultato.</div></div>
         <span class="spacer"></span>
-        <button class="btn danger" id="del-bracket">Elimina tabellone</button>
+        ${champ ? `<a class="btn small" href="#/giornata/${D.day.id}/classifica">🏅 Classifica e punti</a>` : ''}
+        <button class="btn danger small" id="del-bracket">Elimina tabellone</button>
       </div>
-      ${champ ? `<div class="champion"><div class="trophy">🏆</div><h1>${esc(fencerName(champ))}</h1>
-        <p><a class="btn" href="#/giornata/${D.day.id}/classifica">Classifica e punti della giornata</a></p></div>` : ''}
-      <div class="bracket">${D.bracket.map((r) => `
-        <div class="round"><h3>${esc(r.label)}</h3>
-          <div class="round-bouts">${r.bouts.map((b) => {
-            const playable = !b.is_bye && b.forfeit == null && b.fencer_a != null && b.fencer_b != null;
-            return `<div class="de ${playable ? '' : 'locked'} ${b.lock ? 'is-locked' : ''}" ${playable ? `data-id="${b.id}" tabindex="0" role="button"` : ''}>${side(b, 'a')}${side(b, 'b')}${b.lock ? `<div class="de-lock">${lockChip(b.lock)}</div>` : ''}</div>`;
-          }).join('')}</div>
-        </div>`).join('')}</div>
+      <div class="bracket" tabindex="0" aria-label="Tabellone, scorri in orizzontale">
+        <div class="bk" style="width:${width}px">
+          <div class="bk-heads">${rounds.map((r, k) => `<div class="bk-head" style="left:${colX(k)}px;width:${W}px">${esc(r.label)}</div>`).join('')}
+            <div class="bk-head gold" style="left:${colX(rounds.length)}px;width:${W}px">Campione</div></div>
+          <div class="bk-body" style="height:${height}px">
+            <svg class="bk-lines" width="${width}" height="${height}" aria-hidden="true">${lines.join('')}</svg>
+            ${cards}${champCard}
+          </div>
+        </div>
+      </div>
     </section>`;
 
   el.querySelector('#del-bracket').addEventListener('click', () => {
@@ -905,6 +955,14 @@ function viewBracket(el) {
     node.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
   });
 }
+
+// Il tabellone cambia misure tra telefono e computer: lo si ridisegna quando serve.
+let bracketPhone = window.matchMedia('(max-width: 720px)').matches;
+window.addEventListener('resize', () => {
+  const now = window.matchMedia('(max-width: 720px)').matches;
+  if (now !== bracketPhone && document.querySelector('.bk') && !dialog.open) render();
+  bracketPhone = now;
+});
 
 function openDeDialog(id, byId) {
   const b = D.bracket.flatMap((r) => r.bouts).find((x) => x.id === id);
