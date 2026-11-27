@@ -143,7 +143,7 @@ input:focus { outline: 2px solid var(--gold); border-color: transparent; }
   width: min(100%, 520px); border-radius: 18px; border: 2px solid var(--line); background: #040b18; color: #fff;
   padding: 6px 12px 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center;
 }
-.clock .time { font-size: clamp(48px, min(16vw, 11vh), 110px); font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1; letter-spacing: 1px; }
+.clock .time { font-size: clamp(64px, min(22vw, 14vh), 150px); font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1; letter-spacing: 1px; }
 .clock .phase-label { font-size: 13px; color: var(--muted); font-weight: 700; }
 .clock.running { border-color: var(--green-2); box-shadow: 0 0 18px rgba(34, 184, 98, 0.35); }
 .clock.running .time { color: #c9ffd9; }
@@ -197,7 +197,7 @@ input:focus { outline: 2px solid var(--gold); border-color: transparent; }
   .bout-screen .bar { grid-column: 1 / -1; padding-top: 4px; padding-bottom: 4px; }
   .clock-wrap { grid-column: 1 / -1; flex-direction: row; justify-content: center; padding: 4px 8px; }
   .clock { width: auto; flex-direction: row; gap: 14px; padding: 2px 16px; }
-  .clock .time { font-size: 40px; }
+  .clock .time { font-size: clamp(48px, 15vh, 64px); }
   .fencers { grid-column: 1 / -1; }
   /* punteggio e pulsante +1 affiancati */
   .fencer { grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr auto; gap: 6px 10px; padding: 6px 8px; }
@@ -268,4 +268,47 @@ input:focus { outline: 2px solid var(--gold); border-color: transparent; }
 .final-side .cards-shown { margin: 4px 0; }
 @media (orientation: landscape) and (max-height: 520px) {
   .passive { padding: 1px 10px; font-size: 12px; }
+}
+
+/* ---------- Scelta dei colori prima dell'assalto ---------- */
+.colors-screen { min-height: 100dvh; display: flex; flex-direction: column; }
+.colors-screen h2 { margin-top: 18px; font-size: 22px; }
+.txt-red { color: var(--red-2); }
+.color-picks { display: grid; gap: 14px; margin: 18px 0 8px; }
+.color-pick {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 26px 16px; cursor: pointer;
+  border-radius: 18px; border: 2px solid var(--line); background: var(--card); color: var(--text);
+  touch-action: manipulation; transition: transform 0.1s, border-color 0.15s, background 0.15s;
+}
+.color-pick:active { transform: scale(0.98); }
+@media (hover: hover) { .color-pick:hover { border-color: var(--red-2); background: rgba(200, 16, 46, 0.18); } }
+.color-pick .cp-name { font-size: clamp(20px, 6vw, 28px); font-weight: 800; overflow-wrap: anywhere; text-align: center; }
+.color-pick .cp-tag { font-size: 13px; color: var(--muted); font-weight: 600; }
+@media (orientation: landscape) and (max-height: 520px) {
+  .color-picks { grid-template-columns: 1fr 1fr; }
+  .colors-screen h2 { margin-top: 4px; }
+  .color-pick { padding: 18px 12px; }
+}
+
+/* Telefoni bassi (es. iPhone SE): cronometro grande ma tutto deve restare visibile. */
+@media (orientation: portrait) and (max-height: 720px) {
+  .clock .time { font-size: clamp(56px, min(22vw, 11.5vh), 150px); }
+  .clock-wrap { gap: 6px; padding-top: 8px; }
+  .fencer { gap: 4px; padding: 8px 6px; }
+  .score { font-size: clamp(52px, min(24vw, 14vh), 200px); }
+  .hit { min-height: clamp(52px, 10vh, 130px); }
+  .mini button { min-height: 36px; padding: 6px 0; }
+  .passive { padding: 2px 10px; font-size: 12px; }
+}
+
+/* Orizzontale: righe più compatte perché i pulsanti piccoli restino interi. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .clock .time { font-size: clamp(44px, 13vh, 60px); }
+  .clock-wrap { padding: 2px 8px; }
+  .fencers { padding-top: 4px; padding-bottom: 4px; }
+  .fencer { gap: 4px 10px; padding: 4px 8px 6px; }
+  .fencer .fname { font-size: clamp(14px, 4.5vh, 18px); }
+  .fencer .score { font-size: clamp(44px, 20vh, 110px); }
+  .mini button { min-height: 30px; padding: 3px 0; }
+  .controls .btn { padding: 8px; min-height: 0; }
 }

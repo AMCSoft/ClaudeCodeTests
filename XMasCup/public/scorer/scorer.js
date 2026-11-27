@@ -412,12 +412,14 @@ function newState(bout) {
   return {
     kind: bout.kind, id: bout.id, dayId: listData?.day.id ?? null,
     label: bout.label, max: bout.max, timing: bout.timing,
-    a: { id: bout.a.id, name: bout.a.name, seed: bout.a.seed ?? null }, b: { id: bout.b.id, name: bout.b.name, seed: bout.b.seed ?? null },
+    a: { id: bout.a.id, name: bout.a.name, seed: bout.a.seed ?? null, position: bout.a.position ?? null },
+    b: { id: bout.b.id, name: bout.b.name, seed: bout.b.seed ?? null, position: bout.b.position ?? null },
     score: [0, 0], cards: [{ y: 0, r: 0 }, { y: 0, r: 0 }],
     period: 1, phase: 'fight', remaining: bout.timing.periodMs, running: false, endsAt: null,
     // Passività: tempo del cronometro all'ultima stoccata (o inizio periodo), cartellini P dati.
     passiveFrom: bout.timing.periodMs, pRed: false, pBlack: null,
     priority: null, winner: null, reason: null, swapped: false, history: [],
+    colorsSet: false, // prima di iniziare l'arbitro sceglie chi è il rosso e chi il verde
   };
 }
 
@@ -770,8 +772,43 @@ function phaseLabel() {
   return B.running ? 'Tocca per fermare' : 'Tocca per avviare';
 }
 
+// Prima dell'assalto: chi tira con la luce rossa (a sinistra) e chi con la verde (a destra).
+function viewColors() {
+  const pick = (i) => `
+    <button class="color-pick" data-red="${i}">
+      <span class="cp-name">${esc(nameOf(i))}</span>
+      <span class="cp-tag">${B.kind === 'pool' ? `n° ${i === 0 ? B.a.position ?? '' : B.b.position ?? ''}` : `testa di serie ${(i === 0 ? B.a.seed : B.b.seed) ?? ''}`}</span>
+    </button>`;
+  root.innerHTML = `
+    <div class="colors-screen">
+      <header class="bar">
+        <button class="ghost" data-act="menu" aria-label="Menu">☰</button>
+        <div class="bar-title"><div>${esc(B.label)}</div><small>Assegna i colori</small></div>
+        <span class="net ${online ? 'on' : 'off'}"></span>
+        <span></span>
+      </header>
+      <div class="content">
+        <h2 class="center">🔴 Chi tira con il <span class="txt-red">ROSSO</span>?</h2>
+        <p class="muted center small">Tocca lo spadista che ha la luce rossa: sarà a sinistra sullo schermo, l'altro con il verde a destra.</p>
+        <div class="color-picks">${pick(0)}${pick(1)}</div>
+        ${B.history.length ? '<button class="btn block secondary" data-act="back">Torna all\'assalto senza cambiare</button>' : ''}
+      </div>
+    </div>`;
+  root.querySelectorAll('[data-red]').forEach((btn) => btn.addEventListener('click', () => {
+    const red = Number(btn.dataset.red);
+    B.swapped = red === 1;
+    B.colorsSet = true;
+    save();
+    render();
+    toast(`🔴 ${nameOf(red)} · 🟢 ${nameOf(1 - red)}`);
+  }));
+  root.querySelector('[data-act=menu]').addEventListener('click', openMenu);
+  root.querySelector('[data-act=back]')?.addEventListener('click', () => { B.colorsSet = true; save(); render(); });
+}
+
 function viewBout() {
   if (B.phase === 'ended') return viewEnd();
+  if (!B.colorsSet) return viewColors();
   const order = B.swapped ? [1, 0] : [0, 1];
   const periods = B.timing.periods > 1 ? `Periodo ${Math.min(B.period, B.timing.periods)}/${B.timing.periods} · ` : '';
   const side = (i, pos) => {
@@ -796,7 +833,7 @@ function viewBout() {
         <button class="ghost" data-act="menu" aria-label="Menu">☰</button>
         <div class="bar-title"><div>${esc(B.label)}</div><small>${periods}a ${B.max} stoccate</small></div>
         <span class="net ${online ? 'on' : 'off'}"></span>
-        <button class="ghost" data-act="swap" aria-label="Inverti lati" title="Inverti lati">⇄</button>
+        <button class="ghost" data-act="swap" aria-label="Cambia i colori" title="Cambia i colori">⇄</button>
       </header>
       <div class="clock-wrap">
         <button class="clock ${B.running ? 'running' : ''}" data-act="clock" ${B.phase === 'draw' ? 'disabled' : ''}>
@@ -824,7 +861,7 @@ function viewBout() {
   on('clock', toggleClock);
   on('skip-break', skipBreak);
   on('draw', drawPriority);
-  on('swap', () => { B.swapped = !B.swapped; save(); render(); });
+  on('swap', () => { stopClock(); B.colorsSet = false; save(); sendLive(); render(); });
   on('menu', openMenu);
 }
 
@@ -909,7 +946,7 @@ function viewEnd() {
 
 // Tasti rapidi per chi arbitra da computer.
 document.addEventListener('keydown', (e) => {
-  if (!B || routeName() !== 'bout' || sheet.open || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+  if (!B || !B.colorsSet || routeName() !== 'bout' || sheet.open || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
   const left = B.swapped ? 1 : 0;
   const map = {
     ArrowLeft: () => touch(left), a: () => touch(left),
