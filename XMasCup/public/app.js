@@ -889,31 +889,30 @@ function viewBracket(el) {
     const forfeit = b.forfeit != null && b.forfeit === fid;
     return `<div class="side ${cls}">
       <span class="seed">${f ? b[`seed_${who}`] ?? '' : ''}</span>
-      <span class="nm">${f ? esc(fencerName(f)) : '<span class="tbd">da definire</span>'}</span>
-      <span class="score ${forfeit ? 'r' : ''}" ${forfeit ? 'title="Ritirato"' : ''}>${forfeit ? 'R' : score ?? ''}</span>
+      <span class="nm">${f ? esc(fencerName(f)) : b.is_bye ? '<span class="bye">BYE</span>' : '<span class="tbd">da definire</span>'}</span>
+      <span class="score ${forfeit ? 'r' : ''}" ${forfeit ? 'title="Ritirato"' : ''}>${forfeit ? 'R' : b.is_bye ? '' : score ?? ''}</span>
     </div>`;
   };
 
   // Linee: dall'assalto al punto di mezzo, poi verso l'assalto del turno dopo (o il campione).
   const lines = [];
+  // Anche gli assalti con il BYE (passaggio diretto al turno dopo) fanno parte del disegno.
   rounds.forEach((r, k) => r.bouts.forEach((b) => {
-    if (b.is_bye && k === 0) return;
     const x1 = colX(k) + W;
     const y1 = centerY(k, b.position);
     const last = k === rounds.length - 1;
     const x2 = colX(k + 1);
     const y2 = last ? y1 : centerY(k + 1, Math.floor(b.position / 2));
     const xm = x1 + COL / 2;
-    lines.push(`<path class="${b.winner_id != null ? 'done' : ''}" d="M${x1} ${y1} H${xm} V${y2} H${x2}"/>`);
+    lines.push(`<path class="${b.is_bye ? 'bye' : b.winner_id != null ? 'done' : ''}" d="M${x1} ${y1} H${xm} V${y2} H${x2}"/>`);
   }));
 
   const cards = rounds.map((r, k) => r.bouts.map((b) => {
-    if (b.is_bye && k === 0) return '';
     const playable = !b.is_bye && b.forfeit == null && b.fencer_a != null && b.fencer_b != null;
     const live = b.lock?.live;
-    const state = b.winner_id != null ? 'done' : b.lock ? 'live' : playable ? 'ready' : 'wait';
+    const state = b.is_bye ? 'bye' : b.winner_id != null ? 'done' : b.lock ? 'live' : playable ? 'ready' : 'wait';
     return `<div class="de ${state} ${playable ? '' : 'locked'} ${b.lock ? 'is-locked' : ''}" style="left:${colX(k)}px;top:${centerY(k, b.position) - H / 2}px;width:${W}px;height:${H}px"
-      ${playable ? `data-id="${b.id}" tabindex="0" role="button" aria-label="${esc(r.label)}: inserisci o correggi il risultato"` : ''}>
+      ${playable ? `data-id="${b.id}" tabindex="0" role="button" aria-label="${esc(r.label)}: inserisci o correggi il risultato"` : b.is_bye ? 'title="Passaggio diretto al turno successivo (BYE)"' : ''}>
       ${side(b, 'a')}${side(b, 'b')}
       ${b.lock ? `<span class="de-live" title="In arbitraggio da ${esc(b.lock.name)}">📱 ${live && live.score_a != null ? `${live.score_a}–${live.score_b}` : 'live'}</span>` : ''}
     </div>`;

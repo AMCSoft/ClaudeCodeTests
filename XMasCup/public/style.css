@@ -733,3 +733,15 @@ tbody tr:nth-child(even) td { background: rgba(255, 255, 255, 0.022); }
   .tab .ti { display: none; }
   .day-meta { font-size: 14px; gap: 2px 12px; }
 }
+
+/* Assalti con il BYE: il tiratore passa direttamente al turno successivo. */
+.de.bye { cursor: default; background: rgba(17, 36, 74, 0.75); border-style: dashed; box-shadow: none; }
+.de.bye::before { background: rgba(143, 193, 255, 0.5); }
+.de.bye .side.winner { background: linear-gradient(90deg, rgba(143, 193, 255, 0.14), rgba(143, 193, 255, 0.03)); }
+.de.bye .side.winner .nm { color: var(--text); }
+.de.bye .side.winner .seed { background: rgba(143, 193, 255, 0.25); color: var(--text); }
+.de .bye {
+  font-size: 11px; font-weight: 700; letter-spacing: 1px; color: var(--purple);
+  padding: 1px 7px; border-radius: 6px; border: 1px dashed rgba(143, 193, 255, 0.6);
+}
+.bk-lines path.bye { stroke: rgba(143, 193, 255, 0.55); stroke-dasharray: 5 4; }
