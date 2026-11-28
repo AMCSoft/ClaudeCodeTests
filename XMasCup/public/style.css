@@ -745,3 +745,9 @@ tbody tr:nth-child(even) td { background: rgba(255, 255, 255, 0.022); }
   padding: 1px 7px; border-radius: 6px; border: 1px dashed rgba(143, 193, 255, 0.6);
 }
 .bk-lines path.bye { stroke: rgba(143, 193, 255, 0.55); stroke-dasharray: 5 4; }
+
+/* Elenco giornate: più respiro sotto il titolo del riquadro e dentro le schede. */
+.day-grid { margin-top: 20px; }
+.day-card { padding: 18px 16px 16px; }
+.day-card .row + .muted { margin-top: 4px; }
+@media (max-width: 720px) { .day-grid { margin-top: 16px; } }
